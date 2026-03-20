@@ -6,7 +6,6 @@ const getStripeClient = () => {
     throw new Error('Stripe secret key not configured. Set STRIPE_SECRET_KEY environment variable.');
   }
   return new Stripe(stripeKey, {
-    apiVersion: '2023-10-16',
     typescript: true,
   });
 };
