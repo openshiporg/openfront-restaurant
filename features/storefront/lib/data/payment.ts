@@ -45,6 +45,6 @@ export const initiatePaymentSession = async (cartId: string, paymentProviderId: 
     }
   );
 
-  revalidateTag("cart");
+  (revalidateTag as any)("cart");
   return session;
 };

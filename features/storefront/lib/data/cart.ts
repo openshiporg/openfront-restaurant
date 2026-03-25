@@ -86,7 +86,7 @@ export async function setCheckoutContact(data: {
       await getAuthHeaders()
     );
 
-    revalidateTag("cart");
+    (revalidateTag as any)("cart");
     return { success: true };
   } catch (error) {
     const message =
@@ -123,7 +123,7 @@ export async function setCheckoutDelivery(data: {
       await getAuthHeaders()
     );
 
-    revalidateTag("cart");
+    (revalidateTag as any)("cart");
     return { success: true };
   } catch (error) {
     const message =
@@ -251,7 +251,7 @@ export async function placeOrder(paymentSessionId?: string) {
 
   if (completeActiveCart?.id) {
     await removeCartId();
-    revalidateTag("cart");
+    (revalidateTag as any)("cart");
 
     const secretKeyParam = completeActiveCart.secretKey
       ? `?secretKey=${completeActiveCart.secretKey}`
