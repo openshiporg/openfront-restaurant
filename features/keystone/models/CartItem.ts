@@ -6,10 +6,11 @@ import { trackingFields } from "./trackingFields";
 export const CartItem = list({
   access: {
     operation: {
-      query: () => true, // Public read for storefront
-      create: () => true, // Allow adding items for guests
-      update: permissions.canManageCart,
-      delete: permissions.canManageCart,
+      query: ({ session }) =>
+        permissions.canManageCart({ session }) || permissions.canReadCart({ session }),
+      create: () => false,
+      update: () => false,
+      delete: () => false,
     },
   },
   fields: {

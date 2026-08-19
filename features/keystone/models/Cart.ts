@@ -9,9 +9,9 @@ export const Cart = list({
       query: ({ session }) =>
         permissions.canManageOrders({ session }) ||
         permissions.canReadOrders({ session }),
-      create: () => true,
-      update: permissions.canManageOrders,
-      delete: permissions.canManageOrders,
+      create: () => false,
+      update: () => false,
+      delete: () => false,
     },
     filter: {
       query: ({ session }) => {

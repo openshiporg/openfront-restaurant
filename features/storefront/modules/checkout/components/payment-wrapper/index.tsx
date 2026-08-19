@@ -60,7 +60,7 @@ const PaymentWrapper: React.FC<PaymentWrapperProps> = ({ cart, children }) => {
         options={{
           clientId: paypalClientId,
           currency: (cart.currencyCode || "USD").toUpperCase(),
-          intent: "authorize",
+          intent: "capture",
           components: "buttons",
         }}
       >

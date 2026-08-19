@@ -175,6 +175,7 @@ export function ReservationsPage() {
   }, [fetchData])
 
   const openCreate = () => {
+    setActionError(null)
     setEditingId(null)
     setForm({
       ...emptyForm,
@@ -184,6 +185,7 @@ export function ReservationsPage() {
   }
 
   const openEdit = (r: Reservation) => {
+    setActionError(null)
     const d = r.reservationDate ? new Date(r.reservationDate) : new Date()
     setEditingId(r.id)
     setForm({
@@ -202,7 +204,11 @@ export function ReservationsPage() {
   }
 
   const handleSave = async () => {
-    if (!form.customerName || !form.reservationDate) return
+    if (!form.customerName.trim() || !form.customerPhone.trim() || !form.reservationDate || !form.reservationTime) {
+      setActionError('Name, phone, date, and time are required')
+      return
+    }
+    setActionError(null)
     setSaving(true)
     try {
       const [year, month, day] = form.reservationDate.split('-').map(Number)
@@ -542,7 +548,18 @@ export function ReservationsPage() {
               {editingId ? 'Edit Reservation' : 'New Reservation'}
             </DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 pt-2">
+          <form
+            className="space-y-4 pt-2"
+            onSubmit={(event) => {
+              event.preventDefault()
+              void handleSave()
+            }}
+          >
+            {actionError ? (
+              <div role="alert" className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-300">
+                {actionError}
+              </div>
+            ) : null}
             <div className="grid grid-cols-2 gap-3">
               <div className="col-span-2 space-y-1.5">
                 <Label className="text-xs text-muted-foreground">Customer Name *</Label>
@@ -659,6 +676,7 @@ export function ReservationsPage() {
                 variant="outline"
                 size="sm"
                 className="flex-1 h-9"
+                type="button"
                 onClick={() => setDialogOpen(false)}
               >
                 Cancel
@@ -666,13 +684,13 @@ export function ReservationsPage() {
               <Button
                 size="sm"
                 className="flex-1 h-9"
-                onClick={handleSave}
-                disabled={saving || !form.customerName || !form.customerPhone || !form.reservationDate}
+                type="submit"
+                disabled={saving || !form.customerName.trim() || !form.customerPhone.trim() || !form.reservationDate || !form.reservationTime}
               >
                 {saving ? 'Saving…' : editingId ? 'Save Changes' : 'Create'}
               </Button>
             </div>
-          </div>
+          </form>
         </DialogContent>
       </Dialog>
     </>

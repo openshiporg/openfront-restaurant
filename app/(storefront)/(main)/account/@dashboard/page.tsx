@@ -7,14 +7,16 @@ import { notFound } from "next/navigation"
 
 export default async function AccountOverviewPage() {
   const user = await getUser()
-  const orders = await getUserOrders()
-  const storeSettings = await getStoreSettings()
+  if (!user) notFound()
+
+  const [orders, storeSettings] = await Promise.all([
+    getUserOrders(),
+    getStoreSettings(),
+  ])
   const currencyConfig = {
     currencyCode: storeSettings?.currencyCode || "USD",
     locale: storeSettings?.locale || "en-US",
   }
-
-  if (!user) notFound()
 
   const completion = getProfileCompletion(user)
   const firstName = user.firstName || user.name?.split(" ")[0] || "there"

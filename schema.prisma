@@ -12,51 +12,64 @@ generator client {
 }
 
 model User {
-  id                                String            @id @default(cuid())
-  name                              String            @default("")
-  email                             String            @unique @default("")
+  id                                String               @id @default(cuid())
+  name                              String               @default("")
+  email                             String               @unique @default("")
   password                          String
-  role                              Role?             @relation("User_role", fields: [roleId], references: [id])
-  roleId                            String?           @map("role")
-  apiKeys                           ApiKey[]          @relation("ApiKey_user")
-  phone                             String            @default("")
-  restaurantOrders                  RestaurantOrder[] @relation("RestaurantOrder_customer")
-  addresses                         Address[]         @relation("Address_user")
-  carts                             Cart[]            @relation("Cart_user")
+  role                              Role?                @relation("User_role", fields: [roleId], references: [id])
+  roleId                            String?              @map("role")
+  apiKeys                           ApiKey[]             @relation("ApiKey_user")
+  phone                             String               @default("")
+  restaurantOrders                  RestaurantOrder[]    @relation("RestaurantOrder_customer")
+  addresses                         Address[]            @relation("Address_user")
+  carts                             Cart[]               @relation("Cart_user")
   employeeId                        String?
   staffRole                         String?
   hireDate                          DateTime?
-  hourlyRate                        Decimal?          @postgresql.Decimal(10, 2)
-  pin                               String            @default("")
+  hourlyRate                        Decimal?             @postgresql.Decimal(10, 2)
+  pin                               String               @default("")
   staffPermissions                  Json?
-  isActive                          Boolean           @default(true)
-  onboardingStatus                  String?           @default("not_started")
+  isActive                          Boolean              @default(true)
+  onboardingStatus                  String?              @default("not_started")
   photo_id                          String?
   photo_filesize                    Int?
   photo_width                       Int?
   photo_height                      Int?
   photo_extension                   String?
-  emergencyContactName              String            @default("")
-  emergencyContactPhone             String            @default("")
+  emergencyContactName              String               @default("")
+  emergencyContactPhone             String               @default("")
   certifications                    Json?
-  createdAt                         DateTime          @default(now())
-  updatedAt                         DateTime          @default(now()) @updatedAt
+  createdAt                         DateTime             @default(now())
+  updatedAt                         DateTime             @default(now()) @updatedAt
   passwordResetToken                String?
   passwordResetIssuedAt             DateTime?
   passwordResetRedeemedAt           DateTime?
-  from_RestaurantOrder_server       RestaurantOrder[] @relation("RestaurantOrder_server")
-  from_RestaurantOrder_createdBy    RestaurantOrder[] @relation("RestaurantOrder_createdBy")
-  from_KitchenMessage_sender        KitchenMessage[]  @relation("KitchenMessage_sender")
-  from_Payment_processedBy          Payment[]         @relation("Payment_processedBy")
-  from_KitchenStation_assignedStaff KitchenStation[]  @relation("KitchenStation_assignedStaff")
-  from_KitchenTicket_preparedBy     KitchenTicket[]   @relation("KitchenTicket_preparedBy")
-  from_StockMovement_createdBy      StockMovement[]   @relation("StockMovement_createdBy")
-  from_WaitlistEntry_addedBy        WaitlistEntry[]   @relation("WaitlistEntry_addedBy")
-  from_Shift_staff                  Shift[]           @relation("Shift_staff")
-  from_TipPool_createdBy            TipPool[]         @relation("TipPool_createdBy")
-  from_TimeEntry_staff              TimeEntry[]       @relation("TimeEntry_staff")
-  from_WasteLog_loggedBy            WasteLog[]        @relation("WasteLog_loggedBy")
-  from_PurchaseOrder_createdBy      PurchaseOrder[]   @relation("PurchaseOrder_createdBy")
+  from_RestaurantOrder_server       RestaurantOrder[]    @relation("RestaurantOrder_server")
+  from_RestaurantOrder_createdBy    RestaurantOrder[]    @relation("RestaurantOrder_createdBy")
+  from_OrderItem_voidedBy           OrderItem[]          @relation("OrderItem_voidedBy")
+  from_OrderItem_approvedBy         OrderItem[]          @relation("OrderItem_approvedBy")
+  from_KitchenMessage_sender        KitchenMessage[]     @relation("KitchenMessage_sender")
+  from_Payment_processedBy          Payment[]            @relation("Payment_processedBy")
+  from_KitchenStation_assignedStaff KitchenStation[]     @relation("KitchenStation_assignedStaff")
+  from_KitchenTicket_preparedBy     KitchenTicket[]      @relation("KitchenTicket_preparedBy")
+  from_StockMovement_createdBy      StockMovement[]      @relation("StockMovement_createdBy")
+  from_WaitlistEntry_addedBy        WaitlistEntry[]      @relation("WaitlistEntry_addedBy")
+  from_Shift_staff                  Shift[]              @relation("Shift_staff")
+  from_TipPool_createdBy            TipPool[]            @relation("TipPool_createdBy")
+  from_TimeEntry_staff              TimeEntry[]          @relation("TimeEntry_staff")
+  from_WasteLog_reversedBy          WasteLog[]           @relation("WasteLog_reversedBy")
+  from_WasteLog_loggedBy            WasteLog[]           @relation("WasteLog_loggedBy")
+  from_PurchaseOrder_createdBy      PurchaseOrder[]      @relation("PurchaseOrder_createdBy")
+  from_AuditEvent_actor             AuditEvent[]         @relation("AuditEvent_actor")
+  from_AuditEvent_approver          AuditEvent[]         @relation("AuditEvent_approver")
+  from_OrderAdjustment_actor        OrderAdjustment[]    @relation("OrderAdjustment_actor")
+  from_OrderAdjustment_approvedBy   OrderAdjustment[]    @relation("OrderAdjustment_approvedBy")
+  from_Receipt_issuedBy             Receipt[]            @relation("Receipt_issuedBy")
+  from_Refund_requestedBy           Refund[]             @relation("Refund_requestedBy")
+  from_Refund_approvedBy            Refund[]             @relation("Refund_approvedBy")
+  from_KitchenTicketEvent_actor     KitchenTicketEvent[] @relation("KitchenTicketEvent_actor")
+  from_ManagerApproval_requestedBy  ManagerApproval[]    @relation("ManagerApproval_requestedBy")
+  from_ManagerApproval_approvedBy   ManagerApproval[]    @relation("ManagerApproval_approvedBy")
 
   @@index([roleId])
 }
@@ -268,6 +281,10 @@ model RestaurantOrder {
   from_GiftCardTransaction_order GiftCardTransaction[] @relation("GiftCardTransaction_order")
   from_KitchenTicket_order       KitchenTicket[]       @relation("KitchenTicket_order")
   from_StockMovement_order       StockMovement[]       @relation("StockMovement_order")
+  from_OrderAdjustment_order     OrderAdjustment[]     @relation("OrderAdjustment_order")
+  from_Receipt_order             Receipt[]             @relation("Receipt_order")
+  from_Refund_order              Refund[]              @relation("Refund_order")
+  from_KitchenTicketEvent_order  KitchenTicketEvent[]  @relation("KitchenTicketEvent_order")
 
   @@index([customerId])
   @@index([serverId])
@@ -297,30 +314,48 @@ model Address {
 }
 
 model OrderItem {
-  id                  String             @id @default(cuid())
-  quantity            Int                @default(1)
-  price               Int
-  specialInstructions String             @default("")
-  courseNumber        Int?               @default(1)
-  seatNumber          Int?
-  sentToKitchen       DateTime?
-  kitchenStatus       String?            @default("new")
-  firedAt             DateTime?
-  kitchenStartedAt    DateTime?
-  kitchenReadyAt      DateTime?
-  fulfilledAt         DateTime?
-  recalledAt          DateTime?
-  order               RestaurantOrder?   @relation("OrderItem_order", fields: [orderId], references: [id])
-  orderId             String?            @map("order")
-  course              OrderCourse?       @relation("OrderItem_course", fields: [courseId], references: [id])
-  courseId            String?            @map("course")
-  menuItem            MenuItem?          @relation("OrderItem_menuItem", fields: [menuItemId], references: [id])
-  menuItemId          String?            @map("menuItem")
-  appliedModifiers    MenuItemModifier[] @relation("OrderItem_appliedModifiers")
-  kitchenTickets      KitchenTicket[]    @relation("KitchenTicket_orderItems")
-  createdAt           DateTime           @default(now())
-  updatedAt           DateTime           @default(now()) @updatedAt
+  id                                String               @id @default(cuid())
+  quantity                          Int                  @default(1)
+  price                             Int
+  itemNameSnapshot                  String               @default("")
+  itemThumbnailSnapshot             String               @default("")
+  kitchenStationSnapshot            String               @default("")
+  menuItemIdSnapshot                String               @default("")
+  originalOrderIdSnapshot           String               @default("")
+  modifiersSnapshot                 Json?
+  adjustmentTotal                   Int?                 @default(0)
+  isVoided                          Boolean              @default(false)
+  voidedAt                          DateTime?
+  voidReason                        String               @default("")
+  voidedBy                          User?                @relation("OrderItem_voidedBy", fields: [voidedById], references: [id])
+  voidedById                        String?              @map("voidedBy")
+  approvedBy                        User?                @relation("OrderItem_approvedBy", fields: [approvedById], references: [id])
+  approvedById                      String?              @map("approvedBy")
+  specialInstructions               String               @default("")
+  courseNumber                      Int?                 @default(1)
+  seatNumber                        Int?
+  sentToKitchen                     DateTime?
+  kitchenStatus                     String?              @default("new")
+  firedAt                           DateTime?
+  kitchenStartedAt                  DateTime?
+  kitchenReadyAt                    DateTime?
+  fulfilledAt                       DateTime?
+  recalledAt                        DateTime?
+  order                             RestaurantOrder?     @relation("OrderItem_order", fields: [orderId], references: [id])
+  orderId                           String?              @map("order")
+  course                            OrderCourse?         @relation("OrderItem_course", fields: [courseId], references: [id])
+  courseId                          String?              @map("course")
+  menuItem                          MenuItem?            @relation("OrderItem_menuItem", fields: [menuItemId], references: [id])
+  menuItemId                        String?              @map("menuItem")
+  appliedModifiers                  MenuItemModifier[]   @relation("OrderItem_appliedModifiers")
+  kitchenTickets                    KitchenTicket[]      @relation("KitchenTicket_orderItems")
+  createdAt                         DateTime             @default(now())
+  updatedAt                         DateTime             @default(now()) @updatedAt
+  from_OrderAdjustment_orderItem    OrderAdjustment[]    @relation("OrderAdjustment_orderItem")
+  from_KitchenTicketEvent_orderItem KitchenTicketEvent[] @relation("KitchenTicketEvent_orderItem")
 
+  @@index([voidedById])
+  @@index([approvedById])
   @@index([orderId])
   @@index([courseId])
   @@index([menuItemId])
@@ -394,32 +429,38 @@ model Reservation {
 }
 
 model Payment {
-  id                  String             @id @default(cuid())
-  amount              Int
-  data                Json?
-  currencyCode        String             @default("USD")
-  status              String             @default("pending")
-  paymentMethod       String?            @default("credit_card")
-  paymentProvider     PaymentProvider?   @relation("Payment_paymentProvider", fields: [paymentProviderId], references: [id])
-  paymentProviderId   String?            @map("paymentProvider")
-  providerPaymentId   String             @default("")
-  cardLast4           String             @default("")
-  cardBrand           String             @default("")
-  tipAmount           Int?               @default(0)
-  isSplitPayment      Boolean            @default(false)
-  splitPaymentIndex   Int?
-  splitTotal          Int?
-  processedAt         DateTime?
-  errorMessage        String             @default("")
-  notes               String             @default("")
-  order               RestaurantOrder?   @relation("Payment_order", fields: [orderId], references: [id])
-  orderId             String?            @map("order")
-  paymentCollection   PaymentCollection? @relation("Payment_paymentCollection", fields: [paymentCollectionId], references: [id])
-  paymentCollectionId String?            @map("paymentCollection")
-  processedBy         User?              @relation("Payment_processedBy", fields: [processedById], references: [id])
-  processedById       String?            @map("processedBy")
-  createdAt           DateTime           @default(now())
-  updatedAt           DateTime           @default(now()) @updatedAt
+  id                               String                @id @default(cuid())
+  idempotencyKey                   String                @unique @default("")
+  reservedAt                       DateTime?
+  refundedAmount                   Int?                  @default(0)
+  amount                           Int
+  data                             Json?
+  currencyCode                     String                @default("USD")
+  status                           String                @default("pending")
+  paymentMethod                    String?               @default("credit_card")
+  paymentProvider                  PaymentProvider?      @relation("Payment_paymentProvider", fields: [paymentProviderId], references: [id])
+  paymentProviderId                String?               @map("paymentProvider")
+  providerPaymentId                String                @default("")
+  cardLast4                        String                @default("")
+  cardBrand                        String                @default("")
+  tipAmount                        Int?                  @default(0)
+  isSplitPayment                   Boolean               @default(false)
+  splitPaymentIndex                Int?
+  splitTotal                       Int?
+  processedAt                      DateTime?
+  errorMessage                     String                @default("")
+  notes                            String                @default("")
+  order                            RestaurantOrder?      @relation("Payment_order", fields: [orderId], references: [id])
+  orderId                          String?               @map("order")
+  paymentCollection                PaymentCollection?    @relation("Payment_paymentCollection", fields: [paymentCollectionId], references: [id])
+  paymentCollectionId              String?               @map("paymentCollection")
+  processedBy                      User?                 @relation("Payment_processedBy", fields: [processedById], references: [id])
+  processedById                    String?               @map("processedBy")
+  createdAt                        DateTime              @default(now())
+  updatedAt                        DateTime              @default(now()) @updatedAt
+  from_Receipt_payment             Receipt[]             @relation("Receipt_payment")
+  from_Refund_payment              Refund[]              @relation("Refund_payment")
+  from_PaymentWebhookEvent_payment PaymentWebhookEvent[] @relation("PaymentWebhookEvent_payment")
 
   @@index([paymentProviderId])
   @@index([orderId])
@@ -447,7 +488,7 @@ model PaymentSession {
   isInitiated         Boolean            @default(false)
   amount              Int
   data                Json?              @default("{}")
-  idempotencyKey      String             @default("")
+  idempotencyKey      String             @unique @default("")
   paymentCollection   PaymentCollection? @relation("PaymentSession_paymentCollection", fields: [paymentCollectionId], references: [id])
   paymentCollectionId String?            @map("paymentCollection")
   paymentProvider     PaymentProvider?   @relation("PaymentSession_paymentProvider", fields: [paymentProviderId], references: [id])
@@ -456,7 +497,6 @@ model PaymentSession {
   createdAt           DateTime           @default(now())
   updatedAt           DateTime           @default(now()) @updatedAt
 
-  @@index([idempotencyKey])
   @@index([paymentCollectionId])
   @@index([paymentProviderId])
 }
@@ -593,14 +633,17 @@ model GiftCard {
 }
 
 model GiftCardTransaction {
-  id         String           @id @default(cuid())
-  amount     Int
-  createdAt  DateTime         @default(now())
-  updatedAt  DateTime         @default(now()) @updatedAt
-  giftCard   GiftCard?        @relation("GiftCardTransaction_giftCard", fields: [giftCardId], references: [id])
-  giftCardId String?          @map("giftCard")
-  order      RestaurantOrder? @relation("GiftCardTransaction_order", fields: [orderId], references: [id])
-  orderId    String?          @map("order")
+  id             String           @id @default(cuid())
+  idempotencyKey String           @unique @default("")
+  type           String
+  balanceAfter   Int
+  amount         Int
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @default(now()) @updatedAt
+  giftCard       GiftCard?        @relation("GiftCardTransaction_giftCard", fields: [giftCardId], references: [id])
+  giftCardId     String?          @map("giftCard")
+  order          RestaurantOrder? @relation("GiftCardTransaction_order", fields: [orderId], references: [id])
+  orderId        String?          @map("order")
 
   @@index([giftCardId])
   @@index([orderId])
@@ -633,25 +676,26 @@ model PrepStation {
 }
 
 model KitchenTicket {
-  id           String           @id @default(cuid())
-  status       String           @default("new")
-  priority     Int?             @default(0)
-  ticketType   String?          @default("prep")
-  items        Json?
-  firedAt      DateTime?        @default(now())
-  startedAt    DateTime?
-  completedAt  DateTime?
-  servedAt     DateTime?
-  recalledAt   DateTime?
-  order        RestaurantOrder? @relation("KitchenTicket_order", fields: [orderId], references: [id])
-  orderId      String?          @map("order")
-  station      KitchenStation?  @relation("KitchenTicket_station", fields: [stationId], references: [id])
-  stationId    String?          @map("station")
-  orderItems   OrderItem[]      @relation("KitchenTicket_orderItems")
-  preparedBy   User?            @relation("KitchenTicket_preparedBy", fields: [preparedById], references: [id])
-  preparedById String?          @map("preparedBy")
-  createdAt    DateTime         @default(now())
-  updatedAt    DateTime         @default(now()) @updatedAt
+  id                             String               @id @default(cuid())
+  status                         String               @default("new")
+  priority                       Int?                 @default(0)
+  ticketType                     String?              @default("prep")
+  items                          Json?
+  firedAt                        DateTime?            @default(now())
+  startedAt                      DateTime?
+  completedAt                    DateTime?
+  servedAt                       DateTime?
+  recalledAt                     DateTime?
+  order                          RestaurantOrder?     @relation("KitchenTicket_order", fields: [orderId], references: [id])
+  orderId                        String?              @map("order")
+  station                        KitchenStation?      @relation("KitchenTicket_station", fields: [stationId], references: [id])
+  stationId                      String?              @map("station")
+  orderItems                     OrderItem[]          @relation("KitchenTicket_orderItems")
+  preparedBy                     User?                @relation("KitchenTicket_preparedBy", fields: [preparedById], references: [id])
+  preparedById                   String?              @map("preparedBy")
+  createdAt                      DateTime             @default(now())
+  updatedAt                      DateTime             @default(now()) @updatedAt
+  from_KitchenTicketEvent_ticket KitchenTicketEvent[] @relation("KitchenTicketEvent_ticket")
 
   @@index([orderId])
   @@index([stationId])
@@ -708,19 +752,24 @@ model Ingredient {
 }
 
 model StockMovement {
-  id           String           @id @default(cuid())
-  type         String
-  quantity     Decimal          @postgresql.Decimal(10, 2)
-  reason       String           @default("")
-  ingredient   Ingredient?      @relation("StockMovement_ingredient", fields: [ingredientId], references: [id])
-  ingredientId String?          @map("ingredient")
-  createdBy    User?            @relation("StockMovement_createdBy", fields: [createdById], references: [id])
-  createdById  String?          @map("createdBy")
-  order        RestaurantOrder? @relation("StockMovement_order", fields: [orderId], references: [id])
-  orderId      String?          @map("order")
-  createdAt    DateTime         @default(now())
-  updatedAt    DateTime         @default(now()) @updatedAt
+  id            String           @id @default(cuid())
+  eventKey      String           @unique @default("")
+  referenceType String           @default("")
+  referenceId   String           @default("")
+  metadata      Json?
+  type          String
+  quantity      Decimal          @postgresql.Decimal(10, 2)
+  reason        String           @default("")
+  ingredient    Ingredient?      @relation("StockMovement_ingredient", fields: [ingredientId], references: [id])
+  ingredientId  String?          @map("ingredient")
+  createdBy     User?            @relation("StockMovement_createdBy", fields: [createdById], references: [id])
+  createdById   String?          @map("createdBy")
+  order         RestaurantOrder? @relation("StockMovement_order", fields: [orderId], references: [id])
+  orderId       String?          @map("order")
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @default(now()) @updatedAt
 
+  @@index([referenceId])
   @@index([ingredientId])
   @@index([createdById])
   @@index([orderId])
@@ -730,6 +779,8 @@ model StoreSettings {
   id                  Int      @id
   name                String   @default("")
   tagline             String   @default("")
+  logoIcon            String   @default("<svg xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" height=\"100%\" width=\"100%\" viewBox=\"0 0 200 200\"><g clip-path=\"url(#restaurant-logo-clip)\"><path fill-rule=\"evenodd\" clip-rule=\"evenodd\" d=\"M107.143 0H92.8571V63.2531L69.1621 4.60582L55.9166 9.95735L80.2255 70.1239L34.3401 24.2385L24.2386 34.3401L68.2177 78.3191L11.2241 53.4181L5.50459 66.5089L65.8105 92.8571H0V107.143H65.8104L5.50461 133.491L11.2241 146.582L68.2176 121.681L24.2386 165.66L34.3401 175.761L80.2255 129.876L55.9166 190.043L69.1621 195.394L92.8571 136.747V200H107.143V136.747L130.838 195.394L144.083 190.043L119.775 129.876L165.66 175.761L175.761 165.66L131.782 121.681L188.776 146.582L194.495 133.491L134.19 107.143H200V92.8571H134.189L194.495 66.5089L188.776 53.4181L131.782 78.3191L175.761 34.34L165.66 24.2385L119.775 70.1238L144.083 9.95735L130.838 4.60582L107.143 63.2531V0Z\" fill=\"url(#restaurant-logo-gradient)\"/></g><defs><linearGradient id=\"restaurant-logo-gradient\" x1=\"14\" y1=\"26\" x2=\"179\" y2=\"179.5\" gradientUnits=\"userSpaceOnUse\"><stop stop-color=\"#5c6bc0\"/><stop offset=\"1\" stop-color=\"#4f39f6\"/></linearGradient><clipPath id=\"restaurant-logo-clip\"><rect width=\"200\" height=\"200\" fill=\"white\"/></clipPath></defs></svg>")
+  logoColor           String   @default("0")
   address             String   @default("")
   phone               String   @default("")
   email               String   @default("")
@@ -832,17 +883,23 @@ model TimeEntry {
 }
 
 model WasteLog {
-  id           String      @id @default(cuid())
-  quantity     Decimal     @postgresql.Decimal(10, 2)
-  reason       String      @default("spoilage")
-  notes        String      @default("")
-  ingredient   Ingredient? @relation("WasteLog_ingredient", fields: [ingredientId], references: [id])
-  ingredientId String?     @map("ingredient")
-  loggedBy     User?       @relation("WasteLog_loggedBy", fields: [loggedById], references: [id])
-  loggedById   String?     @map("loggedBy")
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @default(now()) @updatedAt
+  id             String      @id @default(cuid())
+  eventKey       String      @unique @default("")
+  reversedAt     DateTime?
+  reversedBy     User?       @relation("WasteLog_reversedBy", fields: [reversedById], references: [id])
+  reversedById   String?     @map("reversedBy")
+  reversalReason String      @default("")
+  quantity       Decimal     @postgresql.Decimal(10, 2)
+  reason         String      @default("spoilage")
+  notes          String      @default("")
+  ingredient     Ingredient? @relation("WasteLog_ingredient", fields: [ingredientId], references: [id])
+  ingredientId   String?     @map("ingredient")
+  loggedBy       User?       @relation("WasteLog_loggedBy", fields: [loggedById], references: [id])
+  loggedById     String?     @map("loggedBy")
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @default(now()) @updatedAt
 
+  @@index([reversedById])
   @@index([ingredientId])
   @@index([loggedById])
 }
@@ -865,6 +922,208 @@ model PurchaseOrder {
 
   @@index([vendorId])
   @@index([createdById])
+}
+
+model AuditEvent {
+  id         String    @id @default(cuid())
+  eventKey   String    @unique @default("")
+  eventType  String    @default("")
+  entityType String    @default("")
+  entityId   String    @default("")
+  reason     String    @default("")
+  before     Json?
+  after      Json?
+  metadata   Json?
+  occurredAt DateTime? @default(now())
+  actor      User?     @relation("AuditEvent_actor", fields: [actorId], references: [id])
+  actorId    String?   @map("actor")
+  approver   User?     @relation("AuditEvent_approver", fields: [approverId], references: [id])
+  approverId String?   @map("approver")
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @default(now()) @updatedAt
+
+  @@index([eventType])
+  @@index([entityType])
+  @@index([entityId])
+  @@index([occurredAt])
+  @@index([actorId])
+  @@index([approverId])
+}
+
+model OrderAdjustment {
+  id             String           @id @default(cuid())
+  idempotencyKey String           @unique @default("")
+  type           String
+  amount         Int
+  reason         String           @default("")
+  metadata       Json?
+  order          RestaurantOrder? @relation("OrderAdjustment_order", fields: [orderId], references: [id])
+  orderId        String?          @map("order")
+  orderItem      OrderItem?       @relation("OrderAdjustment_orderItem", fields: [orderItemId], references: [id])
+  orderItemId    String?          @map("orderItem")
+  actor          User?            @relation("OrderAdjustment_actor", fields: [actorId], references: [id])
+  actorId        String?          @map("actor")
+  approvedBy     User?            @relation("OrderAdjustment_approvedBy", fields: [approvedById], references: [id])
+  approvedById   String?          @map("approvedBy")
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @default(now()) @updatedAt
+
+  @@index([orderId])
+  @@index([orderItemId])
+  @@index([actorId])
+  @@index([approvedById])
+}
+
+model Receipt {
+  id                           String           @id @default(cuid())
+  receiptNumber                String           @unique @default("")
+  kind                         String           @default("sale")
+  amount                       Int
+  currencyCode                 String           @default("")
+  snapshot                     Json?
+  issuedAt                     DateTime?        @default(now())
+  order                        RestaurantOrder? @relation("Receipt_order", fields: [orderId], references: [id])
+  orderId                      String?          @map("order")
+  payment                      Payment?         @relation("Receipt_payment", fields: [paymentId], references: [id])
+  paymentId                    String?          @map("payment")
+  refund                       Refund?          @relation("Receipt_refund", fields: [refundId], references: [id])
+  refundId                     String?          @map("refund")
+  correctsReceipt              Receipt?         @relation("Receipt_correctsReceipt", fields: [correctsReceiptId], references: [id])
+  correctsReceiptId            String?          @map("correctsReceipt")
+  issuedBy                     User?            @relation("Receipt_issuedBy", fields: [issuedById], references: [id])
+  issuedById                   String?          @map("issuedBy")
+  createdAt                    DateTime         @default(now())
+  updatedAt                    DateTime         @default(now()) @updatedAt
+  from_Receipt_correctsReceipt Receipt[]        @relation("Receipt_correctsReceipt")
+
+  @@index([issuedAt])
+  @@index([orderId])
+  @@index([paymentId])
+  @@index([refundId])
+  @@index([correctsReceiptId])
+  @@index([issuedById])
+}
+
+model Refund {
+  id                  String           @id @default(cuid())
+  idempotencyKey      String           @unique @default("")
+  amount              Int
+  currencyCode        String           @default("")
+  status              String           @default("processing")
+  reason              String           @default("")
+  providerRefundId    String           @default("")
+  providerData        Json?
+  processedAt         DateTime?
+  payment             Payment?         @relation("Refund_payment", fields: [paymentId], references: [id])
+  paymentId           String?          @map("payment")
+  order               RestaurantOrder? @relation("Refund_order", fields: [orderId], references: [id])
+  orderId             String?          @map("order")
+  requestedBy         User?            @relation("Refund_requestedBy", fields: [requestedById], references: [id])
+  requestedById       String?          @map("requestedBy")
+  approvedBy          User?            @relation("Refund_approvedBy", fields: [approvedById], references: [id])
+  approvedById        String?          @map("approvedBy")
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @default(now()) @updatedAt
+  from_Receipt_refund Receipt[]        @relation("Receipt_refund")
+
+  @@index([paymentId])
+  @@index([orderId])
+  @@index([requestedById])
+  @@index([approvedById])
+}
+
+model PaymentWebhookEvent {
+  id              String    @id @default(cuid())
+  eventKey        String    @unique @default("")
+  providerCode    String    @default("")
+  providerEventId String    @default("")
+  eventType       String    @default("")
+  status          String?   @default("received")
+  payload         Json?
+  rawBody         String    @default("")
+  error           String    @default("")
+  attempts        Int?      @default(0)
+  receivedAt      DateTime? @default(now())
+  processedAt     DateTime?
+  payment         Payment?  @relation("PaymentWebhookEvent_payment", fields: [paymentId], references: [id])
+  paymentId       String?   @map("payment")
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @default(now()) @updatedAt
+
+  @@index([providerCode])
+  @@index([providerEventId])
+  @@index([eventType])
+  @@index([receivedAt])
+  @@index([paymentId])
+}
+
+model KitchenTicketEvent {
+  id          String           @id @default(cuid())
+  eventType   String
+  eventKey    String           @unique @default("")
+  payload     Json?
+  occurredAt  DateTime?        @default(now())
+  ticket      KitchenTicket?   @relation("KitchenTicketEvent_ticket", fields: [ticketId], references: [id])
+  ticketId    String?          @map("ticket")
+  order       RestaurantOrder? @relation("KitchenTicketEvent_order", fields: [orderId], references: [id])
+  orderId     String?          @map("order")
+  orderItem   OrderItem?       @relation("KitchenTicketEvent_orderItem", fields: [orderItemId], references: [id])
+  orderItemId String?          @map("orderItem")
+  actor       User?            @relation("KitchenTicketEvent_actor", fields: [actorId], references: [id])
+  actorId     String?          @map("actor")
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @default(now()) @updatedAt
+
+  @@index([occurredAt])
+  @@index([ticketId])
+  @@index([orderId])
+  @@index([orderItemId])
+  @@index([actorId])
+}
+
+model IdempotencyKey {
+  id             String    @id @default(cuid())
+  idempotencyKey String    @unique @default("")
+  requestMethod  String    @default("")
+  requestParams  Json?
+  requestPath    String    @default("")
+  responseCode   Int?
+  responseBody   Json?
+  recoveryPoint  String    @default("started")
+  lockedAt       DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @default(now()) @updatedAt
+}
+
+model ManagerApproval {
+  id                 String    @id @default(cuid())
+  actionType         String
+  targetId           String    @default("")
+  reason             String    @default("")
+  amount             Int?
+  requestFingerprint String    @default("")
+  requestPayload     Json?
+  status             String    @default("pending")
+  requestedAt        DateTime? @default(now())
+  approvedAt         DateTime?
+  consumedAt         DateTime?
+  expiresAt          DateTime
+  consumedEntityType String    @default("")
+  consumedEntityId   String    @default("")
+  requestedBy        User?     @relation("ManagerApproval_requestedBy", fields: [requestedById], references: [id])
+  requestedById      String?   @map("requestedBy")
+  approvedBy         User?     @relation("ManagerApproval_approvedBy", fields: [approvedById], references: [id])
+  approvedById       String?   @map("approvedBy")
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @default(now()) @updatedAt
+
+  @@index([actionType])
+  @@index([targetId])
+  @@index([status])
+  @@index([requestedAt])
+  @@index([expiresAt])
+  @@index([requestedById])
+  @@index([approvedById])
 }
 
 enum PaymentCollectionDescriptionType {

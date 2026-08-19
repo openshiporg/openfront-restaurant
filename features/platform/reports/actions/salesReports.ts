@@ -29,7 +29,7 @@ export async function getSalesOverview(
         discount
         total
         createdAt
-        table {
+        tables {
           id
           tableNumber
         }
@@ -41,6 +41,8 @@ export async function getSalesOverview(
           id
           quantity
           price
+          itemNameSnapshot
+          modifiersSnapshot
           menuItem {
             id
             name
@@ -133,6 +135,8 @@ export async function getMenuItemPerformance(startDate: string, endDate: string)
         id
         quantity
         price
+        itemNameSnapshot
+        modifiersSnapshot
         menuItem {
           id
           name

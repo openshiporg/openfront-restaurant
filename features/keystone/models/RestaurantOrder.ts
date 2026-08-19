@@ -15,6 +15,7 @@ import crypto from "crypto";
 import { isSignedIn, permissions } from "../access";
 import { trackingFields } from "./trackingFields";
 import { isKitchenActiveOrderStatus, syncKitchenTicketsForOrder } from "../utils/kitchenTicketSync";
+import { depleteInventoryForCompletedOrder } from "../utils/inventoryLedger";
 
 export const RestaurantOrder = list({
   access: {
@@ -22,9 +23,9 @@ export const RestaurantOrder = list({
       query: ({ session }) =>
         permissions.canReadOrders({ session }) ||
         permissions.canManageOrders({ session }),
-      create: permissions.canManageOrders,
-      update: permissions.canManageOrders,
-      delete: permissions.canManageOrders,
+      create: () => false,
+      update: () => false,
+      delete: () => false,
     },
   },
   ui: {
@@ -84,62 +85,11 @@ export const RestaurantOrder = list({
         }
       }
       
-      // Auto-depletion: deplete ingredient stock when order is completed
-      if (operation === 'update' && item?.status === 'completed' && originalItem?.status !== 'completed') {
+      if (operation === 'update' && (item as any)?.status === 'completed' && (originalItem as any)?.status !== 'completed') {
         try {
-          // Get order items with menu items
-          const orderItems = await sudo.query.OrderItem.findMany({
-            where: { order: { id: { equals: item.id } } },
-            query: 'id quantity menuItem { id }'
-          });
-
-          for (const orderItem of orderItems) {
-            if (!orderItem.menuItem?.id) continue;
-
-            // Find recipe for this menu item
-            const recipes = await sudo.query.Recipe.findMany({
-              where: { menuItem: { id: { equals: orderItem.menuItem.id } } },
-              query: 'id recipeIngredients yield'
-            });
-
-            if (recipes.length === 0) continue;
-            const recipe = recipes[0];
-            if (!recipe.recipeIngredients) continue;
-
-            const recipeIngredients = recipe.recipeIngredients as any[];
-            const portionsOrdered = orderItem.quantity / (recipe.yield || 1);
-
-            // Deplete each ingredient
-            for (const ri of recipeIngredients) {
-              if (!ri.ingredientId) continue;
-              const depleteAmount = ri.quantity * portionsOrdered;
-
-              const ingredient = await sudo.query.Ingredient.findOne({
-                where: { id: ri.ingredientId },
-                query: 'id currentStock'
-              });
-
-              if (ingredient) {
-                const newStock = Math.max(0, parseFloat(ingredient.currentStock || '0') - depleteAmount);
-                await sudo.db.Ingredient.updateOne({
-                  where: { id: ri.ingredientId },
-                  data: { currentStock: newStock.toFixed(2) }
-                });
-
-                // Create stock movement record
-                await sudo.db.StockMovement.createOne({
-                  data: {
-                    ingredient: { connect: { id: ri.ingredientId } },
-                    type: 'sale',
-                    quantity: (-depleteAmount).toFixed(2),
-                    notes: `Auto-depleted for order ${item.orderNumber}`
-                  }
-                });
-              }
-            }
-          }
+          await depleteInventoryForCompletedOrder(String((item as any).id), context as any);
         } catch (err) {
-          console.error('Auto-depletion error:', err);
+          console.error('Transactional inventory depletion failed; reconciliation is required:', err);
         }
       }
     }

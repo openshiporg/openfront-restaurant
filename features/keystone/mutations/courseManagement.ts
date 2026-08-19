@@ -1,5 +1,6 @@
 import type { Context } from ".keystone/types";
 import { permissions } from "../access";
+import { appendKitchenTicketEvent } from "../utils/kitchenTicketEvents";
 
 interface FireCourseArgs {
   courseId: string;
@@ -37,7 +38,7 @@ export async function fireCourse(
 
     const course = await sudo.query.OrderCourse.findOne({
       where: { id: courseId },
-      query: 'orderItems { id }'
+      query: 'order { id } orderItems { id }'
     });
 
     if (course?.orderItems?.length) {
@@ -45,11 +46,21 @@ export async function fireCourse(
         course.orderItems.map((item: any) =>
           sudo.db.OrderItem.updateOne({
             where: { id: item.id },
-            data: { sentToKitchen: new Date().toISOString() }
+            data: {
+              sentToKitchen: new Date().toISOString(),
+              firedAt: new Date().toISOString(),
+              kitchenStatus: 'new',
+            }
           })
         )
       );
     }
+
+    await appendKitchenTicketEvent(context, {
+      eventType: 'dispatch',
+      orderId: course?.order?.id,
+      payload: { courseId, action: 'fire', orderItemIds: (course?.orderItems || []).map((item: any) => item.id) },
+    });
 
     return { success: true, error: null };
   } catch (err) {
@@ -76,6 +87,22 @@ export async function recallCourse(
         status: 'pending',
         fireTime: null
       }
+    });
+    const course = await sudo.query.OrderCourse.findOne({
+      where: { id: courseId },
+      query: 'order { id } orderItems { id }',
+    });
+    const recalledAt = new Date().toISOString();
+    await Promise.all((course?.orderItems || []).map((item: any) =>
+      sudo.db.OrderItem.updateOne({
+        where: { id: item.id },
+        data: { kitchenStatus: 'recalled', recalledAt },
+      })
+    ));
+    await appendKitchenTicketEvent(context, {
+      eventType: 'recall',
+      orderId: course?.order?.id,
+      payload: { courseId, action: 'recall', orderItemIds: (course?.orderItems || []).map((item: any) => item.id) },
     });
 
     return { success: true, error: null };

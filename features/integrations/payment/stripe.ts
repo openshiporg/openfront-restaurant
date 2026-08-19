@@ -8,20 +8,21 @@ const getStripeClient = () => {
   return new Stripe(stripeKey);
 };
 
-export async function createPaymentFunction({ order, amount, currency }: { order: any; amount: number; currency: string }) {
+export async function createPaymentFunction({ order, amount, currency, idempotencyKey }: { order: any; amount: number; currency: string; idempotencyKey?: string }) {
   const stripe = getStripeClient();
 
-  const paymentIntent = await stripe.paymentIntents.create({
-    amount,
-    currency: currency.toLowerCase(),
-    automatic_payment_methods: {
-      enabled: true,
+  const paymentIntent = await stripe.paymentIntents.create(
+    {
+      amount,
+      currency: currency.toLowerCase(),
+      automatic_payment_methods: { enabled: true },
+      metadata: {
+        orderId: order?.id || "",
+        orderNumber: order?.orderNumber || "",
+      },
     },
-    metadata: {
-      orderId: order?.id || "",
-      orderNumber: order?.orderNumber || "",
-    },
-  });
+    idempotencyKey ? { idempotencyKey } : undefined
+  );
 
   return {
     clientSecret: paymentIntent.client_secret,
@@ -43,15 +44,17 @@ export async function capturePaymentFunction({ paymentId, amount }: { paymentId:
   };
 }
 
-export async function refundPaymentFunction({ paymentId, amount }: { paymentId: string; amount: number }) {
+export async function refundPaymentFunction({ paymentId, amount, idempotencyKey }: { paymentId: string; amount: number; idempotencyKey?: string }) {
   const stripe = getStripeClient();
 
-  const refund = await stripe.refunds.create({
-    payment_intent: paymentId,
-    amount,
-  });
+  const refund = await stripe.refunds.create(
+    { payment_intent: paymentId, amount },
+    idempotencyKey ? { idempotencyKey } : undefined
+  );
 
   return {
+    id: refund.id,
+    refundId: refund.id,
     status: refund.status,
     amount: refund.amount,
     data: refund,
@@ -74,7 +77,7 @@ export async function generatePaymentLinkFunction({ paymentId }: { paymentId: st
   return `https://dashboard.stripe.com/payments/${paymentId}`;
 }
 
-export async function handleWebhookFunction({ event, headers }: { event: any; headers: any }) {
+export async function handleWebhookFunction({ event, headers, rawBody }: { event: any; headers: any; rawBody?: string }) {
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
   if (!webhookSecret) {
     throw new Error("Stripe webhook secret is not configured");
@@ -83,8 +86,9 @@ export async function handleWebhookFunction({ event, headers }: { event: any; he
   const stripe = getStripeClient();
 
   try {
+    if (!rawBody) throw new Error("Stripe webhook raw body is required");
     const stripeEvent = stripe.webhooks.constructEvent(
-      JSON.stringify(event),
+      rawBody,
       headers["stripe-signature"],
       webhookSecret
     );

@@ -46,19 +46,19 @@ export async function fetchCart(cartId?: string) {
 
 export async function createCart(orderType: string = "pickup") {
   const CREATE_CART_MUTATION = gql`
-    mutation CreateCart($data: CartCreateInput!) {
-      createCart(data: $data) {
+    mutation CreateActiveCart($orderType: String) {
+      createActiveCart(orderType: $orderType) {
         id
       }
     }
   `;
 
   try {
-    const { createCart } = await openfrontClient.request<{ createCart: any }>(
+    const { createActiveCart } = await openfrontClient.request<{ createActiveCart: any }>(
       CREATE_CART_MUTATION,
-      { data: { orderType } }
+      { orderType }
     );
-    return createCart;
+    return createActiveCart;
   } catch (error) {
     console.error('Error creating cart:', error);
     throw error;
@@ -73,42 +73,27 @@ export async function addToCart(params: {
   specialInstructions?: string;
 }) {
   const ADD_TO_CART_MUTATION = gql`
-    mutation AddToCart($cartId: ID!, $data: CartUpdateInput!) {
-      updateActiveCart(cartId: $cartId, data: $data) {
+    mutation AddActiveCartItem($cartId: ID!, $input: ActiveCartItemInput!) {
+      addActiveCartItem(cartId: $cartId, input: $input) {
         id
-        items {
-          id
-          quantity
-          menuItem {
-            id
-            name
-            price
-          }
-        }
       }
     }
   `;
 
   try {
-    const { updateActiveCart } = await openfrontClient.request<{ updateActiveCart: any }>(
+    const { addActiveCartItem } = await openfrontClient.request<{ addActiveCartItem: any }>(
       ADD_TO_CART_MUTATION,
       {
         cartId: params.cartId,
-        data: {
-          items: {
-            create: [
-              {
-                menuItem: { connect: { id: params.menuItemId } },
-                quantity: params.quantity,
-                modifiers: params.modifierIds ? { connect: params.modifierIds.map((id: string) => ({ id })) } : undefined,
-                specialInstructions: params.specialInstructions,
-              },
-            ],
-          },
+        input: {
+          menuItemId: params.menuItemId,
+          quantity: params.quantity,
+          modifierIds: params.modifierIds || [],
+          specialInstructions: params.specialInstructions,
         },
       }
     );
-    return updateActiveCart;
+    return addActiveCartItem;
   } catch (error) {
     console.error('Error adding to cart:', error);
     throw error;

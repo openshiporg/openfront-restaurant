@@ -39,6 +39,14 @@ import { TipPool } from './TipPool';
 import { TimeEntry } from './TimeEntry';
 import { WasteLog } from './WasteLog';
 import { PurchaseOrder } from './PurchaseOrder';
+import { AuditEvent } from './AuditEvent';
+import { OrderAdjustment } from './OrderAdjustment';
+import { Receipt } from './Receipt';
+import { Refund } from './Refund';
+import { PaymentWebhookEvent } from './PaymentWebhookEvent';
+import { KitchenTicketEvent } from './KitchenTicketEvent';
+import { IdempotencyKey } from './IdempotencyKey';
+import { ManagerApproval } from './ManagerApproval';
 
 export const models = {
   User,
@@ -82,6 +90,14 @@ export const models = {
   TimeEntry,
   WasteLog,
   PurchaseOrder,
+  AuditEvent,
+  OrderAdjustment,
+  Receipt,
+  Refund,
+  PaymentWebhookEvent,
+  KitchenTicketEvent,
+  IdempotencyKey,
+  ManagerApproval,
 };
 
 export default models;

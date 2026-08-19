@@ -16,9 +16,9 @@ export const TipPool = list({
   access: {
     operation: {
       query: permissions.canReadStaff,
-      create: permissions.canManageStaff,
-      update: permissions.canManageStaff,
-      delete: permissions.canManageStaff,
+      create: () => false,
+      update: () => false,
+      delete: () => false,
     },
   },
   ui: {

@@ -5,7 +5,9 @@ import {
   integer,
   timestamp,
   virtual,
-  select
+  select,
+  checkbox,
+  json
 } from "@keystone-6/core/fields";
 
 import { permissions } from "../access";
@@ -42,9 +44,9 @@ export const OrderItem = list({
   access: {
     operation: {
       query: permissions.canReadOrders,
-      create: permissions.canManageOrders,
-      update: permissions.canManageOrders,
-      delete: permissions.canManageOrders,
+      create: () => false,
+      update: () => false,
+      delete: () => false,
     },
   },
   ui: {
@@ -83,24 +85,56 @@ export const OrderItem = list({
       }),
     }),
 
+    itemNameSnapshot: text({
+      validation: { isRequired: true },
+      ui: { description: "Immutable menu item name captured when ordered" },
+    }),
+
+    itemThumbnailSnapshot: text({
+      ui: { description: "Immutable menu image URL captured when ordered" },
+    }),
+
+    kitchenStationSnapshot: text({
+      ui: { description: "Kitchen routing station captured when ordered" },
+    }),
+
+    menuItemIdSnapshot: text({
+      ui: { description: "Historical menu item identifier; not an authority for display" },
+    }),
+
+    originalOrderIdSnapshot: text({
+      ui: { description: "Original check identifier retained when an item is split" },
+    }),
+
+    modifiersSnapshot: json({
+      ui: { description: "Immutable modifier names, groups, and prices captured when ordered" },
+    }),
+
     thumbnail: virtual({
       field: graphql.field({
         type: graphql.String,
-        async resolve(item, args, context) {
-          const sudoContext = context.sudo();
-          const orderItem = await sudoContext.query.OrderItem.findOne({
+        async resolve(item: any, args, context) {
+          if (item.itemThumbnailSnapshot) return item.itemThumbnailSnapshot;
+          const orderItem = await context.sudo().query.OrderItem.findOne({
             where: { id: String(item.id) },
-            query: `
-              menuItem {
-                thumbnail
-              }
-            `,
+            query: "itemThumbnailSnapshot menuItem { thumbnail }",
           });
-
-          return orderItem?.menuItem?.thumbnail || null;
+          return orderItem?.itemThumbnailSnapshot || orderItem?.menuItem?.thumbnail || null;
         },
       }),
     }),
+
+    adjustmentTotal: integer({
+      defaultValue: 0,
+      validation: { min: 0 },
+      ui: { description: "Append-derived comp/correction amount; original price remains unchanged" },
+    }),
+
+    isVoided: checkbox({ defaultValue: false }),
+    voidedAt: timestamp(),
+    voidReason: text({ ui: { displayMode: "textarea" } }),
+    voidedBy: relationship({ ref: "User" }),
+    approvedBy: relationship({ ref: "User" }),
 
     specialInstructions: text({
       ui: {

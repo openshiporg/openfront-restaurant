@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useRef, useState, type CSSProperties } from "react"
 import { ArrowRight, ShoppingBag } from "lucide-react"
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -26,7 +26,7 @@ interface CartItem {
   }>
 }
 
-interface CartData {
+export interface CartData {
   id: string
   orderType?: string
   subtotal: number
@@ -37,9 +37,10 @@ interface CartDropdownProps {
   cart: CartData | null
   currencyCode: string
   locale: string
+  brandHue: string
 }
 
-export default function CartDropdown({ cart, currencyCode, locale }: CartDropdownProps) {
+export default function CartDropdown({ cart, currencyCode, locale, brandHue }: CartDropdownProps) {
   const router = useRouter()
   const [isCartOpen, setIsCartOpen] = useState(false)
   const [isUpdating, setIsUpdating] = useState(false)
@@ -61,6 +62,7 @@ export default function CartDropdown({ cart, currencyCode, locale }: CartDropdow
     setIsUpdating(true)
     try {
       await updateLineItem({ cartId: cart?.id || "", lineId: cartItemId, quantity })
+      router.refresh()
     } catch (error) {
       console.error("Error updating quantity:", error)
     }
@@ -71,6 +73,7 @@ export default function CartDropdown({ cart, currencyCode, locale }: CartDropdow
     setIsUpdating(true)
     try {
       await removeLineItem({ cartId: cart?.id || "", lineId: cartItemId })
+      router.refresh()
     } catch (error) {
       console.error("Error removing item:", error)
     }
@@ -98,7 +101,13 @@ export default function CartDropdown({ cart, currencyCode, locale }: CartDropdow
       </button>
 
       <Sheet open={isCartOpen} onOpenChange={setIsCartOpen}>
-        <SheetContent className="flex w-full max-w-xl flex-col border-l border-border bg-background p-0 sm:max-w-xl">
+        <SheetContent
+          className="flex w-full max-w-xl flex-col border-l border-border bg-background p-0 sm:max-w-xl"
+          style={{
+            "--primary": `oklch(0.55 0.22 ${brandHue})`,
+            "--ring": `oklch(0.55 0.12 ${brandHue})`,
+          } as CSSProperties}
+        >
           <SheetHeader className="border-b border-border px-6 py-5 text-left">
             <SheetTitle className="font-serif text-2xl font-semibold text-foreground">Your order</SheetTitle>
             <p className="mt-1 text-sm text-muted-foreground">
@@ -169,7 +178,7 @@ export default function CartDropdown({ cart, currencyCode, locale }: CartDropdow
 
                 <button
                   type="button"
-                  className="mt-5 inline-flex h-12 w-full items-center justify-center gap-2 rounded-full bg-primary px-6 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+                  className="mt-5 inline-flex h-12 w-full items-center justify-center gap-2 rounded-none bg-primary px-6 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
                   onClick={() => {
                     setIsCartOpen(false)
                     router.push("/checkout?step=contact")

@@ -20,9 +20,9 @@ export const Payment = list({
       query: ({ session }) =>
         permissions.canReadPayments({ session }) ||
         permissions.canManagePayments({ session }),
-      create: permissions.canManagePayments,
-      update: permissions.canManagePayments,
-      delete: permissions.canManagePayments,
+      create: () => false,
+      update: () => false,
+      delete: () => false,
     },
   },
   ui: {
@@ -31,6 +31,9 @@ export const Payment = list({
     },
   },
   fields: {
+    idempotencyKey: text({ validation: { isRequired: true }, isIndexed: "unique" }),
+    reservedAt: timestamp(),
+    refundedAmount: integer({ defaultValue: 0, validation: { min: 0 } }),
     amount: integer({
       validation: { isRequired: true },
       ui: {
@@ -66,6 +69,8 @@ export const Payment = list({
       options: [
         { label: "Pending", value: "pending" },
         { label: "Processing", value: "processing" },
+        { label: "Authorized", value: "authorized" },
+        { label: "Unknown", value: "unknown" },
         { label: "Succeeded", value: "succeeded" },
         { label: "Failed", value: "failed" },
         { label: "Cancelled", value: "cancelled" },

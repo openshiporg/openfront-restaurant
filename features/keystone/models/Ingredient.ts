@@ -69,6 +69,7 @@ export const Ingredient = list({
     }),
 
     currentStock: decimal({
+      access: { create: () => false, update: () => false },
       precision: 10,
       scale: 2,
       defaultValue: "0.00",

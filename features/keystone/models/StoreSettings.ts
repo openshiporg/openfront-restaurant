@@ -1,8 +1,15 @@
-import { list } from "@keystone-6/core";
-import { text, integer, decimal, json, checkbox } from "@keystone-6/core/fields";
+import { graphql, list } from "@keystone-6/core";
+import { text, integer, decimal, json, checkbox, virtual } from "@keystone-6/core/fields";
 
 import { permissions } from "../access";
 import { trackingFields } from "./trackingFields";
+import {
+  DEFAULT_STORE_LOGO_COLOR,
+  DEFAULT_STORE_LOGO_ICON,
+  normalizeStoreLogoColor,
+} from "../../lib/store-logo";
+import { sanitizeStoreLogoSvg } from "../utils/storeLogo";
+import { getPublicPaymentProviderConfig } from "../utils/paymentProviderConfig";
 
 export const StoreSettings = list({
   access: {
@@ -31,6 +38,59 @@ export const StoreSettings = list({
 
     tagline: text({
       ui: { description: "Short tagline (e.g., 'Artisan Burgers & Craft Sides')" },
+    }),
+
+    logoIcon: text({
+      defaultValue: DEFAULT_STORE_LOGO_ICON,
+      ui: { description: "Sanitized SVG used by the storefront and marketplace" },
+      hooks: {
+        resolveInput: ({ resolvedData, fieldKey }) => {
+          const value = resolvedData[fieldKey];
+          if (value === undefined || value === null || value === '') return value;
+          return typeof value === 'string' ? sanitizeStoreLogoSvg(value) : '';
+        },
+        validate: ({ inputData, resolvedData, fieldKey, addValidationError }) => {
+          const submitted = inputData?.[fieldKey];
+          if (typeof submitted === 'string' && submitted.trim() && !resolvedData?.[fieldKey]) {
+            addValidationError('Logo must be a valid, safe SVG document');
+          }
+        },
+      },
+    }),
+
+    logoColor: text({
+      defaultValue: DEFAULT_STORE_LOGO_COLOR,
+      ui: { description: "CSS hue rotation in degrees" },
+      hooks: {
+        resolveInput: ({ resolvedData, fieldKey }) => {
+          const value = resolvedData[fieldKey];
+          return value === undefined ? value : normalizeStoreLogoColor(value);
+        },
+      },
+    }),
+
+    paymentProviders: virtual({
+      field: graphql.field({
+        type: graphql.list(
+          graphql.object<{ provider: string; publishableKey: string }>()({
+            name: 'RestaurantPaymentProviderConfig',
+            fields: {
+              provider: graphql.field({ type: graphql.String }),
+              publishableKey: graphql.field({ type: graphql.String }),
+            },
+          })
+        ),
+        resolve: async (_item, _args, context) => {
+          const installedProviders = await context.sudo().query.PaymentProvider.findMany({
+            where: { isInstalled: { equals: true } },
+            query: 'code',
+          });
+          return installedProviders
+            .map((provider: any) => getPublicPaymentProviderConfig(provider.code || ''))
+            .filter((provider): provider is { provider: 'stripe' | 'paypal'; publishableKey: string } => Boolean(provider));
+        },
+      }),
+      ui: { query: '{ provider publishableKey }' },
     }),
 
     // Contact

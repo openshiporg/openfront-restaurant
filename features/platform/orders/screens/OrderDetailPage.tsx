@@ -31,7 +31,7 @@ export async function OrderDetailPage({ params }: OrderPageParams) {
   }
 
   return (
-    <>
+    <div className="flex h-full min-h-0 flex-col overflow-hidden">
       <PageBreadcrumbs
         items={[
           { type: 'link', label: 'Dashboard', href: '' },
@@ -40,11 +40,13 @@ export async function OrderDetailPage({ params }: OrderPageParams) {
           { type: 'page', label: `#${order.orderNumber}` },
         ]}
       />
-      <OrderPageClient
-        order={order}
-        currencyCode={storeSettings?.currencyCode || 'USD'}
-        locale={storeSettings?.locale || 'en-US'}
-      />
-    </>
+      <div className="min-h-0 flex-1">
+        <OrderPageClient
+          order={order}
+          currencyCode={storeSettings?.currencyCode || 'USD'}
+          locale={storeSettings?.locale || 'en-US'}
+        />
+      </div>
+    </div>
   );
 } 

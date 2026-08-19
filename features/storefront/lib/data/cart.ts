@@ -17,7 +17,7 @@ const CART_QUERY = gql`
 `;
 
 const UPDATE_ACTIVE_CART_MUTATION = gql`
-  mutation UpdateActiveCart($cartId: ID!, $data: CartUpdateInput!) {
+  mutation UpdateActiveCart($cartId: ID!, $data: ActiveCartUpdateInput!) {
     updateActiveCart(cartId: $cartId, data: $data) {
       id
     }
@@ -181,18 +181,16 @@ async function getOrSetCart(orderType: string = "pickup") {
   }
 
   if (!cart) {
-    const { createCart: newCart } = await openfrontClient.request(
+    const { createActiveCart: newCart } = await openfrontClient.request(
       gql`
-        mutation CreateCart($data: CartCreateInput!) {
-          createCart(data: $data) {
+        mutation CreateActiveCart($orderType: String) {
+          createActiveCart(orderType: $orderType) {
             id
             orderType
           }
         }
       `,
-      {
-        data: { orderType, tipPercent: DEFAULT_TIP_PERCENT },
-      },
+      { orderType },
       headers
     );
 
@@ -206,23 +204,21 @@ async function getOrSetCart(orderType: string = "pickup") {
 
 export async function createCart(orderType: string = "pickup") {
   const CREATE_CART_MUTATION = gql`
-    mutation CreateCart($data: CartCreateInput!) {
-      createCart(data: $data) {
+    mutation CreateActiveCart($orderType: String) {
+      createActiveCart(orderType: $orderType) {
         id
       }
     }
   `;
 
   const headers = await getAuthHeaders();
-  const { createCart } = await openfrontClient.request(
+  const { createActiveCart } = await openfrontClient.request(
     CREATE_CART_MUTATION,
-    {
-      data: { orderType, tipPercent: DEFAULT_TIP_PERCENT }
-    },
+    { orderType },
     headers
   );
 
-  return createCart;
+  return createActiveCart;
 }
 
 export async function setCheckoutContact(data: {
@@ -245,7 +241,7 @@ export async function setCheckoutContact(data: {
           customerName: data.customerName,
           customerPhone: data.customerPhone,
           orderType: data.orderType,
-          user: data.userId ? { connect: { id: data.userId } } : undefined,
+          userId: data.userId || undefined,
         },
       },
       await getAuthHeaders()
@@ -304,7 +300,7 @@ export async function submitCheckoutContact(data: {
           customerName: data.customerName,
           customerPhone: data.customerPhone,
           orderType: data.orderType,
-          user: user?.id ? { connect: { id: user.id } } : undefined,
+          userId: user?.id || undefined,
         },
       },
       authHeaders
@@ -456,7 +452,7 @@ export async function setCheckoutDelivery(data: {
       {
         cartId,
         data: {
-          user: user?.id ? { connect: { id: user.id } } : undefined,
+          userId: user?.id || undefined,
           deliveryAddress: addressForCart?.address1 || deliveryAddress,
           deliveryAddress2: addressForCart?.address2 || deliveryAddress2,
           deliveryCity: addressForCart?.city || deliveryCity,
@@ -519,8 +515,8 @@ export async function addToCart(params: {
   orderType?: string;
 }) {
   const ADD_TO_CART_MUTATION = gql`
-    mutation AddToCart($cartId: ID!, $data: CartUpdateInput!) {
-      updateActiveCart(cartId: $cartId, data: $data) {
+    mutation AddActiveCartItem($cartId: ID!, $input: ActiveCartItemInput!) {
+      addActiveCartItem(cartId: $cartId, input: $input) {
         id
       }
     }
@@ -536,30 +532,22 @@ export async function addToCart(params: {
     cookie: `_restaurant_cart_id=${cart.id}`,
   };
 
-  const { updateActiveCart } = await openfrontClient.request(
+  const { addActiveCartItem } = await openfrontClient.request(
     ADD_TO_CART_MUTATION,
     {
       cartId: cart.id,
-      data: {
-        items: {
-          create: [
-            {
-              menuItem: { connect: { id: params.menuItemId } },
-              quantity: params.quantity,
-              modifiers: params.modifierIds
-                ? { connect: params.modifierIds.map((id: string) => ({ id })) }
-                : undefined,
-              specialInstructions: params.specialInstructions,
-            },
-          ],
-        },
+      input: {
+        menuItemId: params.menuItemId,
+        quantity: params.quantity,
+        modifierIds: params.modifierIds || [],
+        specialInstructions: params.specialInstructions,
       },
     },
     headers
   );
 
   updateTag("cart");
-  return updateActiveCart;
+  return addActiveCartItem;
 }
 
 export async function updateLineItem(params: {

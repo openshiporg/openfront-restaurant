@@ -4,6 +4,14 @@ import React, { useState, useEffect } from 'react'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Label } from '@/components/ui/label'
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import {
   Popover,
   PopoverContent,
@@ -36,6 +44,18 @@ interface MenuCategory {
   name: string
 }
 
+interface MenuModifier {
+  id: string
+  name: string
+  modifierGroup: string
+  modifierGroupLabel?: string | null
+  required: boolean
+  minSelections: number
+  maxSelections: number
+  priceAdjustment: string
+  defaultSelected: boolean
+}
+
 interface MenuItem {
   id: string
   name: string
@@ -43,12 +63,15 @@ interface MenuItem {
   available: boolean
   thumbnail?: string | null
   category: { id: string; name: string } | null
+  modifiers: MenuModifier[]
 }
 
 interface CartItem {
   menuItem: MenuItem
   quantity: number
   courseNumber: number
+  modifierIds: string[]
+  specialInstructions: string
 }
 
 const GET_DATA = gql`
@@ -60,6 +83,10 @@ const GET_DATA = gql`
     menuItems(orderBy: { name: asc }) {
       id name price available thumbnail
       category { id name }
+      modifiers {
+        id name modifierGroup modifierGroupLabel required
+        minSelections maxSelections priceAdjustment defaultSelected
+      }
     }
     storeSettings {
       taxRate
@@ -125,6 +152,10 @@ export function POSClient() {
   const [tablePopoverOpen, setTablePopoverOpen] = useState(false)
   const [isUrgent, setIsUrgent] = useState(false)
   const [specialInstructions, setSpecialInstructions] = useState('')
+  const [configuringItem, setConfiguringItem] = useState<MenuItem | null>(null)
+  const [selectedModifierIds, setSelectedModifierIds] = useState<string[]>([])
+  const [itemInstructions, setItemInstructions] = useState('')
+  const [modifierError, setModifierError] = useState<string | null>(null)
 
   const fetchData = async () => {
     try {
@@ -148,18 +179,84 @@ export function POSClient() {
     return () => clearInterval(i)
   }, [])
 
-  const addToCart = (menuItem: MenuItem) => {
-    if (!menuItem.available) return
+  const appendConfiguredItem = (menuItem: MenuItem, modifierIds: string[], instructions = '') => {
+    const signature = [...modifierIds].sort().join(':')
     const existing = cart.findIndex(
-      (i) => i.menuItem.id === menuItem.id && i.courseNumber === 1
+      (item) =>
+        item.menuItem.id === menuItem.id &&
+        item.courseNumber === 1 &&
+        [...item.modifierIds].sort().join(':') === signature &&
+        item.specialInstructions === instructions
     )
     if (existing >= 0) {
       const next = [...cart]
       next[existing].quantity += 1
       setCart(next)
     } else {
-      setCart([...cart, { menuItem, quantity: 1, courseNumber: 1 }])
+      setCart([...cart, {
+        menuItem,
+        quantity: 1,
+        courseNumber: 1,
+        modifierIds,
+        specialInstructions: instructions,
+      }])
     }
+  }
+
+  const addToCart = (menuItem: MenuItem) => {
+    if (!menuItem.available) return
+    if (!menuItem.modifiers?.length) {
+      appendConfiguredItem(menuItem, [])
+      return
+    }
+    setConfiguringItem(menuItem)
+    setSelectedModifierIds(
+      menuItem.modifiers.filter((modifier) => modifier.defaultSelected).map((modifier) => modifier.id)
+    )
+    setItemInstructions('')
+    setModifierError(null)
+  }
+
+  const modifierGroups = configuringItem
+    ? Object.entries(
+        configuringItem.modifiers.reduce<Record<string, MenuModifier[]>>((groups, modifier) => {
+          const key = modifier.modifierGroup || 'addons'
+          groups[key] = [...(groups[key] || []), modifier]
+          return groups
+        }, {})
+      )
+    : []
+
+  const toggleModifier = (modifier: MenuModifier) => {
+    setModifierError(null)
+    setSelectedModifierIds((current) => {
+      if (current.includes(modifier.id)) return current.filter((id) => id !== modifier.id)
+      const groupSelected = configuringItem?.modifiers.filter(
+        (candidate) => candidate.modifierGroup === modifier.modifierGroup && current.includes(candidate.id)
+      ) || []
+      const maximum = Math.max(1, modifier.maxSelections || 1)
+      if (groupSelected.length >= maximum) {
+        return current
+      }
+      return [...current, modifier.id]
+    })
+  }
+
+  const confirmConfiguredItem = () => {
+    if (!configuringItem) return
+    for (const [group, modifiers] of modifierGroups) {
+      const selectedCount = modifiers.filter((modifier) => selectedModifierIds.includes(modifier.id)).length
+      const minimum = Math.max(
+        modifiers.some((modifier) => modifier.required) ? 1 : 0,
+        ...modifiers.map((modifier) => Number(modifier.minSelections || 0))
+      )
+      if (selectedCount < minimum) {
+        setModifierError(`Select at least ${minimum} option${minimum === 1 ? '' : 's'} from ${modifiers[0]?.modifierGroupLabel || group}`)
+        return
+      }
+    }
+    appendConfiguredItem(configuringItem, selectedModifierIds, itemInstructions.trim())
+    setConfiguringItem(null)
   }
 
   const submitOrder = async () => {
@@ -176,6 +273,8 @@ export function POSClient() {
           menuItemId: item.menuItem.id,
           quantity: item.quantity,
           courseNumber: item.courseNumber,
+          modifierIds: item.modifierIds,
+          specialInstructions: item.specialInstructions || null,
         })),
       })
       setCart([])
@@ -190,7 +289,12 @@ export function POSClient() {
     }
   }
 
-  const cartSubtotal = cart.reduce((s, i) => s + parseInt(i.menuItem.price) * i.quantity, 0)
+  const cartSubtotal = cart.reduce((sum, item) => {
+    const modifierTotal = item.menuItem.modifiers
+      .filter((modifier) => item.modifierIds.includes(modifier.id))
+      .reduce((modifierSum, modifier) => modifierSum + Number(modifier.priceAdjustment || 0), 0)
+    return sum + (Number(item.menuItem.price || 0) + modifierTotal) * item.quantity
+  }, 0)
   const taxRate = Number(data.storeSettings?.taxRate || 0)
   const cartTax = Math.round(cartSubtotal * (taxRate / 100))
   const cartTotal = cartSubtotal + cartTax
@@ -488,8 +592,21 @@ export function POSClient() {
                         <div className="min-w-0">
                           <p className="text-xs font-semibold truncate">{item.menuItem.name}</p>
                           <p className="text-[10px] text-muted-foreground">
-                            {formatMoney(parseInt(item.menuItem.price))} each
+                            {formatMoney(
+                              Number(item.menuItem.price || 0) +
+                              item.menuItem.modifiers
+                                .filter((modifier) => item.modifierIds.includes(modifier.id))
+                                .reduce((sum, modifier) => sum + Number(modifier.priceAdjustment || 0), 0)
+                            )} each
                           </p>
+                          {item.modifierIds.length > 0 && (
+                            <p className="text-[10px] text-muted-foreground truncate">
+                              {item.menuItem.modifiers
+                                .filter((modifier) => item.modifierIds.includes(modifier.id))
+                                .map((modifier) => modifier.name)
+                                .join(', ')}
+                            </p>
+                          )}
                         </div>
                       </div>
                       <button
@@ -535,7 +652,12 @@ export function POSClient() {
                         ))}
                       </div>
                       <span className="text-xs font-semibold tabular-nums">
-                        {formatMoney(parseInt(item.menuItem.price) * item.quantity)}
+                        {formatMoney((
+                          Number(item.menuItem.price || 0) +
+                          item.menuItem.modifiers
+                            .filter((modifier) => item.modifierIds.includes(modifier.id))
+                            .reduce((sum, modifier) => sum + Number(modifier.priceAdjustment || 0), 0)
+                        ) * item.quantity)}
                       </span>
                     </div>
                   </div>
@@ -599,6 +721,73 @@ export function POSClient() {
           </div>
         </div>
       </div>
+
+      <Dialog open={Boolean(configuringItem)} onOpenChange={(open) => !open && setConfiguringItem(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Customize {configuringItem?.name}</DialogTitle>
+          </DialogHeader>
+          <div className="max-h-[55vh] space-y-5 overflow-y-auto py-2">
+            {modifierGroups.map(([group, modifiers]) => {
+              const minimum = Math.max(
+                modifiers.some((modifier) => modifier.required) ? 1 : 0,
+                ...modifiers.map((modifier) => Number(modifier.minSelections || 0))
+              )
+              const maximum = Math.min(
+                ...modifiers.map((modifier) => Math.max(1, Number(modifier.maxSelections || 1)))
+              )
+              return (
+                <div key={group} className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label>{modifiers[0]?.modifierGroupLabel || group}</Label>
+                    <span className="text-xs text-muted-foreground">
+                      {minimum > 0 ? `Choose ${minimum}` : 'Optional'} · max {maximum}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {modifiers.map((modifier) => {
+                      const selected = selectedModifierIds.includes(modifier.id)
+                      return (
+                        <button
+                          key={modifier.id}
+                          type="button"
+                          onClick={() => toggleModifier(modifier)}
+                          className={cn(
+                            'rounded-lg border p-3 text-left text-sm transition-colors',
+                            selected ? 'border-foreground bg-muted' : 'border-border hover:bg-muted/40'
+                          )}
+                        >
+                          <span className="font-medium">{modifier.name}</span>
+                          {Number(modifier.priceAdjustment || 0) !== 0 && (
+                            <span className="ml-2 text-xs text-muted-foreground">
+                              {Number(modifier.priceAdjustment) > 0 ? '+' : ''}{formatMoney(Number(modifier.priceAdjustment))}
+                            </span>
+                          )}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              )
+            })}
+            <div className="space-y-2">
+              <Label htmlFor="pos-item-instructions">Item instructions</Label>
+              <Textarea
+                id="pos-item-instructions"
+                value={itemInstructions}
+                maxLength={500}
+                onChange={(event) => setItemInstructions(event.target.value)}
+                placeholder="Preparation notes"
+              />
+            </div>
+            {modifierError && <p className="text-sm text-destructive">{modifierError}</p>}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfiguringItem(null)}>Cancel</Button>
+            <Button onClick={confirmConfiguredItem}>Add item</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

@@ -22,8 +22,8 @@ export default async function getCustomerOrders(
       customer: { id: { equals: sessionUserId } },
     },
     orderBy: { createdAt: "desc" },
-    take: limit,
-    skip: offset,
+    take: Math.min(50, Math.max(1, Number(limit) || 10)),
+    skip: Math.max(0, Number(offset) || 0),
     query: `
       id
       orderNumber
@@ -36,6 +36,9 @@ export default async function getCustomerOrders(
         id
         quantity
         price
+        itemNameSnapshot
+        itemThumbnailSnapshot
+        modifiersSnapshot
         menuItem {
           id
           name

@@ -13,8 +13,11 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Openfront Restaurant",
-  description: "Restaurant operations platform for POS, menu, and fulfillment",
+  title: "Next x Keystone Starter",
+  description: "Next, Keystone, and Tailwind Starter Template",
+  icons: {
+    icon: "/next-keystone-favicon.svg",
+  },
 };
 
 export default function RootLayout({
@@ -24,9 +27,6 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <head>
-        <link href="/favicon.svg" rel="icon" />
-      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased min-h-screen bg-background font-sans`}
       >

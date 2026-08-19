@@ -1,8 +1,11 @@
 import Link from "next/link"
-import { Suspense } from "react"
-import { getStoreSettings } from "@/features/storefront/lib/data/menu"
 import { getCurrencyConfig } from "@/features/storefront/lib/currency"
 import CartButton from "@/features/storefront/modules/layout/components/cart-button"
+import type { CartData } from "@/features/storefront/modules/layout/components/cart-dropdown"
+import {
+  StoreBrand,
+  type StorefrontLayoutSettings,
+} from "@/features/storefront/modules/layout/components/store-logo"
 import { StorefrontSectionLink } from "@/features/storefront/components/StorefrontSectionLink"
 
 const primaryLinks = [
@@ -11,11 +14,18 @@ const primaryLinks = [
   { href: "/#visit-us", label: "Visit us" },
 ]
 
-export default async function Nav() {
-  const storeSettings = await getStoreSettings()
+interface NavProps {
+  storeSettings: StorefrontLayoutSettings | null
+  cart: CartData | null
+  brandHue: string
+}
 
+export default function Nav({ storeSettings, cart, brandHue }: NavProps) {
   const storeName = storeSettings?.name || "Restaurant"
-  const currencyConfig = getCurrencyConfig(storeSettings || undefined)
+  const currencyConfig = getCurrencyConfig({
+    currencyCode: storeSettings?.currencyCode || undefined,
+    locale: storeSettings?.locale || undefined,
+  })
 
   return (
     <div className="sticky top-0 z-50">
@@ -31,11 +41,11 @@ export default async function Nav() {
 
       <header className="border-b border-border bg-background/95 backdrop-blur">
         <div className="storefront-shell flex h-16 items-center justify-between gap-6">
-          <Link href="/" className="min-w-0 py-1">
-            <span className="block whitespace-nowrap font-serif text-[1.4rem] font-bold leading-[1.05] tracking-tight text-primary sm:text-[1.6rem]">
-              {storeName}
-            </span>
-          </Link>
+          <StoreBrand
+            name={storeName}
+            logoIcon={storeSettings?.logoIcon}
+            logoColor={storeSettings?.logoColor}
+          />
 
           <nav className="hidden items-center gap-1 lg:flex">
             {primaryLinks.map((link) => (
@@ -57,18 +67,12 @@ export default async function Nav() {
               Account
             </Link>
 
-            <Suspense
-              fallback={
-                <button className="inline-flex items-center gap-2 rounded-full border border-border bg-background px-4 py-2 text-sm font-medium text-muted-foreground">
-                  <span>Order</span>
-                </button>
-              }
-            >
-              <CartButton
-                currencyCode={currencyConfig.currencyCode}
-                locale={currencyConfig.locale}
-              />
-            </Suspense>
+            <CartButton
+              cart={cart}
+              currencyCode={currencyConfig.currencyCode}
+              locale={currencyConfig.locale}
+              brandHue={brandHue}
+            />
           </div>
         </div>
       </header>

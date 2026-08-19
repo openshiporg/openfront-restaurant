@@ -1712,7 +1712,19 @@ type OrderItem {
   price: Int
   unitPrice: Int
   totalPrice: Int
+  itemNameSnapshot: String
+  itemThumbnailSnapshot: String
+  kitchenStationSnapshot: String
+  menuItemIdSnapshot: String
+  originalOrderIdSnapshot: String
+  modifiersSnapshot: JSON
   thumbnail: String
+  adjustmentTotal: Int
+  isVoided: Boolean
+  voidedAt: DateTime
+  voidReason: String
+  voidedBy: User
+  approvedBy: User
   specialInstructions: String
   courseNumber: Int
   seatNumber: Int
@@ -1745,6 +1757,17 @@ input OrderItemWhereInput {
   id: IDFilter
   quantity: IntFilter
   price: IntFilter
+  itemNameSnapshot: StringFilter
+  itemThumbnailSnapshot: StringFilter
+  kitchenStationSnapshot: StringFilter
+  menuItemIdSnapshot: StringFilter
+  originalOrderIdSnapshot: StringFilter
+  adjustmentTotal: IntNullableFilter
+  isVoided: BooleanFilter
+  voidedAt: DateTimeNullableFilter
+  voidReason: StringFilter
+  voidedBy: UserWhereInput
+  approvedBy: UserWhereInput
   specialInstructions: StringFilter
   courseNumber: IntNullableFilter
   seatNumber: IntNullableFilter
@@ -1774,6 +1797,15 @@ input OrderItemOrderByInput {
   id: OrderDirection
   quantity: OrderDirection
   price: OrderDirection
+  itemNameSnapshot: OrderDirection
+  itemThumbnailSnapshot: OrderDirection
+  kitchenStationSnapshot: OrderDirection
+  menuItemIdSnapshot: OrderDirection
+  originalOrderIdSnapshot: OrderDirection
+  adjustmentTotal: OrderDirection
+  isVoided: OrderDirection
+  voidedAt: OrderDirection
+  voidReason: OrderDirection
   specialInstructions: OrderDirection
   courseNumber: OrderDirection
   seatNumber: OrderDirection
@@ -1791,6 +1823,18 @@ input OrderItemOrderByInput {
 input OrderItemUpdateInput {
   quantity: Int
   price: Int
+  itemNameSnapshot: String
+  itemThumbnailSnapshot: String
+  kitchenStationSnapshot: String
+  menuItemIdSnapshot: String
+  originalOrderIdSnapshot: String
+  modifiersSnapshot: JSON
+  adjustmentTotal: Int
+  isVoided: Boolean
+  voidedAt: DateTime
+  voidReason: String
+  voidedBy: UserRelateToOneForUpdateInput
+  approvedBy: UserRelateToOneForUpdateInput
   specialInstructions: String
   courseNumber: Int
   seatNumber: Int
@@ -1837,6 +1881,18 @@ input OrderItemUpdateArgs {
 input OrderItemCreateInput {
   quantity: Int
   price: Int
+  itemNameSnapshot: String
+  itemThumbnailSnapshot: String
+  kitchenStationSnapshot: String
+  menuItemIdSnapshot: String
+  originalOrderIdSnapshot: String
+  modifiersSnapshot: JSON
+  adjustmentTotal: Int
+  isVoided: Boolean
+  voidedAt: DateTime
+  voidReason: String
+  voidedBy: UserRelateToOneForCreateInput
+  approvedBy: UserRelateToOneForCreateInput
   specialInstructions: String
   courseNumber: Int
   seatNumber: Int
@@ -2185,6 +2241,9 @@ input TableRelateToOneForCreateInput {
 
 type Payment {
   id: ID!
+  idempotencyKey: String
+  reservedAt: DateTime
+  refundedAmount: Int
   amount: Int
   data: JSON
   currencyCode: String
@@ -2210,6 +2269,7 @@ type Payment {
 
 input PaymentWhereUniqueInput {
   id: ID
+  idempotencyKey: String
 }
 
 input PaymentWhereInput {
@@ -2217,6 +2277,9 @@ input PaymentWhereInput {
   OR: [PaymentWhereInput!]
   NOT: [PaymentWhereInput!]
   id: IDFilter
+  idempotencyKey: StringFilter
+  reservedAt: DateTimeNullableFilter
+  refundedAmount: IntNullableFilter
   amount: IntFilter
   currencyCode: StringFilter
   status: StringFilter
@@ -2241,6 +2304,9 @@ input PaymentWhereInput {
 
 input PaymentOrderByInput {
   id: OrderDirection
+  idempotencyKey: OrderDirection
+  reservedAt: OrderDirection
+  refundedAmount: OrderDirection
   amount: OrderDirection
   currencyCode: OrderDirection
   status: OrderDirection
@@ -2260,6 +2326,9 @@ input PaymentOrderByInput {
 }
 
 input PaymentUpdateInput {
+  idempotencyKey: String
+  reservedAt: DateTime
+  refundedAmount: Int
   amount: Int
   data: JSON
   currencyCode: String
@@ -2301,6 +2370,9 @@ input PaymentUpdateArgs {
 }
 
 input PaymentCreateInput {
+  idempotencyKey: String
+  reservedAt: DateTime
+  refundedAmount: Int
   amount: Int
   data: JSON
   currencyCode: String
@@ -2469,6 +2541,7 @@ type PaymentSession {
 
 input PaymentSessionWhereUniqueInput {
   id: ID
+  idempotencyKey: String
 }
 
 input PaymentSessionWhereInput {
@@ -3216,6 +3289,9 @@ input GiftCardTransactionRelateToManyForCreateInput {
 
 type GiftCardTransaction {
   id: ID!
+  idempotencyKey: String
+  type: String
+  balanceAfter: Int
   amount: Int
   createdAt: DateTime
   updatedAt: DateTime
@@ -3225,6 +3301,7 @@ type GiftCardTransaction {
 
 input GiftCardTransactionWhereUniqueInput {
   id: ID
+  idempotencyKey: String
 }
 
 input GiftCardTransactionWhereInput {
@@ -3232,6 +3309,9 @@ input GiftCardTransactionWhereInput {
   OR: [GiftCardTransactionWhereInput!]
   NOT: [GiftCardTransactionWhereInput!]
   id: IDFilter
+  idempotencyKey: StringFilter
+  type: StringFilter
+  balanceAfter: IntFilter
   amount: IntFilter
   createdAt: DateTimeFilter
   updatedAt: DateTimeFilter
@@ -3241,12 +3321,18 @@ input GiftCardTransactionWhereInput {
 
 input GiftCardTransactionOrderByInput {
   id: OrderDirection
+  idempotencyKey: OrderDirection
+  type: OrderDirection
+  balanceAfter: OrderDirection
   amount: OrderDirection
   createdAt: OrderDirection
   updatedAt: OrderDirection
 }
 
 input GiftCardTransactionUpdateInput {
+  idempotencyKey: String
+  type: String
+  balanceAfter: Int
   amount: Int
   createdAt: DateTime
   updatedAt: DateTime
@@ -3266,6 +3352,9 @@ input GiftCardTransactionUpdateArgs {
 }
 
 input GiftCardTransactionCreateInput {
+  idempotencyKey: String
+  type: String
+  balanceAfter: Int
   amount: Int
   createdAt: DateTime
   updatedAt: DateTime
@@ -3839,6 +3928,10 @@ input StockMovementRelateToManyForCreateInput {
 
 type StockMovement {
   id: ID!
+  eventKey: String
+  referenceType: String
+  referenceId: String
+  metadata: JSON
   type: String
   quantity: Decimal
   reason: String
@@ -3851,6 +3944,7 @@ type StockMovement {
 
 input StockMovementWhereUniqueInput {
   id: ID
+  eventKey: String
 }
 
 input StockMovementWhereInput {
@@ -3858,6 +3952,9 @@ input StockMovementWhereInput {
   OR: [StockMovementWhereInput!]
   NOT: [StockMovementWhereInput!]
   id: IDFilter
+  eventKey: StringFilter
+  referenceType: StringFilter
+  referenceId: StringFilter
   type: StringFilter
   quantity: DecimalFilter
   reason: StringFilter
@@ -3870,6 +3967,9 @@ input StockMovementWhereInput {
 
 input StockMovementOrderByInput {
   id: OrderDirection
+  eventKey: OrderDirection
+  referenceType: OrderDirection
+  referenceId: OrderDirection
   type: OrderDirection
   quantity: OrderDirection
   reason: OrderDirection
@@ -3878,6 +3978,10 @@ input StockMovementOrderByInput {
 }
 
 input StockMovementUpdateInput {
+  eventKey: String
+  referenceType: String
+  referenceId: String
+  metadata: JSON
   type: String
   quantity: Decimal
   reason: String
@@ -3900,6 +4004,10 @@ input StockMovementUpdateArgs {
 }
 
 input StockMovementCreateInput {
+  eventKey: String
+  referenceType: String
+  referenceId: String
+  metadata: JSON
   type: String
   quantity: Decimal
   reason: String
@@ -3919,6 +4027,9 @@ type StoreSettings {
   id: ID!
   name: String
   tagline: String
+  logoIcon: String
+  logoColor: String
+  paymentProviders: [RestaurantPaymentProviderConfig]
   address: String
   phone: String
   email: String
@@ -3945,6 +4056,11 @@ type StoreSettings {
   updatedAt: DateTime
 }
 
+type RestaurantPaymentProviderConfig {
+  provider: String
+  publishableKey: String
+}
+
 input StoreSettingsWhereUniqueInput {
   id: ID
 }
@@ -3956,6 +4072,8 @@ input StoreSettingsWhereInput {
   id: IDFilter
   name: StringFilter
   tagline: StringFilter
+  logoIcon: StringFilter
+  logoColor: StringFilter
   address: StringFilter
   phone: StringFilter
   email: StringFilter
@@ -3984,6 +4102,8 @@ input StoreSettingsOrderByInput {
   id: OrderDirection
   name: OrderDirection
   tagline: OrderDirection
+  logoIcon: OrderDirection
+  logoColor: OrderDirection
   address: OrderDirection
   phone: OrderDirection
   email: OrderDirection
@@ -4011,6 +4131,8 @@ input StoreSettingsOrderByInput {
 input StoreSettingsUpdateInput {
   name: String
   tagline: String
+  logoIcon: String
+  logoColor: String
   address: String
   phone: String
   email: String
@@ -4045,6 +4167,8 @@ input StoreSettingsUpdateArgs {
 input StoreSettingsCreateInput {
   name: String
   tagline: String
+  logoIcon: String
+  logoColor: String
   address: String
   phone: String
   email: String
@@ -4415,6 +4539,10 @@ input TimeEntryCreateInput {
 
 type WasteLog {
   id: ID!
+  eventKey: String
+  reversedAt: DateTime
+  reversedBy: User
+  reversalReason: String
   quantity: Decimal
   reason: String
   cost: Float
@@ -4427,6 +4555,7 @@ type WasteLog {
 
 input WasteLogWhereUniqueInput {
   id: ID
+  eventKey: String
 }
 
 input WasteLogWhereInput {
@@ -4434,6 +4563,10 @@ input WasteLogWhereInput {
   OR: [WasteLogWhereInput!]
   NOT: [WasteLogWhereInput!]
   id: IDFilter
+  eventKey: StringFilter
+  reversedAt: DateTimeNullableFilter
+  reversedBy: UserWhereInput
+  reversalReason: StringFilter
   quantity: DecimalFilter
   reason: StringFilter
   notes: StringFilter
@@ -4445,6 +4578,9 @@ input WasteLogWhereInput {
 
 input WasteLogOrderByInput {
   id: OrderDirection
+  eventKey: OrderDirection
+  reversedAt: OrderDirection
+  reversalReason: OrderDirection
   quantity: OrderDirection
   reason: OrderDirection
   notes: OrderDirection
@@ -4453,6 +4589,10 @@ input WasteLogOrderByInput {
 }
 
 input WasteLogUpdateInput {
+  eventKey: String
+  reversedAt: DateTime
+  reversedBy: UserRelateToOneForUpdateInput
+  reversalReason: String
   quantity: Decimal
   reason: String
   notes: String
@@ -4468,6 +4608,10 @@ input WasteLogUpdateArgs {
 }
 
 input WasteLogCreateInput {
+  eventKey: String
+  reversedAt: DateTime
+  reversedBy: UserRelateToOneForCreateInput
+  reversalReason: String
   quantity: Decimal
   reason: String
   notes: String
@@ -4556,6 +4700,774 @@ input PurchaseOrderCreateInput {
   notes: String
   vendor: VendorRelateToOneForCreateInput
   createdBy: UserRelateToOneForCreateInput
+  createdAt: DateTime
+  updatedAt: DateTime
+}
+
+type AuditEvent {
+  id: ID!
+  eventKey: String
+  eventType: String
+  entityType: String
+  entityId: String
+  reason: String
+  before: JSON
+  after: JSON
+  metadata: JSON
+  occurredAt: DateTime
+  actor: User
+  approver: User
+  createdAt: DateTime
+  updatedAt: DateTime
+}
+
+input AuditEventWhereUniqueInput {
+  id: ID
+  eventKey: String
+}
+
+input AuditEventWhereInput {
+  AND: [AuditEventWhereInput!]
+  OR: [AuditEventWhereInput!]
+  NOT: [AuditEventWhereInput!]
+  id: IDFilter
+  eventKey: StringFilter
+  eventType: StringFilter
+  entityType: StringFilter
+  entityId: StringFilter
+  reason: StringFilter
+  occurredAt: DateTimeNullableFilter
+  actor: UserWhereInput
+  approver: UserWhereInput
+  createdAt: DateTimeFilter
+  updatedAt: DateTimeFilter
+}
+
+input AuditEventOrderByInput {
+  id: OrderDirection
+  eventKey: OrderDirection
+  eventType: OrderDirection
+  entityType: OrderDirection
+  entityId: OrderDirection
+  reason: OrderDirection
+  occurredAt: OrderDirection
+  createdAt: OrderDirection
+  updatedAt: OrderDirection
+}
+
+input AuditEventUpdateInput {
+  eventKey: String
+  eventType: String
+  entityType: String
+  entityId: String
+  reason: String
+  before: JSON
+  after: JSON
+  metadata: JSON
+  occurredAt: DateTime
+  actor: UserRelateToOneForUpdateInput
+  approver: UserRelateToOneForUpdateInput
+  createdAt: DateTime
+  updatedAt: DateTime
+}
+
+input AuditEventUpdateArgs {
+  where: AuditEventWhereUniqueInput!
+  data: AuditEventUpdateInput!
+}
+
+input AuditEventCreateInput {
+  eventKey: String
+  eventType: String
+  entityType: String
+  entityId: String
+  reason: String
+  before: JSON
+  after: JSON
+  metadata: JSON
+  occurredAt: DateTime
+  actor: UserRelateToOneForCreateInput
+  approver: UserRelateToOneForCreateInput
+  createdAt: DateTime
+  updatedAt: DateTime
+}
+
+type OrderAdjustment {
+  id: ID!
+  idempotencyKey: String
+  type: String
+  amount: Int
+  reason: String
+  metadata: JSON
+  order: RestaurantOrder
+  orderItem: OrderItem
+  actor: User
+  approvedBy: User
+  createdAt: DateTime
+  updatedAt: DateTime
+}
+
+input OrderAdjustmentWhereUniqueInput {
+  id: ID
+  idempotencyKey: String
+}
+
+input OrderAdjustmentWhereInput {
+  AND: [OrderAdjustmentWhereInput!]
+  OR: [OrderAdjustmentWhereInput!]
+  NOT: [OrderAdjustmentWhereInput!]
+  id: IDFilter
+  idempotencyKey: StringFilter
+  type: StringFilter
+  amount: IntFilter
+  reason: StringFilter
+  order: RestaurantOrderWhereInput
+  orderItem: OrderItemWhereInput
+  actor: UserWhereInput
+  approvedBy: UserWhereInput
+  createdAt: DateTimeFilter
+  updatedAt: DateTimeFilter
+}
+
+input OrderAdjustmentOrderByInput {
+  id: OrderDirection
+  idempotencyKey: OrderDirection
+  type: OrderDirection
+  amount: OrderDirection
+  reason: OrderDirection
+  createdAt: OrderDirection
+  updatedAt: OrderDirection
+}
+
+input OrderAdjustmentUpdateInput {
+  idempotencyKey: String
+  type: String
+  amount: Int
+  reason: String
+  metadata: JSON
+  order: RestaurantOrderRelateToOneForUpdateInput
+  orderItem: OrderItemRelateToOneForUpdateInput
+  actor: UserRelateToOneForUpdateInput
+  approvedBy: UserRelateToOneForUpdateInput
+  createdAt: DateTime
+  updatedAt: DateTime
+}
+
+input OrderItemRelateToOneForUpdateInput {
+  create: OrderItemCreateInput
+  connect: OrderItemWhereUniqueInput
+  disconnect: Boolean
+}
+
+input OrderAdjustmentUpdateArgs {
+  where: OrderAdjustmentWhereUniqueInput!
+  data: OrderAdjustmentUpdateInput!
+}
+
+input OrderAdjustmentCreateInput {
+  idempotencyKey: String
+  type: String
+  amount: Int
+  reason: String
+  metadata: JSON
+  order: RestaurantOrderRelateToOneForCreateInput
+  orderItem: OrderItemRelateToOneForCreateInput
+  actor: UserRelateToOneForCreateInput
+  approvedBy: UserRelateToOneForCreateInput
+  createdAt: DateTime
+  updatedAt: DateTime
+}
+
+input OrderItemRelateToOneForCreateInput {
+  create: OrderItemCreateInput
+  connect: OrderItemWhereUniqueInput
+}
+
+type Receipt {
+  id: ID!
+  receiptNumber: String
+  kind: String
+  amount: Int
+  currencyCode: String
+  snapshot: JSON
+  issuedAt: DateTime
+  order: RestaurantOrder
+  payment: Payment
+  refund: Refund
+  correctsReceipt: Receipt
+  issuedBy: User
+  createdAt: DateTime
+  updatedAt: DateTime
+}
+
+input ReceiptWhereUniqueInput {
+  id: ID
+  receiptNumber: String
+}
+
+input ReceiptWhereInput {
+  AND: [ReceiptWhereInput!]
+  OR: [ReceiptWhereInput!]
+  NOT: [ReceiptWhereInput!]
+  id: IDFilter
+  receiptNumber: StringFilter
+  kind: StringFilter
+  amount: IntFilter
+  currencyCode: StringFilter
+  issuedAt: DateTimeNullableFilter
+  order: RestaurantOrderWhereInput
+  payment: PaymentWhereInput
+  refund: RefundWhereInput
+  correctsReceipt: ReceiptWhereInput
+  issuedBy: UserWhereInput
+  createdAt: DateTimeFilter
+  updatedAt: DateTimeFilter
+}
+
+input ReceiptOrderByInput {
+  id: OrderDirection
+  receiptNumber: OrderDirection
+  kind: OrderDirection
+  amount: OrderDirection
+  currencyCode: OrderDirection
+  issuedAt: OrderDirection
+  createdAt: OrderDirection
+  updatedAt: OrderDirection
+}
+
+input ReceiptUpdateInput {
+  receiptNumber: String
+  kind: String
+  amount: Int
+  currencyCode: String
+  snapshot: JSON
+  issuedAt: DateTime
+  order: RestaurantOrderRelateToOneForUpdateInput
+  payment: PaymentRelateToOneForUpdateInput
+  refund: RefundRelateToOneForUpdateInput
+  correctsReceipt: ReceiptRelateToOneForUpdateInput
+  issuedBy: UserRelateToOneForUpdateInput
+  createdAt: DateTime
+  updatedAt: DateTime
+}
+
+input PaymentRelateToOneForUpdateInput {
+  create: PaymentCreateInput
+  connect: PaymentWhereUniqueInput
+  disconnect: Boolean
+}
+
+input RefundRelateToOneForUpdateInput {
+  create: RefundCreateInput
+  connect: RefundWhereUniqueInput
+  disconnect: Boolean
+}
+
+input ReceiptRelateToOneForUpdateInput {
+  create: ReceiptCreateInput
+  connect: ReceiptWhereUniqueInput
+  disconnect: Boolean
+}
+
+input ReceiptUpdateArgs {
+  where: ReceiptWhereUniqueInput!
+  data: ReceiptUpdateInput!
+}
+
+input ReceiptCreateInput {
+  receiptNumber: String
+  kind: String
+  amount: Int
+  currencyCode: String
+  snapshot: JSON
+  issuedAt: DateTime
+  order: RestaurantOrderRelateToOneForCreateInput
+  payment: PaymentRelateToOneForCreateInput
+  refund: RefundRelateToOneForCreateInput
+  correctsReceipt: ReceiptRelateToOneForCreateInput
+  issuedBy: UserRelateToOneForCreateInput
+  createdAt: DateTime
+  updatedAt: DateTime
+}
+
+input PaymentRelateToOneForCreateInput {
+  create: PaymentCreateInput
+  connect: PaymentWhereUniqueInput
+}
+
+input RefundRelateToOneForCreateInput {
+  create: RefundCreateInput
+  connect: RefundWhereUniqueInput
+}
+
+input ReceiptRelateToOneForCreateInput {
+  create: ReceiptCreateInput
+  connect: ReceiptWhereUniqueInput
+}
+
+type Refund {
+  id: ID!
+  idempotencyKey: String
+  amount: Int
+  currencyCode: String
+  status: String
+  reason: String
+  providerRefundId: String
+  providerData: JSON
+  processedAt: DateTime
+  payment: Payment
+  order: RestaurantOrder
+  requestedBy: User
+  approvedBy: User
+  createdAt: DateTime
+  updatedAt: DateTime
+}
+
+input RefundWhereUniqueInput {
+  id: ID
+  idempotencyKey: String
+}
+
+input RefundWhereInput {
+  AND: [RefundWhereInput!]
+  OR: [RefundWhereInput!]
+  NOT: [RefundWhereInput!]
+  id: IDFilter
+  idempotencyKey: StringFilter
+  amount: IntFilter
+  currencyCode: StringFilter
+  status: StringFilter
+  reason: StringFilter
+  providerRefundId: StringFilter
+  processedAt: DateTimeNullableFilter
+  payment: PaymentWhereInput
+  order: RestaurantOrderWhereInput
+  requestedBy: UserWhereInput
+  approvedBy: UserWhereInput
+  createdAt: DateTimeFilter
+  updatedAt: DateTimeFilter
+}
+
+input RefundOrderByInput {
+  id: OrderDirection
+  idempotencyKey: OrderDirection
+  amount: OrderDirection
+  currencyCode: OrderDirection
+  status: OrderDirection
+  reason: OrderDirection
+  providerRefundId: OrderDirection
+  processedAt: OrderDirection
+  createdAt: OrderDirection
+  updatedAt: OrderDirection
+}
+
+input RefundUpdateInput {
+  idempotencyKey: String
+  amount: Int
+  currencyCode: String
+  status: String
+  reason: String
+  providerRefundId: String
+  providerData: JSON
+  processedAt: DateTime
+  payment: PaymentRelateToOneForUpdateInput
+  order: RestaurantOrderRelateToOneForUpdateInput
+  requestedBy: UserRelateToOneForUpdateInput
+  approvedBy: UserRelateToOneForUpdateInput
+  createdAt: DateTime
+  updatedAt: DateTime
+}
+
+input RefundUpdateArgs {
+  where: RefundWhereUniqueInput!
+  data: RefundUpdateInput!
+}
+
+input RefundCreateInput {
+  idempotencyKey: String
+  amount: Int
+  currencyCode: String
+  status: String
+  reason: String
+  providerRefundId: String
+  providerData: JSON
+  processedAt: DateTime
+  payment: PaymentRelateToOneForCreateInput
+  order: RestaurantOrderRelateToOneForCreateInput
+  requestedBy: UserRelateToOneForCreateInput
+  approvedBy: UserRelateToOneForCreateInput
+  createdAt: DateTime
+  updatedAt: DateTime
+}
+
+type PaymentWebhookEvent {
+  id: ID!
+  eventKey: String
+  providerCode: String
+  providerEventId: String
+  eventType: String
+  status: String
+  payload: JSON
+  rawBody: String
+  error: String
+  attempts: Int
+  receivedAt: DateTime
+  processedAt: DateTime
+  payment: Payment
+  createdAt: DateTime
+  updatedAt: DateTime
+}
+
+input PaymentWebhookEventWhereUniqueInput {
+  id: ID
+  eventKey: String
+}
+
+input PaymentWebhookEventWhereInput {
+  AND: [PaymentWebhookEventWhereInput!]
+  OR: [PaymentWebhookEventWhereInput!]
+  NOT: [PaymentWebhookEventWhereInput!]
+  id: IDFilter
+  eventKey: StringFilter
+  providerCode: StringFilter
+  providerEventId: StringFilter
+  eventType: StringFilter
+  status: StringNullableFilter
+  rawBody: StringFilter
+  error: StringFilter
+  attempts: IntNullableFilter
+  receivedAt: DateTimeNullableFilter
+  processedAt: DateTimeNullableFilter
+  payment: PaymentWhereInput
+  createdAt: DateTimeFilter
+  updatedAt: DateTimeFilter
+}
+
+input PaymentWebhookEventOrderByInput {
+  id: OrderDirection
+  eventKey: OrderDirection
+  providerCode: OrderDirection
+  providerEventId: OrderDirection
+  eventType: OrderDirection
+  status: OrderDirection
+  rawBody: OrderDirection
+  error: OrderDirection
+  attempts: OrderDirection
+  receivedAt: OrderDirection
+  processedAt: OrderDirection
+  createdAt: OrderDirection
+  updatedAt: OrderDirection
+}
+
+input PaymentWebhookEventUpdateInput {
+  eventKey: String
+  providerCode: String
+  providerEventId: String
+  eventType: String
+  status: String
+  payload: JSON
+  rawBody: String
+  error: String
+  attempts: Int
+  receivedAt: DateTime
+  processedAt: DateTime
+  payment: PaymentRelateToOneForUpdateInput
+  createdAt: DateTime
+  updatedAt: DateTime
+}
+
+input PaymentWebhookEventUpdateArgs {
+  where: PaymentWebhookEventWhereUniqueInput!
+  data: PaymentWebhookEventUpdateInput!
+}
+
+input PaymentWebhookEventCreateInput {
+  eventKey: String
+  providerCode: String
+  providerEventId: String
+  eventType: String
+  status: String
+  payload: JSON
+  rawBody: String
+  error: String
+  attempts: Int
+  receivedAt: DateTime
+  processedAt: DateTime
+  payment: PaymentRelateToOneForCreateInput
+  createdAt: DateTime
+  updatedAt: DateTime
+}
+
+type KitchenTicketEvent {
+  id: ID!
+  eventType: String
+  eventKey: String
+  payload: JSON
+  occurredAt: DateTime
+  ticket: KitchenTicket
+  order: RestaurantOrder
+  orderItem: OrderItem
+  actor: User
+  createdAt: DateTime
+  updatedAt: DateTime
+}
+
+input KitchenTicketEventWhereUniqueInput {
+  id: ID
+  eventKey: String
+}
+
+input KitchenTicketEventWhereInput {
+  AND: [KitchenTicketEventWhereInput!]
+  OR: [KitchenTicketEventWhereInput!]
+  NOT: [KitchenTicketEventWhereInput!]
+  id: IDFilter
+  eventType: StringFilter
+  eventKey: StringFilter
+  occurredAt: DateTimeNullableFilter
+  ticket: KitchenTicketWhereInput
+  order: RestaurantOrderWhereInput
+  orderItem: OrderItemWhereInput
+  actor: UserWhereInput
+  createdAt: DateTimeFilter
+  updatedAt: DateTimeFilter
+}
+
+input KitchenTicketEventOrderByInput {
+  id: OrderDirection
+  eventType: OrderDirection
+  eventKey: OrderDirection
+  occurredAt: OrderDirection
+  createdAt: OrderDirection
+  updatedAt: OrderDirection
+}
+
+input KitchenTicketEventUpdateInput {
+  eventType: String
+  eventKey: String
+  payload: JSON
+  occurredAt: DateTime
+  ticket: KitchenTicketRelateToOneForUpdateInput
+  order: RestaurantOrderRelateToOneForUpdateInput
+  orderItem: OrderItemRelateToOneForUpdateInput
+  actor: UserRelateToOneForUpdateInput
+  createdAt: DateTime
+  updatedAt: DateTime
+}
+
+input KitchenTicketRelateToOneForUpdateInput {
+  create: KitchenTicketCreateInput
+  connect: KitchenTicketWhereUniqueInput
+  disconnect: Boolean
+}
+
+input KitchenTicketEventUpdateArgs {
+  where: KitchenTicketEventWhereUniqueInput!
+  data: KitchenTicketEventUpdateInput!
+}
+
+input KitchenTicketEventCreateInput {
+  eventType: String
+  eventKey: String
+  payload: JSON
+  occurredAt: DateTime
+  ticket: KitchenTicketRelateToOneForCreateInput
+  order: RestaurantOrderRelateToOneForCreateInput
+  orderItem: OrderItemRelateToOneForCreateInput
+  actor: UserRelateToOneForCreateInput
+  createdAt: DateTime
+  updatedAt: DateTime
+}
+
+input KitchenTicketRelateToOneForCreateInput {
+  create: KitchenTicketCreateInput
+  connect: KitchenTicketWhereUniqueInput
+}
+
+type IdempotencyKey {
+  id: ID!
+  idempotencyKey: String
+  requestMethod: String
+  requestParams: JSON
+  requestPath: String
+  responseCode: Int
+  responseBody: JSON
+  recoveryPoint: String
+  lockedAt: DateTime
+  createdAt: DateTime
+  updatedAt: DateTime
+}
+
+input IdempotencyKeyWhereUniqueInput {
+  id: ID
+  idempotencyKey: String
+}
+
+input IdempotencyKeyWhereInput {
+  AND: [IdempotencyKeyWhereInput!]
+  OR: [IdempotencyKeyWhereInput!]
+  NOT: [IdempotencyKeyWhereInput!]
+  id: IDFilter
+  idempotencyKey: StringFilter
+  requestMethod: StringFilter
+  requestPath: StringFilter
+  responseCode: IntNullableFilter
+  recoveryPoint: StringFilter
+  lockedAt: DateTimeNullableFilter
+  createdAt: DateTimeFilter
+  updatedAt: DateTimeFilter
+}
+
+input IdempotencyKeyOrderByInput {
+  id: OrderDirection
+  idempotencyKey: OrderDirection
+  requestMethod: OrderDirection
+  requestPath: OrderDirection
+  responseCode: OrderDirection
+  recoveryPoint: OrderDirection
+  lockedAt: OrderDirection
+  createdAt: OrderDirection
+  updatedAt: OrderDirection
+}
+
+input IdempotencyKeyUpdateInput {
+  idempotencyKey: String
+  requestMethod: String
+  requestParams: JSON
+  requestPath: String
+  responseCode: Int
+  responseBody: JSON
+  recoveryPoint: String
+  lockedAt: DateTime
+  createdAt: DateTime
+  updatedAt: DateTime
+}
+
+input IdempotencyKeyUpdateArgs {
+  where: IdempotencyKeyWhereUniqueInput!
+  data: IdempotencyKeyUpdateInput!
+}
+
+input IdempotencyKeyCreateInput {
+  idempotencyKey: String
+  requestMethod: String
+  requestParams: JSON
+  requestPath: String
+  responseCode: Int
+  responseBody: JSON
+  recoveryPoint: String
+  lockedAt: DateTime
+  createdAt: DateTime
+  updatedAt: DateTime
+}
+
+type ManagerApproval {
+  id: ID!
+  actionType: String
+  targetId: String
+  reason: String
+  amount: Int
+  requestFingerprint: String
+  requestPayload: JSON
+  status: String
+  requestedAt: DateTime
+  approvedAt: DateTime
+  consumedAt: DateTime
+  expiresAt: DateTime
+  consumedEntityType: String
+  consumedEntityId: String
+  requestedBy: User
+  approvedBy: User
+  createdAt: DateTime
+  updatedAt: DateTime
+}
+
+input ManagerApprovalWhereUniqueInput {
+  id: ID
+}
+
+input ManagerApprovalWhereInput {
+  AND: [ManagerApprovalWhereInput!]
+  OR: [ManagerApprovalWhereInput!]
+  NOT: [ManagerApprovalWhereInput!]
+  id: IDFilter
+  actionType: StringFilter
+  targetId: StringFilter
+  reason: StringFilter
+  amount: IntNullableFilter
+  requestFingerprint: StringFilter
+  status: StringFilter
+  requestedAt: DateTimeNullableFilter
+  approvedAt: DateTimeNullableFilter
+  consumedAt: DateTimeNullableFilter
+  expiresAt: DateTimeFilter
+  consumedEntityType: StringFilter
+  consumedEntityId: StringFilter
+  requestedBy: UserWhereInput
+  approvedBy: UserWhereInput
+  createdAt: DateTimeFilter
+  updatedAt: DateTimeFilter
+}
+
+input ManagerApprovalOrderByInput {
+  id: OrderDirection
+  actionType: OrderDirection
+  targetId: OrderDirection
+  reason: OrderDirection
+  amount: OrderDirection
+  requestFingerprint: OrderDirection
+  status: OrderDirection
+  requestedAt: OrderDirection
+  approvedAt: OrderDirection
+  consumedAt: OrderDirection
+  expiresAt: OrderDirection
+  consumedEntityType: OrderDirection
+  consumedEntityId: OrderDirection
+  createdAt: OrderDirection
+  updatedAt: OrderDirection
+}
+
+input ManagerApprovalUpdateInput {
+  actionType: String
+  targetId: String
+  reason: String
+  amount: Int
+  requestFingerprint: String
+  requestPayload: JSON
+  status: String
+  requestedAt: DateTime
+  approvedAt: DateTime
+  consumedAt: DateTime
+  expiresAt: DateTime
+  consumedEntityType: String
+  consumedEntityId: String
+  requestedBy: UserRelateToOneForUpdateInput
+  approvedBy: UserRelateToOneForUpdateInput
+  createdAt: DateTime
+  updatedAt: DateTime
+}
+
+input ManagerApprovalUpdateArgs {
+  where: ManagerApprovalWhereUniqueInput!
+  data: ManagerApprovalUpdateInput!
+}
+
+input ManagerApprovalCreateInput {
+  actionType: String
+  targetId: String
+  reason: String
+  amount: Int
+  requestFingerprint: String
+  requestPayload: JSON
+  status: String
+  requestedAt: DateTime
+  approvedAt: DateTime
+  consumedAt: DateTime
+  expiresAt: DateTime
+  consumedEntityType: String
+  consumedEntityId: String
+  requestedBy: UserRelateToOneForCreateInput
+  approvedBy: UserRelateToOneForCreateInput
   createdAt: DateTime
   updatedAt: DateTime
 }
@@ -4812,27 +5724,84 @@ type Mutation {
   updatePurchaseOrders(data: [PurchaseOrderUpdateArgs!]!): [PurchaseOrder]
   deletePurchaseOrder(where: PurchaseOrderWhereUniqueInput!): PurchaseOrder
   deletePurchaseOrders(where: [PurchaseOrderWhereUniqueInput!]!): [PurchaseOrder]
+  createAuditEvent(data: AuditEventCreateInput!): AuditEvent
+  createAuditEvents(data: [AuditEventCreateInput!]!): [AuditEvent]
+  updateAuditEvent(where: AuditEventWhereUniqueInput!, data: AuditEventUpdateInput!): AuditEvent
+  updateAuditEvents(data: [AuditEventUpdateArgs!]!): [AuditEvent]
+  deleteAuditEvent(where: AuditEventWhereUniqueInput!): AuditEvent
+  deleteAuditEvents(where: [AuditEventWhereUniqueInput!]!): [AuditEvent]
+  createOrderAdjustment(data: OrderAdjustmentCreateInput!): OrderAdjustment
+  createOrderAdjustments(data: [OrderAdjustmentCreateInput!]!): [OrderAdjustment]
+  updateOrderAdjustment(where: OrderAdjustmentWhereUniqueInput!, data: OrderAdjustmentUpdateInput!): OrderAdjustment
+  updateOrderAdjustments(data: [OrderAdjustmentUpdateArgs!]!): [OrderAdjustment]
+  deleteOrderAdjustment(where: OrderAdjustmentWhereUniqueInput!): OrderAdjustment
+  deleteOrderAdjustments(where: [OrderAdjustmentWhereUniqueInput!]!): [OrderAdjustment]
+  createReceipt(data: ReceiptCreateInput!): Receipt
+  createReceipts(data: [ReceiptCreateInput!]!): [Receipt]
+  updateReceipt(where: ReceiptWhereUniqueInput!, data: ReceiptUpdateInput!): Receipt
+  updateReceipts(data: [ReceiptUpdateArgs!]!): [Receipt]
+  deleteReceipt(where: ReceiptWhereUniqueInput!): Receipt
+  deleteReceipts(where: [ReceiptWhereUniqueInput!]!): [Receipt]
+  createRefund(data: RefundCreateInput!): Refund
+  createRefunds(data: [RefundCreateInput!]!): [Refund]
+  updateRefund(where: RefundWhereUniqueInput!, data: RefundUpdateInput!): Refund
+  updateRefunds(data: [RefundUpdateArgs!]!): [Refund]
+  deleteRefund(where: RefundWhereUniqueInput!): Refund
+  deleteRefunds(where: [RefundWhereUniqueInput!]!): [Refund]
+  createPaymentWebhookEvent(data: PaymentWebhookEventCreateInput!): PaymentWebhookEvent
+  createPaymentWebhookEvents(data: [PaymentWebhookEventCreateInput!]!): [PaymentWebhookEvent]
+  updatePaymentWebhookEvent(where: PaymentWebhookEventWhereUniqueInput!, data: PaymentWebhookEventUpdateInput!): PaymentWebhookEvent
+  updatePaymentWebhookEvents(data: [PaymentWebhookEventUpdateArgs!]!): [PaymentWebhookEvent]
+  deletePaymentWebhookEvent(where: PaymentWebhookEventWhereUniqueInput!): PaymentWebhookEvent
+  deletePaymentWebhookEvents(where: [PaymentWebhookEventWhereUniqueInput!]!): [PaymentWebhookEvent]
+  createKitchenTicketEvent(data: KitchenTicketEventCreateInput!): KitchenTicketEvent
+  createKitchenTicketEvents(data: [KitchenTicketEventCreateInput!]!): [KitchenTicketEvent]
+  updateKitchenTicketEvent(where: KitchenTicketEventWhereUniqueInput!, data: KitchenTicketEventUpdateInput!): KitchenTicketEvent
+  updateKitchenTicketEvents(data: [KitchenTicketEventUpdateArgs!]!): [KitchenTicketEvent]
+  deleteKitchenTicketEvent(where: KitchenTicketEventWhereUniqueInput!): KitchenTicketEvent
+  deleteKitchenTicketEvents(where: [KitchenTicketEventWhereUniqueInput!]!): [KitchenTicketEvent]
+  createIdempotencyKey(data: IdempotencyKeyCreateInput!): IdempotencyKey
+  createIdempotencyKeys(data: [IdempotencyKeyCreateInput!]!): [IdempotencyKey]
+  updateIdempotencyKey(where: IdempotencyKeyWhereUniqueInput!, data: IdempotencyKeyUpdateInput!): IdempotencyKey
+  updateIdempotencyKeys(data: [IdempotencyKeyUpdateArgs!]!): [IdempotencyKey]
+  deleteIdempotencyKey(where: IdempotencyKeyWhereUniqueInput!): IdempotencyKey
+  deleteIdempotencyKeys(where: [IdempotencyKeyWhereUniqueInput!]!): [IdempotencyKey]
+  createManagerApproval(data: ManagerApprovalCreateInput!): ManagerApproval
+  createManagerApprovals(data: [ManagerApprovalCreateInput!]!): [ManagerApproval]
+  updateManagerApproval(where: ManagerApprovalWhereUniqueInput!, data: ManagerApprovalUpdateInput!): ManagerApproval
+  updateManagerApprovals(data: [ManagerApprovalUpdateArgs!]!): [ManagerApproval]
+  deleteManagerApproval(where: ManagerApprovalWhereUniqueInput!): ManagerApproval
+  deleteManagerApprovals(where: [ManagerApprovalWhereUniqueInput!]!): [ManagerApproval]
   endSession: Boolean!
   authenticateUserWithPassword(email: String!, password: String!): UserAuthenticationWithPasswordResult
   createInitialUser(data: CreateInitialUserInput!): UserAuthenticationWithPasswordSuccess!
   sendUserPasswordResetLink(email: String!): Boolean!
   redeemUserPasswordResetToken(email: String!, token: String!, password: String!): RedeemUserPasswordResetTokenResult
   updateActiveUser(data: UserUpdateProfileInput!): User
-  updateActiveCart(cartId: ID!, data: CartUpdateInput!): Cart
+  createActiveCart(orderType: String): Cart
+  addActiveCartItem(cartId: ID!, input: ActiveCartItemInput!): Cart
+  updateActiveCart(cartId: ID!, data: ActiveCartUpdateInput!): Cart
   updateCartItemQuantity(cartItemId: ID!, quantity: Int!): Cart
   removeCartItem(cartItemId: ID!): Cart
-  processPayment(orderId: String!, amount: Int!, paymentMethod: String!, tipAmount: Int): ProcessPaymentResult
+  processPayment(orderId: String!, amount: Int, paymentMethod: String!, tipAmount: Int, idempotencyKey: String!): ProcessPaymentResult
+  setGiftCardStatus(giftCardId: ID!, isDisabled: Boolean!, reason: String): GiftCard
+  redeemGiftCard(orderId: String!, code: String!, tipAmount: Int, idempotencyKey: String!): GiftCardRedemptionResult
+  refundPayment(paymentId: ID!, amount: Int, reason: String!, idempotencyKey: String!, managerApproval: Boolean @deprecated(reason: "Caller assertions do not constitute approval"), managerApprovalId: ID): RefundPaymentResult
   capturePayment(paymentIntentId: String!): CapturePaymentResult
+  reconcilePayment(paymentId: ID!): CapturePaymentResult
   splitCheckByItem(orderId: String!, itemIds: [String!]!): SplitCheckResult
   splitCheckByGuest(orderId: String!, guestCount: Int!): SplitCheckResult
-  voidOrderItem(orderItemId: String!, reason: String!, managerApproval: Boolean, managerId: String): VoidCompResult
-  compOrderItem(orderItemId: String!, reason: String!, compAmount: Int, managerApproval: Boolean, managerId: String): VoidCompResult
-  voidOrder(orderId: String!, reason: String!, managerApproval: Boolean, managerId: String): VoidCompResult
+  voidOrderItem(orderItemId: String!, reason: String!, managerApproval: Boolean @deprecated(reason: "Caller assertions do not constitute approval"), managerId: String @deprecated(reason: "Use managerApprovalId"), managerApprovalId: ID, idempotencyKey: String): VoidCompResult
+  compOrderItem(orderItemId: String!, reason: String!, compAmount: Int, managerApproval: Boolean @deprecated(reason: "Caller assertions do not constitute approval"), managerId: String @deprecated(reason: "Use managerApprovalId"), managerApprovalId: ID, idempotencyKey: String): VoidCompResult
+  voidOrder(orderId: String!, reason: String!, managerApproval: Boolean @deprecated(reason: "Caller assertions do not constitute approval"), managerId: String @deprecated(reason: "Use managerApprovalId"), managerApprovalId: ID, idempotencyKey: String): VoidCompResult
+  requestManagerApproval(actionType: String!, targetId: ID!, reason: String!, amount: Int): ManagerApprovalResult
+  approveManagerApproval(approvalId: ID!): ManagerApprovalResult
   initiatePaymentSession(cartId: ID!, paymentProviderId: String!): InitiatePaymentSessionResult
   completeActiveCart(cartId: ID!, paymentSessionId: ID): RestaurantOrder
+  transitionRestaurantOrder(orderId: ID!, status: String!, reason: String): RestaurantOrder
   createPOSOrder(orderType: String!, guestCount: Int, tableIds: [ID!], isUrgent: Boolean, specialInstructions: String, items: [POSOrderItemInput!]!): RestaurantOrder
-  addServiceFloorItem(orderId: ID, tableId: ID!, menuItemId: ID!, quantity: Int!, courseNumber: Int, seatNumber: Int, specialInstructions: String): RestaurantOrder
-  updateServiceFloorItem(orderItemId: ID!, quantity: Int, courseNumber: Int, seatNumber: Int, specialInstructions: String, voidReason: String): RestaurantOrder
+  addServiceFloorItem(orderId: ID, tableId: ID!, menuItemId: ID!, quantity: Int!, courseNumber: Int, seatNumber: Int, specialInstructions: String, modifierIds: [ID!]): RestaurantOrder
+  updateServiceFloorItem(orderItemId: ID!, quantity: Int, courseNumber: Int, seatNumber: Int, specialInstructions: String, voidReason: String, managerApprovalId: ID): RestaurantOrder
   updateServiceFloorTableStatus(tableId: ID!, status: String!): ServiceFloorMutationResult
   updateServiceFloorCheckStatus(orderId: ID!, action: String!): ServiceFloorMutationResult
   createWaitlistGuest(customerName: String!, phoneNumber: String!, partySize: Int!, quotedWaitTime: Int, notes: String): WaitlistMutationResult
@@ -4843,6 +5812,10 @@ type Mutation {
   updateShiftStatus(shiftId: ID!, action: String!): ShiftMutationResult
   createTipPoolLedger(date: String!, tipPoolType: String!, cashTips: String!, creditTips: String!): TipPoolMutationResult
   updateTipPoolStatus(tipPoolId: ID!, action: String!): TipPoolMutationResult
+  adjustInventory(ingredientId: ID!, quantity: String!, reason: String!, idempotencyKey: String!): WasteMutationResult
+  recordWaste(ingredientId: ID!, quantity: String!, reason: String!, notes: String, idempotencyKey: String!): WasteMutationResult
+  reverseWaste(wasteLogId: ID!, reason: String!, idempotencyKey: String!): WasteMutationResult
+  reconcileOrderInventory(orderId: ID!): InventoryReconciliationResult
   transferTable(orderId: String!, fromTableId: String!, toTableId: String!): TableManagementResult
   combineTables(orderId: String!, tableIds: [String!]!): TableManagementResult
   fireCourse(courseId: String!): CourseManagementResult
@@ -4850,7 +5823,7 @@ type Mutation {
   syncKitchenTickets: SyncKitchenTicketsResult
   updateKitchenTicketStatus(ticketId: String!, status: String!): KitchenTicketMutationResult
   fulfillKitchenTicketItem(ticketId: String!, itemId: String!, fulfilled: Boolean!): KitchenTicketMutationResult
-  handlePaymentProviderWebhook(providerCode: String!, event: JSON!, headers: JSON!): HandleWebhookResult
+  handlePaymentProviderWebhook(providerCode: String!, event: JSON!, headers: JSON!, rawBody: String): HandleWebhookResult
 }
 
 union UserAuthenticationWithPasswordResult = UserAuthenticationWithPasswordSuccess | UserAuthenticationWithPasswordFailure
@@ -5005,6 +5978,30 @@ type Query {
   purchaseOrder(where: PurchaseOrderWhereUniqueInput!): PurchaseOrder
   purchaseOrders(where: PurchaseOrderWhereInput! = {}, orderBy: [PurchaseOrderOrderByInput!]! = [], take: Int, skip: Int! = 0, cursor: PurchaseOrderWhereUniqueInput): [PurchaseOrder!]
   purchaseOrdersCount(where: PurchaseOrderWhereInput! = {}): Int
+  auditEvent(where: AuditEventWhereUniqueInput!): AuditEvent
+  auditEvents(where: AuditEventWhereInput! = {}, orderBy: [AuditEventOrderByInput!]! = [], take: Int, skip: Int! = 0, cursor: AuditEventWhereUniqueInput): [AuditEvent!]
+  auditEventsCount(where: AuditEventWhereInput! = {}): Int
+  orderAdjustment(where: OrderAdjustmentWhereUniqueInput!): OrderAdjustment
+  orderAdjustments(where: OrderAdjustmentWhereInput! = {}, orderBy: [OrderAdjustmentOrderByInput!]! = [], take: Int, skip: Int! = 0, cursor: OrderAdjustmentWhereUniqueInput): [OrderAdjustment!]
+  orderAdjustmentsCount(where: OrderAdjustmentWhereInput! = {}): Int
+  receipt(where: ReceiptWhereUniqueInput!): Receipt
+  receipts(where: ReceiptWhereInput! = {}, orderBy: [ReceiptOrderByInput!]! = [], take: Int, skip: Int! = 0, cursor: ReceiptWhereUniqueInput): [Receipt!]
+  receiptsCount(where: ReceiptWhereInput! = {}): Int
+  refund(where: RefundWhereUniqueInput!): Refund
+  refunds(where: RefundWhereInput! = {}, orderBy: [RefundOrderByInput!]! = [], take: Int, skip: Int! = 0, cursor: RefundWhereUniqueInput): [Refund!]
+  refundsCount(where: RefundWhereInput! = {}): Int
+  paymentWebhookEvent(where: PaymentWebhookEventWhereUniqueInput!): PaymentWebhookEvent
+  paymentWebhookEvents(where: PaymentWebhookEventWhereInput! = {}, orderBy: [PaymentWebhookEventOrderByInput!]! = [], take: Int, skip: Int! = 0, cursor: PaymentWebhookEventWhereUniqueInput): [PaymentWebhookEvent!]
+  paymentWebhookEventsCount(where: PaymentWebhookEventWhereInput! = {}): Int
+  kitchenTicketEvent(where: KitchenTicketEventWhereUniqueInput!): KitchenTicketEvent
+  kitchenTicketEvents(where: KitchenTicketEventWhereInput! = {}, orderBy: [KitchenTicketEventOrderByInput!]! = [], take: Int, skip: Int! = 0, cursor: KitchenTicketEventWhereUniqueInput): [KitchenTicketEvent!]
+  kitchenTicketEventsCount(where: KitchenTicketEventWhereInput! = {}): Int
+  idempotencyKey(where: IdempotencyKeyWhereUniqueInput!): IdempotencyKey
+  idempotencyKeys(where: IdempotencyKeyWhereInput! = {}, orderBy: [IdempotencyKeyOrderByInput!]! = [], take: Int, skip: Int! = 0, cursor: IdempotencyKeyWhereUniqueInput): [IdempotencyKey!]
+  idempotencyKeysCount(where: IdempotencyKeyWhereInput! = {}): Int
+  managerApproval(where: ManagerApprovalWhereUniqueInput!): ManagerApproval
+  managerApprovals(where: ManagerApprovalWhereInput! = {}, orderBy: [ManagerApprovalOrderByInput!]! = [], take: Int, skip: Int! = 0, cursor: ManagerApprovalWhereUniqueInput): [ManagerApproval!]
+  managerApprovalsCount(where: ManagerApprovalWhereInput! = {}): Int
   keystone: KeystoneMeta!
   authenticatedItem: AuthenticatedItem
   validateUserPasswordResetToken(email: String!, token: String!): ValidateUserPasswordResetTokenResult
@@ -5014,6 +6011,7 @@ type Query {
   activeCartPaymentProviders: [PaymentProvider!]
   getCustomerOrder(orderId: ID!, secretKey: String): JSON
   getCustomerOrders(limit: Int, offset: Int): JSON
+  lookupGiftCard(code: String!): JSON
 }
 
 union AuthenticatedItem = User
@@ -5162,10 +6160,49 @@ input UserUpdateProfileInput {
   onboardingStatus: String
 }
 
+input ActiveCartUpdateInput {
+  orderType: String
+  email: String
+  customerName: String
+  customerPhone: String
+  deliveryAddress: String
+  deliveryAddress2: String
+  deliveryCity: String
+  deliveryState: String
+  deliveryZip: String
+  deliveryCountryCode: String
+  tipPercent: String
+  userId: ID
+}
+
+input ActiveCartItemInput {
+  menuItemId: ID!
+  quantity: Int!
+  modifierIds: [ID!]
+  specialInstructions: String
+}
+
 type ProcessPaymentResult {
   success: Boolean!
   paymentId: String
   clientSecret: String
+  amount: Int
+  remainingBalance: Int
+  error: String
+}
+
+type GiftCardRedemptionResult {
+  success: Boolean!
+  paymentId: String
+  amount: Int!
+  remainingBalance: Int!
+  error: String
+}
+
+type RefundPaymentResult {
+  success: Boolean!
+  refundId: ID
+  status: String
   error: String
 }
 
@@ -5194,10 +6231,21 @@ type VoidCompResult {
   error: String
 }
 
+type ManagerApprovalResult {
+  id: ID
+  status: String
+  actionType: String
+  targetId: ID
+  expiresAt: String
+  error: String
+}
+
 input POSOrderItemInput {
   menuItemId: ID!
   quantity: Int!
   courseNumber: Int
+  modifierIds: [ID!]
+  specialInstructions: String
 }
 
 type InitiatePaymentSessionResult {
@@ -5233,6 +6281,18 @@ type ShiftMutationResult {
 
 type TipPoolMutationResult {
   success: Boolean!
+  error: String
+}
+
+type WasteMutationResult {
+  success: Boolean!
+  wasteLogId: ID
+  error: String
+}
+
+type InventoryReconciliationResult {
+  success: Boolean!
+  created: Int!
   error: String
 }
 

@@ -1,5 +1,6 @@
 import { Context } from ".keystone/types";
 import { assertCanAccessCart } from "../utils/cartAccess";
+import { calculateRestaurantTotals } from "../../lib/restaurant-order-pricing";
 
 export default async function activeCart(root: any, { cartId }: { cartId?: string }, context: Context) {
   const sudoContext = context.sudo();
@@ -76,11 +77,23 @@ export default async function activeCart(root: any, { cartId }: { cartId?: strin
 
   const settings = await sudoContext.query.StoreSettings.findOne({
     where: { id: "1" },
-    query: `currencyCode`,
+    query: `currencyCode deliveryFee deliveryMinimum pickupDiscount taxRate`,
+  });
+  const currencyCode = settings?.currencyCode || "USD";
+  const totals = calculateRestaurantTotals({
+    subtotal: cart.subtotal || 0,
+    orderType: cart.orderType,
+    tipPercent: cart.tipPercent,
+    deliveryFee: settings?.deliveryFee,
+    deliveryMinimum: settings?.deliveryMinimum,
+    pickupDiscountPercent: settings?.pickupDiscount,
+    taxRate: settings?.taxRate,
+    currencyCode,
   });
 
   return {
     ...cart,
-    currencyCode: settings?.currencyCode || "USD",
+    ...totals,
+    currencyCode,
   };
 }

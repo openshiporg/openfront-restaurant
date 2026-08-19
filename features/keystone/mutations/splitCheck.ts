@@ -1,17 +1,11 @@
+import crypto from "crypto";
 import type { Context } from ".keystone/types";
 import { calculateRestaurantTotals } from "../../lib/restaurant-order-pricing";
 import { permissions } from "../access";
 import { getStoreDeliverySettings } from "../utils/deliveryValidation";
-
-interface SplitCheckByItemArgs {
-  orderId: string;
-  itemIds: string[];
-}
-
-interface SplitCheckByGuestArgs {
-  orderId: string;
-  guestCount: number;
-}
+import { appendAuditEvent } from "../utils/audit";
+import { getOrderItemsSubtotal } from "../utils/orderItemFinancials";
+import { syncKitchenTicketsForOrder } from "../utils/kitchenTicketSync";
 
 interface SplitCheckResult {
   success: boolean;
@@ -19,272 +13,159 @@ interface SplitCheckResult {
   error: string | null;
 }
 
-function cents(value: unknown): number {
-  const n = Number(value || 0);
-  return Number.isFinite(n) ? Math.round(n) : 0;
+function splitKey(orderId: string, itemIds: string[]) {
+  return crypto.createHash("sha256").update(`split:${orderId}:${[...itemIds].sort().join(":")}`).digest("hex");
 }
 
-async function calculateTotalsFromItems(
-  items: Array<{ quantity?: number | null; price?: number | null }>,
-  orderType: string | null | undefined,
-  context: Context
-) {
-  const settings = await getStoreDeliverySettings(context);
-  const subtotal = items.reduce((sum, item) => {
-    return sum + cents(item.price) * (item.quantity || 0);
-  }, 0);
-  const { tax, total } = calculateRestaurantTotals({
-    subtotal,
-    orderType,
-    taxRate: settings?.taxRate,
-    currencyCode: settings?.currencyCode || "USD",
-  });
-  return { subtotal, tax, total };
+function buildSplitOrderNumber() {
+  return `SPL-${Date.now().toString(36).toUpperCase()}-${crypto.randomBytes(3).toString("hex").toUpperCase()}`;
 }
 
-function buildSplitOrderNumber(suffix: string) {
-  const now = new Date();
-  const datePart = now.toISOString().slice(2, 10).replace(/-/g, '');
-  const timePart = now.getTime().toString().slice(-4);
-  return `${datePart}-${timePart}-${suffix}`;
-}
-
-// Split check by moving selected items to a new order
 export async function splitCheckByItem(
-  root: any,
-  args: SplitCheckByItemArgs,
+  _root: unknown,
+  args: { orderId: string; itemIds: string[] },
   context: Context
 ): Promise<SplitCheckResult> {
   if (!permissions.canManageOrders({ session: context.session })) {
-    return {
-      success: false,
-      newOrderIds: [],
-      error: "Not authorized to split check",
-    };
+    return { success: false, newOrderIds: [], error: "Not authorized to split check" };
   }
-
-  const { orderId, itemIds } = args;
-
-  if (!itemIds || itemIds.length === 0) {
-    return {
-      success: false,
-      newOrderIds: [],
-      error: "Must select at least one item to split",
-    };
-  }
-
   try {
-    const originalOrder = await context.query.RestaurantOrder.findOne({
-      where: { id: orderId },
-      query: 'id orderNumber orderType orderSource status specialInstructions server { id } tables { id }',
-    });
+    const itemIds = Array.from(new Set(args.itemIds || []));
+    if (!itemIds.length) throw new Error("Must select at least one item to split");
+    const settings = await getStoreDeliverySettings(context);
+    const key = splitKey(args.orderId, itemIds);
+    const prisma = context.prisma as any;
+    const result = await prisma.$transaction(async (tx: any) => {
+      const existing = await tx.orderAdjustment.findUnique({ where: { idempotencyKey: key } });
+      if (existing?.metadata?.newOrderId) {
+        return { originalOrderId: args.orderId, newOrderId: existing.metadata.newOrderId, replay: true };
+      }
+      const order = await tx.restaurantOrder.findUnique({
+        where: { id: args.orderId },
+        include: { tables: true, orderItems: true },
+      });
+      if (!order) throw new Error("Order not found");
+      if (["completed", "cancelled"].includes(order.status || "")) throw new Error("Closed checks cannot be split");
+      const reservedPayments = await tx.payment.count({
+        where: { orderId: order.id, status: { in: ["processing", "authorized", "succeeded", "unknown"] } },
+      });
+      if (reservedPayments) throw new Error("A check with reserved or successful tenders cannot be split");
+      const selected = order.orderItems.filter((item: any) => itemIds.includes(item.id));
+      if (selected.length !== itemIds.length) throw new Error("One or more selected items do not belong to this check");
+      if (selected.length === order.orderItems.length) throw new Error("At least one item must remain on the original check");
 
-    if (!originalOrder) {
-      return {
-        success: false,
-        newOrderIds: [],
-        error: "Order not found",
-      };
-    }
+      const originalSubtotalBefore = getOrderItemsSubtotal(order.orderItems);
+      const movedSubtotal = getOrderItemsSubtotal(selected);
+      const remainingItems = order.orderItems.filter((item: any) => !itemIds.includes(item.id));
+      const remainingSubtotal = getOrderItemsSubtotal(remainingItems);
+      const ratio = originalSubtotalBefore > 0 ? movedSubtotal / originalSubtotalBefore : 0;
+      const movedTip = Math.round(Number(order.tip || 0) * ratio);
+      const movedDiscount = Math.round(Number(order.discount || 0) * ratio);
+      const remainingTip = Number(order.tip || 0) - movedTip;
+      const remainingDiscount = Number(order.discount || 0) - movedDiscount;
+      const movedPricing = calculateRestaurantTotals({
+        subtotal: movedSubtotal,
+        orderType: order.orderType,
+        taxRate: settings?.taxRate,
+        currencyCode: settings?.currencyCode || order.currencyCode || "USD",
+      });
+      const remainingPricing = calculateRestaurantTotals({
+        subtotal: remainingSubtotal,
+        orderType: order.orderType,
+        taxRate: settings?.taxRate,
+        currencyCode: settings?.currencyCode || order.currencyCode || "USD",
+      });
+      const movedTotal = Math.max(0, movedSubtotal + movedPricing.tax + movedTip - movedDiscount);
+      const remainingTotal = Math.max(0, remainingSubtotal + remainingPricing.tax + remainingTip - remainingDiscount);
 
-    const itemsToMove = await context.query.OrderItem.findMany({
-      where: {
-        id: { in: itemIds },
-        order: { id: { equals: orderId } },
-      },
-      query: 'id quantity price',
-    });
-
-    if (itemsToMove.length === 0) {
-      return {
-        success: false,
-        newOrderIds: [],
-        error: "No valid items found to split",
-      };
-    }
-
-    const newTotals = await calculateTotalsFromItems(itemsToMove as any, originalOrder.orderType, context);
-
-    const newOrder = await context.db.RestaurantOrder.createOne({
-      data: {
-        orderNumber: buildSplitOrderNumber('S'),
-        orderType: originalOrder.orderType || 'dine_in',
-        orderSource: originalOrder.orderSource || 'pos',
-        status: originalOrder.status || 'open',
-        guestCount: 1,
-        subtotal: newTotals.subtotal,
-        tax: newTotals.tax,
-        total: newTotals.total,
-        specialInstructions: originalOrder.specialInstructions
-          ? `${originalOrder.specialInstructions} | Split from ${originalOrder.orderNumber}`
-          : `Split from ${originalOrder.orderNumber}`,
-        tables: (originalOrder.tables || []).length
-          ? { connect: (originalOrder.tables || []).map((t: any) => ({ id: t.id })) }
-          : undefined,
-        server: originalOrder.server?.id
-          ? { connect: { id: originalOrder.server.id } }
-          : undefined,
-      },
-    });
-
-    for (const item of itemsToMove) {
-      await context.db.OrderItem.updateOne({
-        where: { id: item.id },
+      const newOrder = await tx.restaurantOrder.create({
         data: {
-          order: { connect: { id: newOrder.id } },
+          orderNumber: buildSplitOrderNumber(),
+          orderType: order.orderType,
+          orderSource: order.orderSource,
+          status: order.status,
+          guestCount: 1,
+          specialInstructions: order.specialInstructions || "",
+          subtotal: movedSubtotal,
+          tax: movedPricing.tax,
+          tip: movedTip,
+          discount: movedDiscount,
+          total: movedTotal,
+          currencyCode: order.currencyCode,
+          customerId: order.customerId,
+          serverId: order.serverId,
+          createdById: context.session?.itemId || order.createdById,
+          customerName: order.customerName,
+          customerEmail: order.customerEmail,
+          customerPhone: order.customerPhone,
+          deliveryAddress: order.deliveryAddress,
+          deliveryAddress2: order.deliveryAddress2,
+          deliveryCity: order.deliveryCity,
+          deliveryState: order.deliveryState,
+          deliveryZip: order.deliveryZip,
+          deliveryCountryCode: order.deliveryCountryCode,
+          tables: order.tables.length ? { connect: order.tables.map((table: any) => ({ id: table.id })) } : undefined,
         },
       });
+      await tx.orderItem.updateMany({
+        where: { id: { in: itemIds }, orderId: order.id },
+        data: { orderId: newOrder.id, originalOrderIdSnapshot: order.id },
+      });
+      await tx.restaurantOrder.update({
+        where: { id: order.id },
+        data: {
+          subtotal: remainingSubtotal,
+          tax: remainingPricing.tax,
+          tip: remainingTip,
+          discount: remainingDiscount,
+          total: remainingTotal,
+        },
+      });
+      await tx.orderAdjustment.create({
+        data: {
+          idempotencyKey: key,
+          type: "split",
+          amount: movedTotal,
+          reason: "Item split",
+          metadata: { newOrderId: newOrder.id, itemIds, originalOrderId: order.id },
+          orderId: order.id,
+          actorId: context.session?.itemId || null,
+          approvedById: context.session?.itemId || null,
+        },
+      });
+      return { originalOrderId: order.id, newOrderId: newOrder.id, replay: false };
+    }, { isolationLevel: "Serializable" });
+
+    if (!result.replay) {
+      await appendAuditEvent(context, {
+        eventType: "check.split_by_item",
+        entityType: "RestaurantOrder",
+        entityId: args.orderId,
+        after: { newOrderId: result.newOrderId, itemIds },
+        metadata: { idempotencyKey: key },
+      }).catch((error) => console.error("Split audit event failed:", error));
+      await Promise.all([
+        syncKitchenTicketsForOrder(result.originalOrderId, context),
+        syncKitchenTicketsForOrder(result.newOrderId, context),
+      ]);
     }
-
-    const remainingItems = await context.query.OrderItem.findMany({
-      where: {
-        order: { id: { equals: orderId } },
-      },
-      query: 'id quantity price',
-    });
-
-    const remainingTotals = await calculateTotalsFromItems(remainingItems as any, originalOrder.orderType, context);
-
-    await context.db.RestaurantOrder.updateOne({
-      where: { id: orderId },
-      data: {
-        subtotal: remainingTotals.subtotal,
-        tax: remainingTotals.tax,
-        total: remainingTotals.total,
-      },
-    });
-
-    return {
-      success: true,
-      newOrderIds: [newOrder.id],
-      error: null,
-    };
-  } catch (err) {
-    const errorMessage = err instanceof Error ? err.message : "Unknown error";
-    console.error(`Error splitting check by item: ${errorMessage}`);
-
-    return {
-      success: false,
-      newOrderIds: [],
-      error: errorMessage,
-    };
+    return { success: true, newOrderIds: [result.newOrderId], error: null };
+  } catch (error) {
+    return { success: false, newOrderIds: [], error: error instanceof Error ? error.message : "Unknown error" };
   }
 }
 
-// Split check evenly by guest count
 export async function splitCheckByGuest(
-  root: any,
-  args: SplitCheckByGuestArgs,
+  _root: unknown,
+  _args: { orderId: string; guestCount: number },
   context: Context
 ): Promise<SplitCheckResult> {
   if (!permissions.canManageOrders({ session: context.session })) {
-    return {
-      success: false,
-      newOrderIds: [],
-      error: "Not authorized to split check",
-    };
+    return { success: false, newOrderIds: [], error: "Not authorized to split check" };
   }
-
-  const { orderId, guestCount } = args;
-
-  if (guestCount < 2) {
-    return {
-      success: false,
-      newOrderIds: [],
-      error: "Guest count must be at least 2 to split",
-    };
-  }
-
-  try {
-    const originalOrder = await context.query.RestaurantOrder.findOne({
-      where: { id: orderId },
-      query: 'id orderNumber orderType orderSource status specialInstructions total subtotal tax server { id } tables { id }',
-    });
-
-    if (!originalOrder) {
-      return {
-        success: false,
-        newOrderIds: [],
-        error: "Order not found",
-      };
-    }
-
-    const totalAmount = cents(originalOrder.total);
-    const totalSubtotal = cents(originalOrder.subtotal);
-    const totalTax = cents(originalOrder.tax);
-
-    const splitTotalBase = Math.floor(totalAmount / guestCount);
-    const splitSubtotalBase = Math.floor(totalSubtotal / guestCount);
-    const splitTaxBase = Math.floor(totalTax / guestCount);
-
-    let totalRemainder = totalAmount - splitTotalBase * guestCount;
-    let subtotalRemainder = totalSubtotal - splitSubtotalBase * guestCount;
-    let taxRemainder = totalTax - splitTaxBase * guestCount;
-
-    const newOrderIds: string[] = [];
-
-    for (let i = 1; i < guestCount; i++) {
-      const thisTotal = splitTotalBase + (totalRemainder > 0 ? 1 : 0);
-      const thisSubtotal = splitSubtotalBase + (subtotalRemainder > 0 ? 1 : 0);
-      const thisTax = splitTaxBase + (taxRemainder > 0 ? 1 : 0);
-
-      if (totalRemainder > 0) totalRemainder -= 1;
-      if (subtotalRemainder > 0) subtotalRemainder -= 1;
-      if (taxRemainder > 0) taxRemainder -= 1;
-
-      const newOrder = await context.db.RestaurantOrder.createOne({
-        data: {
-          orderNumber: buildSplitOrderNumber(`G${i + 1}`),
-          orderType: originalOrder.orderType || 'dine_in',
-          orderSource: originalOrder.orderSource || 'pos',
-          status: originalOrder.status || 'open',
-          guestCount: 1,
-          subtotal: thisSubtotal,
-          tax: thisTax,
-          total: thisTotal,
-          specialInstructions: `Split from order ${originalOrder.orderNumber} (Guest ${i + 1} of ${guestCount})`,
-          tables: (originalOrder.tables || []).length
-            ? { connect: (originalOrder.tables || []).map((t: any) => ({ id: t.id })) }
-            : undefined,
-          server: originalOrder.server?.id
-            ? { connect: { id: originalOrder.server.id } }
-            : undefined,
-        },
-      });
-
-      newOrderIds.push(newOrder.id);
-    }
-
-    const originalTotal = splitTotalBase + (totalRemainder > 0 ? 1 : 0);
-    const originalSubtotal = splitSubtotalBase + (subtotalRemainder > 0 ? 1 : 0);
-    const originalTax = splitTaxBase + (taxRemainder > 0 ? 1 : 0);
-
-    await context.db.RestaurantOrder.updateOne({
-      where: { id: orderId },
-      data: {
-        guestCount: 1,
-        subtotal: originalSubtotal,
-        tax: originalTax,
-        total: originalTotal,
-        specialInstructions: originalOrder.specialInstructions
-          ? `${originalOrder.specialInstructions} | Split check (Guest 1 of ${guestCount})`
-          : `Split check (Guest 1 of ${guestCount})`,
-      },
-    });
-
-    return {
-      success: true,
-      newOrderIds,
-      error: null,
-    };
-  } catch (err) {
-    const errorMessage = err instanceof Error ? err.message : "Unknown error";
-    console.error(`Error splitting check by guest: ${errorMessage}`);
-
-    return {
-      success: false,
-      newOrderIds: [],
-      error: errorMessage,
-    };
-  }
+  return {
+    success: false,
+    newOrderIds: [],
+    error: "Equal guest splits are disabled until financial check-allocation records and tender UI are migrated. Split by item instead.",
+  };
 }

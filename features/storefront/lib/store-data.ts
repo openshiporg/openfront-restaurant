@@ -93,6 +93,8 @@ export interface DayHours {
 export interface StoreInfo {
   name: string
   tagline: string
+  logoIcon?: string
+  logoColor?: string
   address: string
   phone: string
   currencyCode: string

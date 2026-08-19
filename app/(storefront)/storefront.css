@@ -50,13 +50,15 @@
 
 :root {
   --radius: 0.25rem;
+  --store-logo-hue: 0;
+  --store-brand-hue: calc(260 + var(--store-logo-hue));
   --background: oklch(0.986 0.001 106);
   --foreground: oklch(0.22 0.012 40);
   --card: oklch(0.975 0.001 106);
   --card-foreground: oklch(0.22 0.012 40);
   --popover: oklch(0.975 0.001 106);
   --popover-foreground: oklch(0.22 0.012 40);
-  --primary: oklch(0.55 0.22 27.03);
+  --primary: oklch(0.55 0.22 var(--store-brand-hue));
   --primary-foreground: oklch(0.98 0.01 100.72);
   --secondary: oklch(0.52 0.14 247.51);
   --secondary-foreground: oklch(0.98 0.01 100.72);
@@ -67,8 +69,8 @@
   --destructive: oklch(0.56 0.23 29.23);
   --border: oklch(0.89 0.002 106);
   --input: oklch(0.89 0.002 106);
-  --ring: oklch(0.55 0.12 27.03);
-  --chart-1: oklch(0.58 0.23 27.06);
+  --ring: oklch(0.55 0.12 var(--store-brand-hue));
+  --chart-1: oklch(0.58 0.23 var(--store-brand-hue));
   --chart-2: oklch(0.61 0.18 251.95);
   --chart-3: oklch(0.72 0.15 83.5);
   --chart-4: oklch(0.67 0.15 144.89);
@@ -83,6 +85,17 @@
   --sidebar-ring: oklch(0.52 0.14 247.51);
 }
 
+.storefront-brand {
+  /* Resolve brand-dependent tokens on the store wrapper. */
+  --store-logo-hue: var(--store-page-logo-hue, 0);
+  --store-brand-hue: var(--store-page-brand-hue, 260);
+  --primary: oklch(0.55 0.22 var(--store-brand-hue));
+  --secondary: oklch(0.72 0.12 var(--store-brand-hue));
+  --ring: oklch(0.55 0.12 var(--store-brand-hue));
+  --chart-1: oklch(0.58 0.23 var(--store-brand-hue));
+  --chart-2: oklch(0.68 0.16 var(--store-brand-hue));
+}
+
 .dark {
   --background: oklch(0.19 0.008 42);
   --foreground: oklch(0.95 0.004 84);
@@ -90,7 +103,7 @@
   --card-foreground: oklch(0.95 0.004 84);
   --popover: oklch(0.22 0.008 42);
   --popover-foreground: oklch(0.95 0.004 84);
-  --primary: oklch(0.55 0.22 27.03);
+  --primary: oklch(0.55 0.22 var(--store-brand-hue));
   --primary-foreground: oklch(0.98 0.01 100.72);
   --secondary: oklch(0.56 0.05 255);
   --secondary-foreground: oklch(0.95 0.004 84);
@@ -101,8 +114,8 @@
   --destructive: oklch(0.56 0.23 29.23);
   --border: oklch(0.34 0.008 42);
   --input: oklch(0.34 0.008 42);
-  --ring: oklch(0.62 0.16 27.03);
-  --chart-1: oklch(0.64 0.25 26.85);
+  --ring: oklch(0.62 0.16 var(--store-brand-hue));
+  --chart-1: oklch(0.64 0.25 var(--store-brand-hue));
   --chart-2: oklch(0.66 0.19 250.17);
   --chart-3: oklch(0.78 0.16 87.01);
   --chart-4: oklch(0.68 0.15 144.94);
@@ -115,6 +128,14 @@
   --sidebar-accent-foreground: oklch(0.95 0.01 25.23);
   --sidebar-border: oklch(0.32 0.01 27.45 / 30%);
   --sidebar-ring: oklch(0.5 0.14 249.16);
+}
+
+.dark .storefront-brand {
+  --primary: oklch(0.64 0.2 var(--store-brand-hue));
+  --secondary: oklch(0.58 0.1 var(--store-brand-hue));
+  --ring: oklch(0.62 0.16 var(--store-brand-hue));
+  --chart-1: oklch(0.64 0.25 var(--store-brand-hue));
+  --chart-2: oklch(0.7 0.17 var(--store-brand-hue));
 }
 
 @layer base {

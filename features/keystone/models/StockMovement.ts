@@ -5,6 +5,7 @@ import {
   select,
   decimal,
   relationship,
+  json,
 } from "@keystone-6/core/fields";
 
 import { isSignedIn, permissions } from "../access";
@@ -14,9 +15,9 @@ export const StockMovement = list({
   access: {
     operation: {
       query: permissions.canReadInventory,
-      create: permissions.canManageInventory,
-      update: permissions.canManageInventory,
-      delete: permissions.canManageInventory,
+      create: () => false,
+      update: () => false,
+      delete: () => false,
     },
   },
   ui: {
@@ -25,6 +26,10 @@ export const StockMovement = list({
     },
   },
   fields: {
+    eventKey: text({ validation: { isRequired: true }, isIndexed: "unique" }),
+    referenceType: text(),
+    referenceId: text({ isIndexed: true }),
+    metadata: json(),
     type: select({
       type: "string",
       options: [

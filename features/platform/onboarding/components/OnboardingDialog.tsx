@@ -48,6 +48,7 @@ import { RESTAURANT_TEMPLATES, SECTION_DEFINITIONS } from '../config/templates';
 // Payment provider environment variable mapping adapted for restaurant
 const PAYMENT_METHOD_ENV_VARS: Record<string, string[]> = {
   'Credit Card': ['NEXT_PUBLIC_STRIPE_KEY', 'STRIPE_SECRET_KEY'],
+  'Mobile Payment': ['NEXT_PUBLIC_PAYPAL_CLIENT_ID', 'PAYPAL_CLIENT_SECRET'],
 };
 
 // Component to display payment method environment variables

@@ -2,6 +2,8 @@ import type { Context } from ".keystone/types";
 import { calculateRestaurantTotals } from "../../lib/restaurant-order-pricing";
 import { permissions } from "../access";
 import { getStoreDeliverySettings } from "../utils/deliveryValidation";
+import { voidOrderItem } from "./voidComp";
+import { getOrderItemsSubtotal } from "../utils/orderItemFinancials";
 
 
 interface UpdateServiceFloorItemArgs {
@@ -11,6 +13,7 @@ interface UpdateServiceFloorItemArgs {
   seatNumber?: number | null;
   specialInstructions?: string | null;
   voidReason?: string | null;
+  managerApprovalId?: string | null;
 }
 
 function getCourseType(courseNumber: number) {
@@ -33,17 +36,14 @@ async function recalculateOrderTotals(orderId: string, context: Context, voidRea
         tip
         discount
         specialInstructions
-        orderItems { id quantity price }
+        orderItems { id quantity price adjustmentTotal isVoided }
       `,
     }),
   ]);
 
   if (!order) throw new Error("Order not found while recalculating totals");
 
-  const subtotal = (order.orderItems || []).reduce(
-    (sum: number, item: any) => sum + Number(item.price || 0) * Number(item.quantity || 0),
-    0
-  );
+  const subtotal = getOrderItemsSubtotal(order.orderItems || []);
 
   const { tax } = calculateRestaurantTotals({
     subtotal,
@@ -122,7 +122,13 @@ export default async function updateServiceFloorItem(
   const voidReason = args.voidReason?.trim() || null;
 
   if (voidReason) {
-    await sudo.db.OrderItem.deleteOne({ where: { id: args.orderItemId } });
+    const result = await voidOrderItem(null, {
+      orderItemId: args.orderItemId,
+      reason: voidReason,
+      managerApprovalId: args.managerApprovalId,
+      idempotencyKey: `service-floor-void:${args.orderItemId}:${voidReason}:${args.managerApprovalId || "missing-approval"}`,
+    }, context);
+    if (!result.success) throw new Error(result.error || "Unable to void item");
   } else {
     const quantity = Math.max(1, Math.floor(Number(args.quantity ?? item.quantity ?? 1)));
     const courseNumber = Math.max(1, Math.floor(Number(args.courseNumber ?? item.courseNumber ?? 1)));
@@ -140,7 +146,7 @@ export default async function updateServiceFloorItem(
     });
   }
 
-  await recalculateOrderTotals(orderId, context, voidReason);
+  if (!voidReason) await recalculateOrderTotals(orderId, context);
 
   const refreshed = await sudo.query.RestaurantOrder.findOne({
     where: { id: orderId },

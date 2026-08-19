@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -39,11 +39,14 @@ import {
 } from 'lucide-react'
 import { gql, request } from 'graphql-request'
 import { formatCurrency, fromMinorUnits, toMinorUnits } from '@/features/storefront/lib/currency'
+import { Elements, PaymentElement, useElements, useStripe } from '@stripe/react-stripe-js'
+import { loadStripe } from '@stripe/stripe-js'
 
 interface OrderItem {
   id: string
   quantity: number
   price: string
+  itemNameSnapshot: string
   menuItem: {
     id: string
     name: string
@@ -97,6 +100,7 @@ const GET_ORDER = gql`
         id
         quantity
         price
+        itemNameSnapshot
         menuItem {
           id
           name
@@ -116,55 +120,83 @@ const GET_ORDER = gql`
     storeSettings {
       currencyCode
       locale
+      paymentProviders { provider publishableKey }
     }
   }
 `
 
 const PROCESS_PAYMENT = gql`
-  mutation ProcessPayment($orderId: String!, $amount: Int!, $paymentMethod: String!, $tipAmount: Int) {
-    processPayment(orderId: $orderId, amount: $amount, paymentMethod: $paymentMethod, tipAmount: $tipAmount) {
-      success
-      paymentId
-      clientSecret
-      error
+  mutation ProcessPayment($orderId: String!, $amount: Int, $paymentMethod: String!, $tipAmount: Int, $idempotencyKey: String!) {
+    processPayment(
+      orderId: $orderId
+      amount: $amount
+      paymentMethod: $paymentMethod
+      tipAmount: $tipAmount
+      idempotencyKey: $idempotencyKey
+    ) {
+      success paymentId clientSecret amount remainingBalance error
     }
   }
 `
 
-const CAPTURE_PAYMENT = gql`
-  mutation CapturePayment($paymentIntentId: String!) {
-    capturePayment(paymentIntentId: $paymentIntentId) {
-      success
-      status
-      error
-    }
+const RECONCILE_PAYMENT = gql`
+  mutation ReconcilePayment($paymentId: ID!) {
+    reconcilePayment(paymentId: $paymentId) { success status error }
   }
 `
+
+function WebCardConfirmation({ paymentId, onComplete }: { paymentId: string; onComplete: () => Promise<void> }) {
+  const stripe = useStripe()
+  const elements = useElements()
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const confirm = async () => {
+    if (!stripe || !elements) return
+    setSubmitting(true)
+    setError(null)
+    const result = await stripe.confirmPayment({ elements, redirect: 'if_required' })
+    if (result.error) {
+      setError(result.error.message || 'Card confirmation failed')
+      setSubmitting(false)
+      return
+    }
+    const reconciliation: any = await request('/api/graphql', RECONCILE_PAYMENT, { paymentId })
+    if (!reconciliation?.reconcilePayment?.success) {
+      setError(reconciliation?.reconcilePayment?.error || 'Payment is still awaiting provider confirmation')
+      setSubmitting(false)
+      return
+    }
+    await onComplete()
+    setSubmitting(false)
+  }
+
+  return (
+    <div className="space-y-4">
+      <PaymentElement />
+      {error && <p className="text-sm text-destructive">{error}</p>}
+      <Button className="w-full" onClick={confirm} disabled={!stripe || !elements || submitting}>
+        {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+        Confirm secure web card payment
+      </Button>
+    </div>
+  )
+}
 
 const GET_GIFT_CARD = gql`
-  query GetGiftCard($code: String!) {
-    giftCards(where: { code: { equals: $code }, isDisabled: { equals: false } }) {
-      id
-      code
-      balance
-    }
+  query LookupGiftCard($code: String!) {
+    lookupGiftCard(code: $code)
   }
 `
 
-const UPDATE_GIFT_CARD = gql`
-  mutation UpdateGiftCard($id: ID!, $balance: Int!) {
-    updateGiftCard(where: { id: $id }, data: { balance: $balance }) {
-      id
-      balance
-    }
-  }
-`
-
-const CREATE_GIFT_CARD_TRANSACTION = gql`
-  mutation CreateGiftCardTransaction($data: GiftCardTransactionCreateInput!) {
-    createGiftCardTransaction(data: $data) {
-      id
-    }
+const REDEEM_GIFT_CARD = gql`
+  mutation RedeemGiftCard($orderId: String!, $code: String!, $tipAmount: Int, $idempotencyKey: String!) {
+    redeemGiftCard(
+      orderId: $orderId
+      code: $code
+      tipAmount: $tipAmount
+      idempotencyKey: $idempotencyKey
+    ) { success paymentId amount remainingBalance error }
   }
 `
 
@@ -180,6 +212,8 @@ export function PaymentClient({ orderId }: PaymentClientProps) {
   const [processing, setProcessing] = useState(false)
   const [activeTab, setActiveTab] = useState<string>('cash')
   const [currencyConfig, setCurrencyConfig] = useState({ currencyCode: 'USD', locale: 'en-US' })
+  const [stripePublishableKey, setStripePublishableKey] = useState<string | null>(null)
+  const [cardSession, setCardSession] = useState<{ clientSecret: string; paymentId: string; splitId?: string } | null>(null)
 
   // Cash payment state
   const [cashReceived, setCashReceived] = useState<string>('')
@@ -203,6 +237,11 @@ export function PaymentClient({ orderId }: PaymentClientProps) {
   // Success dialog
   const [successDialogOpen, setSuccessDialogOpen] = useState(false)
   const [changeAmount, setChangeAmount] = useState<number>(0)
+  const attemptKeys = useRef<Record<string, string>>({})
+  const getAttemptKey = (scope: string) => {
+    if (!attemptKeys.current[scope]) attemptKeys.current[scope] = crypto.randomUUID()
+    return attemptKeys.current[scope]
+  }
 
   useEffect(() => {
     fetchOrder()
@@ -222,6 +261,8 @@ export function PaymentClient({ orderId }: PaymentClientProps) {
         currencyCode: nextCurrencyCode,
         locale: nextLocale,
       })
+      const stripeConfig = nextStoreSettings.paymentProviders?.find((provider: any) => provider.provider === 'stripe')
+      setStripePublishableKey(stripeConfig?.publishableKey || null)
       setTipAmount(fromMinorUnits(Number(nextOrder?.tip || 0), nextCurrencyCode).toFixed(2))
     } catch (err) {
       console.error('Error fetching order:', err)
@@ -289,6 +330,7 @@ export function PaymentClient({ orderId }: PaymentClientProps) {
         amount: amountInCents,
         paymentMethod: 'cash',
         tipAmount: tipInCents,
+        idempotencyKey: getAttemptKey('cash'),
       })
 
       const { success, error } = (result as any).processPayment
@@ -324,31 +366,17 @@ export function PaymentClient({ orderId }: PaymentClientProps) {
         amount: amountInCents,
         paymentMethod: 'credit_card',
         tipAmount: tipInCents,
+        idempotencyKey: getAttemptKey('card'),
       })
 
-      const { success, clientSecret, error } = (result as any).processPayment
+      const { success, paymentId, clientSecret, error } = (result as any).processPayment
 
-      if (success && clientSecret) {
-        // In a real implementation, you would use Stripe Elements here
-        // For now, we'll simulate a successful card payment by capturing it
-        const captureResult = await request('/api/graphql', CAPTURE_PAYMENT, {
-          paymentIntentId: clientSecret.split('_secret_')[0],
-        })
-
-        const captureData = (captureResult as any).capturePayment
-        if (captureData.success) {
-          await fetchOrder()
-          setChangeAmount(0)
-          setSuccessDialogOpen(true)
-        } else {
-          alert(`Card capture failed: ${captureData.error}`)
-        }
-      } else if (success) {
-        await fetchOrder()
-        setChangeAmount(0)
-        setSuccessDialogOpen(true)
+      if (success && clientSecret && paymentId && stripePublishableKey) {
+        setCardSession({ clientSecret, paymentId })
+      } else if (success && !stripePublishableKey) {
+        alert('Stripe publishable configuration is unavailable. The payment remains reserved for recovery.')
       } else {
-        alert(`Payment failed: ${error}`)
+        alert(`Payment failed: ${error || 'Secure card session could not be created'}`)
       }
     } catch (err) {
       console.error('Error processing card payment:', err)
@@ -372,9 +400,8 @@ export function PaymentClient({ orderId }: PaymentClientProps) {
         code: giftCardCode.trim(),
       })
 
-      const cards = (data as any).giftCards
-      if (cards && cards.length > 0) {
-        const card = cards[0]
+      const card = (data as any).lookupGiftCard
+      if (card) {
         setGiftCardBalance(Number(card.balance || 0))
         setGiftCardId(card.id)
       } else {
@@ -400,48 +427,28 @@ export function PaymentClient({ orderId }: PaymentClientProps) {
       const amountInCents = amountToCharge
       const tipInCents = getDesiredTipCents()
 
-      // Process the payment
-      const result = await request('/api/graphql', PROCESS_PAYMENT, {
+      const result = await request('/api/graphql', REDEEM_GIFT_CARD, {
         orderId: order.id,
-        amount: amountInCents,
-        paymentMethod: 'gift_card',
+        code: giftCardCode.trim().toUpperCase(),
         tipAmount: tipInCents,
+        idempotencyKey: getAttemptKey(`gift:${giftCardCode.trim().toUpperCase()}`),
       })
+      const redemption = (result as any).redeemGiftCard
 
-      const { success, error } = (result as any).processPayment
-
-      if (success) {
-        // Update gift card balance
-        const newBalance = giftCardBalance - amountToCharge
-        await request('/api/graphql', UPDATE_GIFT_CARD, {
-          id: giftCardId,
-          balance: newBalance,
-        })
-
-        // Create gift card transaction
-        await request('/api/graphql', CREATE_GIFT_CARD_TRANSACTION, {
-          data: {
-            amount: -amountInCents,
-            giftCard: { connect: { id: giftCardId } },
-            order: { connect: { id: order.id } },
-          },
-        })
-
-        // If fully paid, refresh and show success
-        if (amountToCharge >= total) {
+      if (redemption.success) {
+        const chargedAmount = Number(redemption.amount || amountInCents)
+        if (Number(redemption.remainingBalance || 0) === 0) {
           await fetchOrder()
           setChangeAmount(0)
           setSuccessDialogOpen(true)
         } else {
-          // Partial payment - refresh order to show updated balance
           await fetchOrder()
-          setGiftCardBalance(null)
-          setGiftCardId(null)
-          const msg = formatCurrency(amountToCharge, currencyConfig) + " charged to gift card. Remaining balance: " + formatCurrency(total - amountToCharge, currencyConfig);
-          alert(msg);
+          setGiftCardBalance(Math.max(0, giftCardBalance - chargedAmount))
+          const msg = formatCurrency(chargedAmount, currencyConfig) + " charged to gift card. Remaining balance: " + formatCurrency(Number(redemption.remainingBalance || 0), currencyConfig)
+          alert(msg)
         }
       } else {
-        alert(`Payment failed: ${error}`)
+        alert(`Payment failed: ${redemption.error}`)
       }
     } catch (err) {
       console.error('Error processing gift card payment:', err)
@@ -453,6 +460,10 @@ export function PaymentClient({ orderId }: PaymentClientProps) {
 
   // Split payment functions
   const addSplitPayment = () => {
+    if (newSplitMethod === 'gift_card') {
+      alert('Apply gift cards from the Gift Card tab before adding remaining split tenders')
+      return
+    }
     const amount = toMinorUnits(newSplitAmount || '0', currencyConfig.currencyCode)
     if (amount <= 0) return
     if (amount > getSplitRemaining()) {
@@ -484,6 +495,7 @@ export function PaymentClient({ orderId }: PaymentClientProps) {
     try {
       for (let i = 0; i < splitPayments.length; i++) {
         const split = splitPayments[i]
+        if (split.status === 'completed') continue
         const amountInCents = split.amount
         
         // Update status to processing
@@ -491,23 +503,27 @@ export function PaymentClient({ orderId }: PaymentClientProps) {
           prev.map((p) => (p.id === split.id ? { ...p, status: 'processing' } : p))
         )
 
+        if (split.method === 'gift_card') {
+          throw new Error('Apply gift cards from the Gift Card tab before processing remaining split tenders')
+        }
         const result = await request('/api/graphql', PROCESS_PAYMENT, {
           orderId: order.id,
           amount: amountInCents,
           paymentMethod: split.method === 'card' ? 'credit_card' : split.method,
           tipAmount: i === 0 ? getDesiredTipCents() : 0,
+          idempotencyKey: getAttemptKey(`split:${split.id}`),
         })
 
-        const { success, clientSecret, error } = (result as any).processPayment
+        const { success, paymentId, clientSecret, error } = (result as any).processPayment
 
         if (success) {
-          if (split.method === 'card' && clientSecret) {
-            // Capture card payment
-            await request('/api/graphql', CAPTURE_PAYMENT, {
-              paymentIntentId: clientSecret.split('_secret_')[0],
-            })
+          if (split.method === 'card') {
+            if (!clientSecret || !paymentId || !stripePublishableKey) {
+              throw new Error('Secure Stripe configuration is required for split card tenders')
+            }
+            setCardSession({ clientSecret, paymentId, splitId: split.id })
+            return
           }
-
           setSplitPayments((prev) =>
             prev.map((p) => (p.id === split.id ? { ...p, status: 'completed' } : p))
           )
@@ -579,7 +595,7 @@ export function PaymentClient({ orderId }: PaymentClientProps) {
             {order.orderItems.map((item) => (
               <div key={item.id} className="flex justify-between text-sm">
                 <span>
-                  {item.quantity}x {item.menuItem?.name || 'Unknown Item'}
+                  {item.quantity}x {item.itemNameSnapshot || item.menuItem?.name || 'Unknown Item'}
                 </span>
                 <span>{formatCurrency(item.price, currencyConfig)}</span>
               </div>
@@ -741,9 +757,9 @@ export function PaymentClient({ orderId }: PaymentClientProps) {
 
                 <div className="p-8 border-2 border-dashed rounded-lg text-center">
                   <CreditCard className="h-16 w-16 mx-auto text-muted-foreground mb-4" />
-                  <p className="text-lg font-medium">Ready for Card</p>
+                  <p className="text-lg font-medium">Secure web card payment</p>
                   <p className="text-sm text-muted-foreground">
-                    Insert, tap, or swipe card to process payment
+                    Uses the configured Stripe web payment form. This is not a card-present terminal.
                   </p>
                 </div>
               </div>
@@ -759,7 +775,7 @@ export function PaymentClient({ orderId }: PaymentClientProps) {
                 ) : (
                   <CreditCard className="mr-2 h-4 w-4" />
                 )}
-                Process Card Payment
+                Open Secure Card Form
               </Button>
             </TabsContent>
 
@@ -912,6 +928,38 @@ export function PaymentClient({ orderId }: PaymentClientProps) {
         </CardContent>
       </Card>
 
+      <Dialog open={Boolean(cardSession)} onOpenChange={(open) => !open && setCardSession(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Secure web card payment</DialogTitle>
+          </DialogHeader>
+          {cardSession && stripePublishableKey && (
+            <Elements
+              stripe={loadStripe(stripePublishableKey)}
+              options={{ clientSecret: cardSession.clientSecret }}
+            >
+              <WebCardConfirmation
+                paymentId={cardSession.paymentId}
+                onComplete={async () => {
+                  const completedSplitId = cardSession.splitId
+                  setCardSession(null)
+                  if (completedSplitId) {
+                    setSplitPayments((previous) => previous.map((payment) =>
+                      payment.id === completedSplitId ? { ...payment, status: 'completed' } : payment
+                    ))
+                    await fetchOrder()
+                  } else {
+                    await fetchOrder()
+                    setChangeAmount(0)
+                    setSuccessDialogOpen(true)
+                  }
+                }}
+              />
+            </Elements>
+          )}
+        </DialogContent>
+      </Dialog>
+
       {/* Add Split Payment Dialog */}
       <Dialog open={splitDialogOpen} onOpenChange={setSplitDialogOpen}>
         <DialogContent>
@@ -948,11 +996,12 @@ export function PaymentClient({ orderId }: PaymentClientProps) {
                   Card
                 </Button>
                 <Button
-                  variant={newSplitMethod === 'gift_card' ? 'default' : 'outline'}
-                  onClick={() => setNewSplitMethod('gift_card')}
+                  variant="outline"
+                  disabled
+                  title="Apply gift cards from the Gift Card tab first"
                 >
                   <Gift className="mr-2 h-4 w-4" />
-                  Gift Card
+                  Gift via tab
                 </Button>
               </div>
             </div>

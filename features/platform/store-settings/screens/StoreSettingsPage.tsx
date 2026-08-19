@@ -14,18 +14,23 @@ import {
 } from '@/components/ui/select'
 import MultipleSelector, { type Option } from '@/components/ui/multiple-selector'
 import { Switch } from '@/components/ui/switch'
-import { Globe2, Save, Store, CalendarClock } from 'lucide-react'
+import { Globe2, Save, Store, CalendarClock, Palette } from 'lucide-react'
 import {
   WeeklyHoursEditor,
   type DayKey,
   type HoursState,
 } from '@/features/platform/store-settings/components/WeeklyHoursEditor'
 import { getUniqueDeliveryPostalCodes, normalizeCountryCode, normalizePostalCode } from '@/features/lib/delivery-zones'
+import { normalizeStoreLogoColor } from '@/features/lib/store-logo'
+import { LOGO_ICONS } from '@/features/platform/store-settings/lib/icon-registry'
+import { LogoPicker } from '@/features/platform/store-settings/components/LogoPicker'
 
 interface StoreSettingsData {
   id?: string
   name: string
   tagline?: string | null
+  logoIcon?: string | null
+  logoColor?: string | null
   address?: string | null
   phone?: string | null
   email?: string | null
@@ -50,6 +55,8 @@ const UPDATE_STORE_SETTINGS = gql`
     updateStoreSettings(where: { id: $id }, data: $data) {
       id
       name
+      logoIcon
+      logoColor
       currencyCode
       locale
       timezone
@@ -207,6 +214,8 @@ export function StoreSettingsPage({ initialSettings }: { initialSettings: StoreS
   const [form, setForm] = useState({
     name: initialSettings?.name || 'Openfront Restaurant',
     tagline: initialSettings?.tagline || '',
+    logoIcon: initialSettings?.logoIcon || LOGO_ICONS[0].lightSvg,
+    logoColor: normalizeStoreLogoColor(initialSettings?.logoColor),
     address: initialSettings?.address || '',
     phone: initialSettings?.phone || '',
     email: initialSettings?.email || '',
@@ -302,6 +311,8 @@ export function StoreSettingsPage({ initialSettings }: { initialSettings: StoreS
       const data: any = {
         name: form.name,
         tagline: form.tagline,
+        logoIcon: form.logoIcon,
+        logoColor: normalizeStoreLogoColor(form.logoColor),
         address: form.address,
         phone: form.phone,
         email: form.email,
@@ -615,6 +626,41 @@ export function StoreSettingsPage({ initialSettings }: { initialSettings: StoreS
         </div>
 
         <div className="space-y-6">
+          <Section title="Branding" icon={<Palette size={13} />}>
+            <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-4 px-5 py-4">
+              <div
+                className="flex size-16 items-center justify-center overflow-hidden border border-border bg-background p-2 [&>svg]:block [&>svg]:size-full"
+                style={{ filter: `hue-rotate(${form.logoColor}deg)` }}
+                dangerouslySetInnerHTML={{ __html: form.logoIcon }}
+              />
+              <div className="min-w-0">
+                <LogoPicker
+                  value={form.logoIcon}
+                  hue={form.logoColor}
+                  onChange={(logoIcon) => setForm((current) => ({ ...current, logoIcon }))}
+                />
+                <p className="mt-2 text-xs text-muted-foreground">
+                  This logo is exposed to storefront and Marketplace clients through GraphQL.
+                </p>
+              </div>
+            </div>
+            <div className="border-t border-border px-5 py-4">
+              <div className="flex items-center justify-between gap-4">
+                <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Hue rotation</p>
+                <span className="font-mono text-xs text-muted-foreground">{form.logoColor}°</span>
+              </div>
+              <input
+                type="range"
+                min="0"
+                max="359"
+                value={form.logoColor}
+                onChange={(event) => setForm((current) => ({ ...current, logoColor: event.target.value }))}
+                className="mt-3 w-full accent-primary"
+                aria-label="Logo hue rotation"
+              />
+            </div>
+          </Section>
+
           <WeeklyHoursEditor
             days={days}
             hours={hours}

@@ -1,5 +1,5 @@
 import { list } from "@keystone-6/core";
-import { integer, relationship } from "@keystone-6/core/fields";
+import { integer, relationship, select, text } from "@keystone-6/core/fields";
 
 import { isSignedIn, permissions } from "../access";
 import { trackingFields } from "./trackingFields";
@@ -8,9 +8,9 @@ export const GiftCardTransaction = list({
   access: {
     operation: {
       query: permissions.canReadGiftCards,
-      create: permissions.canManageGiftCards,
-      update: permissions.canManageGiftCards,
-      delete: permissions.canManageGiftCards,
+      create: () => false,
+      update: () => false,
+      delete: () => false,
     },
   },
   ui: {
@@ -19,6 +19,18 @@ export const GiftCardTransaction = list({
     },
   },
   fields: {
+    idempotencyKey: text({ validation: { isRequired: true }, isIndexed: "unique" }),
+    type: select({
+      type: "string",
+      options: [
+        { label: "Issue", value: "issue" },
+        { label: "Redeem", value: "redeem" },
+        { label: "Refund", value: "refund" },
+        { label: "Adjustment", value: "adjustment" },
+      ],
+      validation: { isRequired: true },
+    }),
+    balanceAfter: integer({ validation: { isRequired: true } }),
     amount: integer({
       validation: { isRequired: true },
     }),

@@ -37,11 +37,9 @@ interface PaymentProviderListPageClientProps {
 }
 
 const PROVIDER_TYPE_LABELS: Record<string, string> = {
-  stripe: 'Stripe',
-  paypal: 'PayPal',
-  square: 'Square',
-  adyen: 'Adyen',
-  manual: 'Manual / Cash',
+  pp_stripe_stripe: 'Stripe',
+  pp_paypal_paypal: 'PayPal',
+  pp_system_default: 'Manual / Cash',
 }
 
 export function PaymentProviderListPageClient({
@@ -79,7 +77,7 @@ export function PaymentProviderListPageClient({
     return { where, take: pageSize, skip: (currentPage - 1) * pageSize, orderBy }
   }, [list, currentSearchParams, currentPage, pageSize, searchString])
 
-  const querySelectedFields = `id name providerType isInstalled credentials config status createdAt`
+  const querySelectedFields = `id name code isInstalled credentials metadata createdAt`
 
   const { data: queryData, error: queryError } = useListItemsQuery(
     { listKey: list.key, variables, selectedFields: querySelectedFields },
@@ -162,7 +160,7 @@ export function PaymentProviderListPageClient({
           ) : (
             data?.items?.map((provider: any) => {
               const isConnected = provider.isInstalled
-              const typeLabel = PROVIDER_TYPE_LABELS[provider.providerType?.toLowerCase()] || provider.providerType || 'Unknown'
+              const typeLabel = PROVIDER_TYPE_LABELS[provider.code] || provider.name || 'Unknown'
               const hasCredentials = provider.credentials && Object.keys(provider.credentials).length > 0
 
               return (
@@ -203,12 +201,6 @@ export function PaymentProviderListPageClient({
                             {hasCredentials ? 'Credentials configured' : 'No credentials'}
                           </span>
 
-                          {/* Provider status */}
-                          {provider.status && (
-                            <span className="text-[11px] text-muted-foreground uppercase tracking-wider">
-                              {provider.status}
-                            </span>
-                          )}
                         </div>
                       </div>
 

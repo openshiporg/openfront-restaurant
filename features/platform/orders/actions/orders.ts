@@ -42,6 +42,8 @@ export async function getOrders(
       id
       quantity
       price
+      itemNameSnapshot
+      modifiersSnapshot
       menuItem {
         id
         name
@@ -107,6 +109,9 @@ export async function getOrder(orderId: string) {
           id
           quantity
           price
+          itemNameSnapshot
+          itemThumbnailSnapshot
+          modifiersSnapshot
           specialInstructions
           menuItem {
             id
@@ -130,8 +135,8 @@ export async function getOrder(orderId: string) {
 
 export async function updateOrderStatus(id: string, status: string) {
   const query = `
-    mutation UpdateOrderStatus($id: ID!, $data: RestaurantOrderUpdateInput!) {
-      updateRestaurantOrder(where: { id: $id }, data: $data) {
+    mutation TransitionRestaurantOrder($id: ID!, $status: String!) {
+      transitionRestaurantOrder(orderId: $id, status: $status) {
         id
         status
       }
@@ -140,7 +145,7 @@ export async function updateOrderStatus(id: string, status: string) {
 
   const response = await keystoneClient(query, {
     id,
-    data: { status }
+    status
   });
 
   if (response.success) {

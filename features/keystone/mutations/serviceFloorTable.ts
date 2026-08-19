@@ -1,5 +1,6 @@
 import type { Context } from ".keystone/types";
 import { permissions } from "../access";
+import { appendAuditEvent } from "../utils/audit";
 
 
 type TableStatus = "available" | "occupied" | "reserved" | "cleaning";
@@ -110,7 +111,7 @@ export async function updateServiceFloorCheckStatus(
       }
       nextStatus = "completed";
     } else if (args.action === "cancel_check") {
-      nextStatus = "cancelled";
+      return { success: false, error: "Use the approved order void workflow with a reason to cancel this check" };
     } else {
       return { success: false, error: "Invalid check action" };
     }
@@ -119,6 +120,14 @@ export async function updateServiceFloorCheckStatus(
       where: { id: args.orderId },
       data: { status: nextStatus },
     });
+    await appendAuditEvent(context, {
+      eventType: "service_floor.check_status_changed",
+      entityType: "RestaurantOrder",
+      entityId: args.orderId,
+      before: { status: order.status },
+      after: { status: nextStatus },
+      metadata: { action: args.action },
+    }).catch((error) => console.error("Check status audit event failed:", error));
 
     if (["completed", "cancelled"].includes(nextStatus)) {
       for (const table of order.tables || []) {

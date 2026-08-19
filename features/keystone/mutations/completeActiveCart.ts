@@ -12,6 +12,9 @@ import {
   getStoreDeliverySettings,
 } from "../utils/deliveryValidation";
 import { isKitchenActiveOrderStatus, syncKitchenTicketsForOrder } from "../utils/kitchenTicketSync";
+import { validateCartItemInput } from "../utils/cartItemValidation";
+import { appendAuditEventWithClient } from "../utils/audit";
+import { issueReceiptWithClient } from "../utils/receipt";
 
 interface CompleteActiveCartArgs {
   cartId: string;
@@ -44,11 +47,13 @@ export default async function completeActiveCart(
       deliveryCountryCode
       tipPercent
       user { id }
+      order { id orderNumber secretKey status }
       paymentCollection {
         id
         amount
         paymentSessions {
           id
+          idempotencyKey
           isSelected
           isInitiated
           amount
@@ -82,7 +87,19 @@ export default async function completeActiveCart(
   });
 
   if (!cart) throw new Error("Cart not found");
+  if (cart.order?.id) return cart.order;
   if (!cart.items?.length) throw new Error("Cart is empty");
+
+  const validatedItems = await Promise.all(
+    cart.items.map((item: any) =>
+      validateCartItemInput(context, {
+        menuItemId: item.menuItem?.id,
+        quantity: item.quantity,
+        modifierIds: (item.modifiers || []).map((modifier: any) => modifier.id),
+        specialInstructions: item.specialInstructions,
+      })
+    )
+  );
 
   const selectedSession = paymentSessionId
     ? cart.paymentCollection?.paymentSessions?.find(
@@ -95,7 +112,7 @@ export default async function completeActiveCart(
   }
 
   const sessionData = (selectedSession.data || {}) as Record<string, any>;
-  const paymentData = selectedSession.data || null;
+  let paymentData: Record<string, any> = { ...sessionData };
 
   const providerCode = selectedSession.paymentProvider?.code || sessionData?.providerCode;
   const providerPaymentId = sessionData?.paymentIntentId || sessionData?.orderId;
@@ -105,7 +122,8 @@ export default async function completeActiveCart(
     throw new Error("Selected payment session is missing payment provider information.");
   }
 
-  const isManual = providerCode === "pp_system_default";
+  const isManual =
+    providerCode === "pp_system_default" || providerCode?.startsWith("pp_manual");
   let paymentResult: { status: string; paymentIntentId: string | null } = {
     status: "manual_pending",
     paymentIntentId: null,
@@ -128,6 +146,15 @@ export default async function completeActiveCart(
         provider: paymentProvider,
         paymentId: providerPaymentId,
       });
+      const captureId =
+        captured.data?.purchase_units?.[0]?.payments?.captures?.[0]?.id ||
+        captured.data?.id ||
+        null;
+      paymentData = {
+        ...paymentData,
+        capture: captured.data || captured,
+        captureId,
+      };
       paymentResult = {
         status: captured.status === "succeeded" ? "succeeded" : "failed",
         paymentIntentId: providerPaymentId,
@@ -143,7 +170,10 @@ export default async function completeActiveCart(
 
   const settings = await getStoreDeliverySettings(context);
   const currencyCode = settings?.currencyCode || "USD";
-  const subtotal = cart.subtotal || 0;
+  const subtotal = validatedItems.reduce(
+    (sum, item) => sum + item.unitPrice * item.quantity,
+    0
+  );
 
   assertDeliveryAddressComplete({
     orderType: cart.orderType,
@@ -175,88 +205,17 @@ export default async function completeActiveCart(
     throw new Error(`Delivery orders require a minimum subtotal of ${settings?.deliveryMinimum || "0.00"}.`);
   }
 
-  if (cart.paymentCollection?.id && (cart.paymentCollection.amount || 0) !== total) {
-    await sudoContext.query.PaymentCollection.updateOne({
-      where: { id: cart.paymentCollection.id },
-      data: { amount: total },
-    });
-  }
-
   const orderTypeMap: Record<string, string> = {
     pickup: "takeout",
     delivery: "delivery",
   };
 
-  const orderNumber = `ORD-${Date.now().toString(36).toUpperCase()}`;
+  const orderNumber = `ORD-${Date.now().toString(36).toUpperCase()}-${require("crypto").randomBytes(3).toString("hex").toUpperCase()}`;
   const customerId = cart.user?.id;
-  const secretKey = !customerId
-    ? require("crypto").randomBytes(32).toString("hex")
-    : undefined;
+  const secretKey = !customerId ? require("crypto").randomBytes(32).toString("hex") : "";
   const isDeliveryOrder = cart.orderType === "delivery";
-
-  if (selectedSession.amount !== total) {
-    if (!isManual) {
-      throw new Error("Cart total changed. Please return to payment and confirm your payment method again.");
-    }
-
-    await sudoContext.query.PaymentSession.updateOne({
-      where: { id: selectedSession.id },
-      data: { amount: total },
-    });
-  }
-
-  const order = await sudoContext.query.RestaurantOrder.createOne({
-    data: {
-      orderNumber,
-      orderType: orderTypeMap[cart.orderType || "pickup"] || "takeout",
-      orderSource: "online",
-      status: isManual ? "open" : "sent_to_kitchen",
-      guestCount: 1,
-      subtotal,
-      tax,
-      tip,
-      discount: pickupDiscount,
-      total,
-      currencyCode,
-      customer: customerId ? { connect: { id: customerId } } : undefined,
-      customerName: cart.customerName || "",
-      customerEmail: cart.email || "",
-      customerPhone: cart.customerPhone || "",
-      deliveryAddress: isDeliveryOrder ? cart.deliveryAddress || undefined : undefined,
-      deliveryAddress2: isDeliveryOrder ? cart.deliveryAddress2 || undefined : undefined,
-      deliveryCity: isDeliveryOrder ? cart.deliveryCity || undefined : undefined,
-      deliveryState: isDeliveryOrder ? cart.deliveryState || undefined : undefined,
-      deliveryZip: isDeliveryOrder ? cart.deliveryZip || undefined : undefined,
-      deliveryCountryCode: isDeliveryOrder ? cart.deliveryCountryCode || undefined : undefined,
-      secretKey,
-    },
-    query: "id orderNumber secretKey status",
-  });
-
-  for (const item of cart.items) {
-    const modTotal =
-      item.modifiers?.reduce(
-        (s: number, m: any) => s + (m.priceAdjustment || 0),
-        0
-      ) || 0;
-    const unitPrice = (item.menuItem?.price || 0) + modTotal;
-
-    await sudoContext.query.OrderItem.createOne({
-      data: {
-        quantity: item.quantity,
-        price: Math.round(unitPrice),
-        specialInstructions: item.specialInstructions || "",
-        order: { connect: { id: order.id } },
-        menuItem: { connect: { id: item.menuItem.id } },
-        appliedModifiers: item.modifiers?.length
-          ? { connect: item.modifiers.map((m: any) => ({ id: m.id })) }
-          : undefined,
-      },
-    });
-  }
-
-  if (isKitchenActiveOrderStatus(order.status)) {
-    await syncKitchenTicketsForOrder(order.id, context);
+  if (Number(selectedSession.amount || 0) !== total && !isManual) {
+    throw new Error("Cart total changed. Please return to payment and confirm your payment method again.");
   }
 
   const paymentMethodMap: Record<string, string> = {
@@ -264,43 +223,126 @@ export default async function completeActiveCart(
     pp_paypal_paypal: "paypal",
     pp_system_default: "cash",
   };
+  const paymentIdempotencyKey = `checkout:${selectedSession.idempotencyKey || selectedSession.id}`;
+  const prisma = context.prisma as any;
+  const result = await prisma.$transaction(async (tx: any) => {
+    const lockedCart = await tx.cart.findUnique({ where: { id: cartId } });
+    if (!lockedCart) throw new Error("Cart not found");
+    if (lockedCart.orderId) {
+      const existingOrder = await tx.restaurantOrder.findUnique({ where: { id: lockedCart.orderId } });
+      return { order: existingOrder, payment: null, replay: true };
+    }
 
-  const payment = await sudoContext.query.Payment.createOne({
-    data: {
-      amount: total,
-      status: paymentResult.status === "succeeded" ? "succeeded" : "pending",
-      paymentMethod: paymentMethodMap[providerCode || "pp_system_default"] || "cash",
-      currencyCode,
-      tipAmount: tip,
-      providerPaymentId: paymentResult.paymentIntentId || undefined,
-      data: paymentData || {},
-      processedAt:
-        paymentResult.status === "succeeded"
-          ? new Date().toISOString()
-          : undefined,
-      order: { connect: { id: order.id } },
-      paymentProvider: { connect: { id: paymentProvider.id } },
-    },
-  });
-
-  if (cart.paymentCollection?.id) {
-    await sudoContext.query.PaymentCollection.updateOne({
-      where: { id: cart.paymentCollection.id },
+    const order = await tx.restaurantOrder.create({
       data: {
-        payments: { connect: [{ id: payment.id }] },
+        orderNumber,
+        orderType: orderTypeMap[cart.orderType || "pickup"] || "takeout",
+        orderSource: "online",
+        status: isManual ? "open" : "sent_to_kitchen",
+        guestCount: 1,
+        subtotal,
+        tax,
+        tip,
+        discount: pickupDiscount,
+        total,
+        currencyCode,
+        customerId: customerId || null,
+        customerName: cart.customerName || "",
+        customerEmail: cart.email || "",
+        customerPhone: cart.customerPhone || "",
+        deliveryAddress: isDeliveryOrder ? cart.deliveryAddress || "" : "",
+        deliveryAddress2: isDeliveryOrder ? cart.deliveryAddress2 || "" : "",
+        deliveryCity: isDeliveryOrder ? cart.deliveryCity || "" : "",
+        deliveryState: isDeliveryOrder ? cart.deliveryState || "" : "",
+        deliveryZip: isDeliveryOrder ? cart.deliveryZip || "" : "",
+        deliveryCountryCode: isDeliveryOrder ? cart.deliveryCountryCode || "" : "",
+        secretKey,
+        orderItems: {
+          create: validatedItems.map((item) => ({
+            quantity: item.quantity,
+            price: item.unitPrice,
+            itemNameSnapshot: item.menuItem.name,
+            itemThumbnailSnapshot: item.menuItem.thumbnail || "",
+            kitchenStationSnapshot: item.menuItem.kitchenStation || "expo",
+            menuItemIdSnapshot: item.menuItem.id,
+            modifiersSnapshot: item.modifiers.map((modifier: any) => ({
+              id: modifier.id,
+              name: modifier.name,
+              modifierGroup: modifier.modifierGroup,
+              modifierGroupLabel: modifier.modifierGroupLabel || null,
+              priceAdjustment: modifier.priceAdjustment,
+            })),
+            specialInstructions: item.specialInstructions,
+            menuItemId: item.menuItem.id,
+            appliedModifiers: item.modifiers.length
+              ? { connect: item.modifiers.map((modifier: any) => ({ id: modifier.id })) }
+              : undefined,
+          })),
+        },
       },
     });
+    const payment = await tx.payment.create({
+      data: {
+        idempotencyKey: paymentIdempotencyKey,
+        reservedAt: new Date(),
+        amount: total,
+        status: paymentResult.status === "succeeded" ? "succeeded" : "pending",
+        paymentMethod: paymentMethodMap[providerCode || "pp_system_default"] || "cash",
+        currencyCode,
+        tipAmount: tip,
+        providerPaymentId: paymentResult.paymentIntentId || "",
+        data: paymentData || {},
+        processedAt: paymentResult.status === "succeeded" ? new Date() : null,
+        orderId: order.id,
+        paymentProviderId: paymentProvider.id,
+        paymentCollectionId: cart.paymentCollection?.id || null,
+      },
+    });
+    if (cart.paymentCollection?.id) {
+      await tx.paymentCollection.update({ where: { id: cart.paymentCollection.id }, data: { amount: total } });
+    }
+    if (isManual && Number(selectedSession.amount || 0) !== total) {
+      await tx.paymentSession.update({ where: { id: selectedSession.id }, data: { amount: total } });
+    }
+    await tx.cart.update({ where: { id: cartId }, data: { orderId: order.id } });
+    await appendAuditEventWithClient(tx, context.session?.itemId, {
+      eventKey: `checkout-completed:${order.id}`,
+      eventType: "checkout.completed",
+      entityType: "RestaurantOrder",
+      entityId: order.id,
+      after: { total, paymentStatus: payment.status },
+      metadata: { paymentSessionId: selectedSession.id, paymentIdempotencyKey },
+    });
+    if (payment.status === "succeeded") {
+      await issueReceiptWithClient(tx, context.session?.itemId, {
+        kind: "sale",
+        entityId: payment.id,
+        orderId: order.id,
+        paymentId: payment.id,
+        amount: total,
+        currencyCode,
+        snapshot: {
+          orderNumber: order.orderNumber,
+          items: validatedItems,
+          subtotal,
+          tax,
+          tip,
+          discount: pickupDiscount,
+          deliveryFee,
+          total,
+        },
+      });
+    }
+    return { order, payment, replay: false };
+  }, { isolationLevel: "Serializable" });
+
+  if (!result.replay && isKitchenActiveOrderStatus(result.order.status)) {
+    await syncKitchenTicketsForOrder(result.order.id, context);
   }
-
-  await sudoContext.query.Cart.updateOne({
-    where: { id: cartId },
-    data: {
-      order: { connect: { id: order.id } },
-    },
-  });
-
-  return await sudoContext.query.RestaurantOrder.findOne({
-    where: { id: order.id },
-    query: "id orderNumber secretKey status",
-  });
+  return {
+    id: result.order.id,
+    orderNumber: result.order.orderNumber,
+    secretKey: result.order.secretKey,
+    status: result.order.status,
+  };
 }

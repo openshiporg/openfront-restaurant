@@ -7,24 +7,24 @@ import { sendPasswordResetEmail } from "./lib/mail";
 import { permissions } from "./access";
 import Iron from "@hapi/iron";
 import * as cookie from "cookie";
+import { getRuntimeConfig } from "./runtimeConfig";
 
-const databaseURL = process.env.DATABASE_URL || "file:./keystone.db";
+const runtimeConfig = getRuntimeConfig();
+const { databaseURL, sessionSecret } = runtimeConfig;
+const {
+  bucketName,
+  region,
+  accessKeyId,
+  secretAccessKey,
+  endpoint,
+} = runtimeConfig.storage;
 
 const listKey = "User";
 
 const sessionConfig = {
-  maxAge: 60 * 60 * 24 * 360, // How long they stay signed in?
-  secret:
-    process.env.SESSION_SECRET || "this secret should only be used in testing",
+  maxAge: 60 * 60 * 24 * 360,
+  secret: sessionSecret,
 };
-
-const {
-  S3_BUCKET_NAME: bucketName = "keystone-test",
-  S3_REGION: region = "ap-southeast-2",
-  S3_ACCESS_KEY_ID: accessKeyId = "keystone",
-  S3_SECRET_ACCESS_KEY: secretAccessKey = "keystone",
-  S3_ENDPOINT: endpoint = "https://sfo3.digitaloceanspaces.com",
-} = process.env;
 
 export function statelessSessions({
   secret,

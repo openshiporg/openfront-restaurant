@@ -14,12 +14,9 @@ export const PaymentCollection = list({
     operation: {
       query: ({ session }) =>
         permissions.canManageOrders({ session }),
-      create: ({ session }) =>
-        permissions.canManageOrders({ session }),
-      update: ({ session }) =>
-        permissions.canManageOrders({ session }),
-      delete: ({ session }) =>
-        permissions.canManageOrders({ session }),
+      create: () => false,
+      update: () => false,
+      delete: () => false,
     },
   },
   fields: {

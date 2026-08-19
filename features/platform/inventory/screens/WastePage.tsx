@@ -34,6 +34,8 @@ interface WasteLog {
   notes: string | null
   createdAt: string
   loggedBy: { name: string } | null
+  reversedAt: string | null
+  reversalReason: string | null
 }
 
 interface Ingredient {
@@ -58,7 +60,7 @@ const GET_WASTE_DATA = gql`
     wasteLogs(orderBy: { createdAt: desc }, take: 100) {
       id
       ingredient { id name unit }
-      quantity reason cost notes createdAt
+      quantity reason cost notes createdAt reversedAt reversalReason
       loggedBy { name }
     }
     ingredients(orderBy: { name: asc }) {
@@ -68,15 +70,29 @@ const GET_WASTE_DATA = gql`
   }
 `
 
-const CREATE_WASTE_LOG = gql`
-  mutation CreateWasteLog($data: WasteLogCreateInput!) {
-    createWasteLog(data: $data) { id }
+const RECORD_WASTE = gql`
+  mutation RecordWaste(
+    $ingredientId: ID!
+    $quantity: String!
+    $reason: String!
+    $notes: String
+    $idempotencyKey: String!
+  ) {
+    recordWaste(
+      ingredientId: $ingredientId
+      quantity: $quantity
+      reason: $reason
+      notes: $notes
+      idempotencyKey: $idempotencyKey
+    ) { success wasteLogId error }
   }
 `
 
-const DELETE_WASTE_LOG = gql`
-  mutation DeleteWasteLog($id: ID!) {
-    deleteWasteLog(where: { id: $id }) { id }
+const REVERSE_WASTE = gql`
+  mutation ReverseWaste($wasteLogId: ID!, $reason: String!, $idempotencyKey: String!) {
+    reverseWaste(wasteLogId: $wasteLogId, reason: $reason, idempotencyKey: $idempotencyKey) {
+      success wasteLogId error
+    }
   }
 `
 
@@ -117,14 +133,16 @@ export function WastePage() {
   const handleCreate = async () => {
     if (!form.ingredientId || !form.quantity) return
     try {
-      await request('/api/graphql', CREATE_WASTE_LOG, {
-        data: {
-          ingredient: { connect: { id: form.ingredientId } },
-          quantity: form.quantity,
-          reason: form.reason,
-          notes: form.notes || null,
-        },
+      const result: any = await request('/api/graphql', RECORD_WASTE, {
+        ingredientId: form.ingredientId,
+        quantity: form.quantity,
+        reason: form.reason,
+        notes: form.notes || null,
+        idempotencyKey: crypto.randomUUID(),
       })
+      if (!result?.recordWaste?.success) {
+        throw new Error(result?.recordWaste?.error || 'Unable to record waste')
+      }
       setDialogOpen(false)
       setForm({ ingredientId: '', quantity: '', reason: 'spoilage', notes: '' })
       fetchData()
@@ -133,10 +151,18 @@ export function WastePage() {
     }
   }
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Delete this waste log?')) return
+  const handleReverse = async (id: string) => {
+    const reason = prompt('Reason for reversing this waste entry?')?.trim()
+    if (!reason) return
     try {
-      await request('/api/graphql', DELETE_WASTE_LOG, { id })
+      const result: any = await request('/api/graphql', REVERSE_WASTE, {
+        wasteLogId: id,
+        reason,
+        idempotencyKey: `waste-reversal:${id}`,
+      })
+      if (!result?.reverseWaste?.success) {
+        throw new Error(result?.reverseWaste?.error || 'Unable to reverse waste')
+      }
       fetchData()
     } catch (err) {
       console.error('Error:', err)
@@ -146,19 +172,20 @@ export function WastePage() {
   const getReasonConfig = (reason: string) =>
     WASTE_REASONS.find(r => r.value === reason) || WASTE_REASONS[WASTE_REASONS.length - 1]
 
-  const totalWasteCost = logs.reduce((s, l) => s + (l.cost || 0), 0)
-  const last7DaysCost = logs
+  const activeLogs = logs.filter(log => !log.reversedAt)
+  const totalWasteCost = activeLogs.reduce((s, l) => s + (l.cost || 0), 0)
+  const last7DaysCost = activeLogs
     .filter(l => new Date(l.createdAt) > new Date(Date.now() - 7 * 86400000))
     .reduce((s, l) => s + (l.cost || 0), 0)
-  const last30DaysCost = logs
+  const last30DaysCost = activeLogs
     .filter(l => new Date(l.createdAt) > new Date(Date.now() - 30 * 86400000))
     .reduce((s, l) => s + (l.cost || 0), 0)
   const avgDailyCost = last30DaysCost / 30
 
   const reasonBreakdown = WASTE_REASONS.map(r => ({
     ...r,
-    count: logs.filter(l => l.reason === r.value).length,
-    cost: logs.filter(l => l.reason === r.value).reduce((s, l) => s + (l.cost || 0), 0),
+    count: activeLogs.filter(l => l.reason === r.value).length,
+    cost: activeLogs.filter(l => l.reason === r.value).reduce((s, l) => s + (l.cost || 0), 0),
   })).filter(r => r.count > 0).sort((a, b) => b.cost - a.cost)
 
   if (loading) {
@@ -206,7 +233,7 @@ export function WastePage() {
             {formatCurrency(last7DaysCost, currencyConfig, { inputIsCents: false })}
           </p>
           <p className="text-xs text-muted-foreground mt-0.5">
-            {logs.filter(l => new Date(l.createdAt) > new Date(Date.now() - 7 * 86400000)).length} incidents
+            {activeLogs.filter(l => new Date(l.createdAt) > new Date(Date.now() - 7 * 86400000)).length} incidents
           </p>
         </div>
         <div className="px-5 py-4">
@@ -261,6 +288,7 @@ export function WastePage() {
                           <div>
                             <p className="text-sm font-medium">
                               {log.ingredient?.name || 'Unknown ingredient'}
+                              {log.reversedAt ? <span className="ml-2 text-[10px] uppercase text-muted-foreground">Reversed</span> : null}
                             </p>
                             <div className="flex items-center gap-3 mt-0.5 flex-wrap">
                               <span className="text-[11px] text-muted-foreground">
@@ -283,10 +311,12 @@ export function WastePage() {
                               {formatCurrency(log.cost || 0, currencyConfig, { inputIsCents: false })}
                             </p>
                             <button
-                              onClick={() => handleDelete(log.id)}
-                              className="w-6 h-6 rounded flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-red-600"
+                              onClick={() => handleReverse(log.id)}
+                              disabled={Boolean(log.reversedAt)}
+                              title={log.reversedAt ? 'Already reversed' : 'Reverse this entry'}
+                              className="w-6 h-6 rounded flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-red-600 disabled:opacity-30"
                             >
-                              <Trash2 size={12} />
+                              <RefreshCw size={12} />
                             </button>
                           </div>
                         </div>

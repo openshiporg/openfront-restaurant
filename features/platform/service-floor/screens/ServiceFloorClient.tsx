@@ -77,6 +77,8 @@ interface ActiveOrder {
     seatNumber?: number | null
     courseNumber?: number | null
     specialInstructions?: string | null
+    itemNameSnapshot: string
+    modifiersSnapshot?: Array<{ name: string }> | null
     menuItem: { id: string; name: string } | null
   }[]
   payments: {
@@ -87,11 +89,24 @@ interface ActiveOrder {
   }[]
 }
 
+interface MenuModifier {
+  id: string
+  name: string
+  modifierGroup: string
+  modifierGroupLabel?: string | null
+  required: boolean
+  minSelections: number
+  maxSelections: number
+  priceAdjustment: number
+  defaultSelected: boolean
+}
+
 interface MenuItem {
   id: string
   name: string
   price: number
   available: boolean
+  modifiers: MenuModifier[]
 }
 
 const GET_SERVICE_FLOOR = gql`
@@ -109,11 +124,19 @@ const GET_SERVICE_FLOOR = gql`
       id orderNumber status total guestCount createdAt
       tables { id tableNumber }
       courses(orderBy: { courseNumber: asc }) { id courseType courseNumber status onHold }
-      orderItems { id quantity price seatNumber courseNumber specialInstructions menuItem { id name } }
+      orderItems {
+        id quantity price seatNumber courseNumber specialInstructions
+        itemNameSnapshot modifiersSnapshot isVoided adjustmentTotal
+        menuItem { id name }
+      }
       payments { id amount status paymentMethod }
     }
     menuItems(where: { available: { equals: true } }, orderBy: { name: asc }) {
       id name price available
+      modifiers {
+        id name modifierGroup modifierGroupLabel required
+        minSelections maxSelections priceAdjustment defaultSelected
+      }
     }
     storeSettings { currencyCode locale taxRate }
   }
@@ -134,6 +157,7 @@ const ADD_SERVICE_FLOOR_ITEM = gql`
     $courseNumber: Int
     $seatNumber: Int
     $specialInstructions: String
+    $modifierIds: [ID!]
   ) {
     addServiceFloorItem(
       orderId: $orderId
@@ -143,6 +167,7 @@ const ADD_SERVICE_FLOOR_ITEM = gql`
       courseNumber: $courseNumber
       seatNumber: $seatNumber
       specialInstructions: $specialInstructions
+      modifierIds: $modifierIds
     ) {
       id
       orderNumber
@@ -279,6 +304,7 @@ export function ServiceFloorClient() {
   const [courseNumber, setCourseNumber] = useState<number>(1)
   const [seatNumber, setSeatNumber] = useState<number>(1)
   const [itemNotes, setItemNotes] = useState<string>('')
+  const [selectedModifierIds, setSelectedModifierIds] = useState<string[]>([])
   const [addingItem, setAddingItem] = useState(false)
   const [editingItem, setEditingItem] = useState<ActiveOrder['orderItems'][number] | null>(null)
   const [editQuantity, setEditQuantity] = useState<number>(1)
@@ -363,6 +389,33 @@ export function ServiceFloorClient() {
     return map
   }, [menuItems])
 
+  const selectedMenuItem = selectedMenuItemId ? menuItemMap[selectedMenuItemId] : null
+  const modifierGroups = useMemo(() => {
+    return Object.entries((selectedMenuItem?.modifiers || []).reduce<Record<string, MenuModifier[]>>((groups, modifier) => {
+      const key = modifier.modifierGroup || 'addons'
+      groups[key] = [...(groups[key] || []), modifier]
+      return groups
+    }, {}))
+  }, [selectedMenuItem])
+
+  const selectMenuItem = (id: string) => {
+    setSelectedMenuItemId(id)
+    setSelectedModifierIds(
+      (menuItemMap[id]?.modifiers || []).filter((modifier) => modifier.defaultSelected).map((modifier) => modifier.id)
+    )
+  }
+
+  const toggleModifier = (modifier: MenuModifier) => {
+    setSelectedModifierIds((current) => {
+      if (current.includes(modifier.id)) return current.filter((id) => id !== modifier.id)
+      const selectedInGroup = (selectedMenuItem?.modifiers || []).filter(
+        (candidate) => candidate.modifierGroup === modifier.modifierGroup && current.includes(candidate.id)
+      )
+      if (selectedInGroup.length >= Math.max(1, Number(modifier.maxSelections || 1))) return current
+      return [...current, modifier.id]
+    })
+  }
+
   const withAction = async (key: string, fn: () => Promise<void>) => {
     try {
       setProcessingAction(key)
@@ -413,6 +466,7 @@ export function ServiceFloorClient() {
         courseNumber,
         seatNumber,
         specialInstructions: itemNotes.trim() || null,
+        modifierIds: selectedModifierIds,
       })
 
       if (!res?.addServiceFloorItem?.id) {
@@ -424,6 +478,7 @@ export function ServiceFloorClient() {
       setSeatNumber(1)
       setItemNotes('')
       setSelectedMenuItemId('')
+      setSelectedModifierIds([])
       setSheetSuccess('Item added to check')
     })
     setAddingItem(false)
@@ -765,7 +820,7 @@ export function ServiceFloorClient() {
               {/* Quick add item */}
               <div className="rounded-lg border border-border bg-card p-3 space-y-3">
                 <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Quick Add Item</p>
-                <Select value={selectedMenuItemId} onValueChange={setSelectedMenuItemId}>
+                <Select value={selectedMenuItemId} onValueChange={selectMenuItem}>
                   <SelectTrigger className="h-8 text-xs">
                     <SelectValue placeholder="Select menu item" />
                   </SelectTrigger>
@@ -777,6 +832,30 @@ export function ServiceFloorClient() {
                     ))}
                   </SelectContent>
                 </Select>
+                {modifierGroups.map(([group, modifiers]) => (
+                  <div key={group} className="space-y-1.5 rounded-md border border-border p-2">
+                    <div className="flex items-center justify-between text-[10px] uppercase tracking-wider text-muted-foreground">
+                      <span>{modifiers[0]?.modifierGroupLabel || group}</span>
+                      <span>{modifiers.some((modifier) => modifier.required) ? 'Required' : 'Optional'}</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {modifiers.map((modifier) => (
+                        <label key={modifier.id} className="flex cursor-pointer items-center gap-2 rounded border p-2 text-xs">
+                          <Checkbox
+                            checked={selectedModifierIds.includes(modifier.id)}
+                            onCheckedChange={() => toggleModifier(modifier)}
+                          />
+                          <span className="min-w-0 truncate">{modifier.name}</span>
+                          {Number(modifier.priceAdjustment || 0) !== 0 && (
+                            <span className="ml-auto text-muted-foreground">
+                              {Number(modifier.priceAdjustment) > 0 ? '+' : ''}{formatCurrency(modifier.priceAdjustment, currencyConfig)}
+                            </span>
+                          )}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                ))}
                 <div className="grid grid-cols-3 gap-2">
                   <div>
                     <p className="mb-1 text-[10px] uppercase tracking-wider text-muted-foreground">Qty</p>
@@ -844,11 +923,16 @@ export function ServiceFloorClient() {
                         <div key={item.id} className="flex items-start justify-between gap-2 rounded border border-border bg-background px-3 py-2">
                           <div className="min-w-0">
                             <p className="truncate text-xs font-medium">
-                              {item.quantity}× {item.menuItem?.name || 'Item'}
+                              {item.quantity}× {item.itemNameSnapshot || item.menuItem?.name || 'Item'}
                             </p>
                             <p className="mt-0.5 text-[10px] uppercase tracking-wider text-muted-foreground">
                               Course {item.courseNumber || 1} · Seat {item.seatNumber || 1} · {formatCurrency((item.quantity || 0) * (item.price || 0), currencyConfig)}
                             </p>
+                            {item.modifiersSnapshot?.length ? (
+                              <p className="mt-1 line-clamp-2 text-[11px] text-muted-foreground">
+                                {item.modifiersSnapshot.map((modifier) => modifier.name).join(', ')}
+                              </p>
+                            ) : null}
                             {item.specialInstructions ? (
                               <p className="mt-1 line-clamp-2 text-[11px] text-muted-foreground">{item.specialInstructions}</p>
                             ) : null}

@@ -227,8 +227,8 @@ export async function getGiftCardStatusCounts() {
  */
 export async function updateGiftCardStatus(id: string, isDisabled: boolean) {
   const mutation = `
-    mutation UpdateGiftCardStatus($id: ID!, $data: GiftCardUpdateInput!) {
-      updateGiftCard(where: { id: $id }, data: $data) {
+    mutation SetGiftCardStatus($id: ID!, $isDisabled: Boolean!) {
+      setGiftCardStatus(giftCardId: $id, isDisabled: $isDisabled) {
         id
         isDisabled
       }
@@ -237,7 +237,7 @@ export async function updateGiftCardStatus(id: string, isDisabled: boolean) {
 
   const response = await keystoneClient(mutation, {
     id,
-    data: { isDisabled },
+    isDisabled,
   });
 
   if (response.success) {
@@ -247,7 +247,7 @@ export async function updateGiftCardStatus(id: string, isDisabled: boolean) {
 
     return {
       success: true,
-      data: response.data.updateGiftCard,
+      data: response.data.setGiftCardStatus,
     };
   } else {
     console.error('Error updating giftcard status:', response.error);

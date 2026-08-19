@@ -2,6 +2,7 @@ import type { Context } from ".keystone/types";
 import { calculateRestaurantTotals } from "../../lib/restaurant-order-pricing";
 import { permissions } from "../access";
 import { getStoreDeliverySettings } from "../utils/deliveryValidation";
+import { validateCartItemInput } from "../utils/cartItemValidation";
 
 
 interface AddServiceFloorItemArgs {
@@ -12,6 +13,7 @@ interface AddServiceFloorItemArgs {
   courseNumber?: number | null;
   seatNumber?: number | null;
   specialInstructions?: string | null;
+  modifierIds?: string[] | null;
 }
 
 function generateDineInOrderNumber() {
@@ -89,21 +91,21 @@ export default async function addServiceFloorItem(
   if (!args.tableId) throw new Error("Table is required");
   if (!args.menuItemId) throw new Error("Menu item is required");
 
-  const [settings, table, menuItem] = await Promise.all([
+  const [settings, table, validatedItem] = await Promise.all([
     getStoreDeliverySettings(context),
     sudo.query.Table.findOne({
       where: { id: args.tableId },
       query: "id tableNumber status",
     }),
-    sudo.query.MenuItem.findOne({
-      where: { id: args.menuItemId },
-      query: "id name price available",
+    validateCartItemInput(context, {
+      menuItemId: args.menuItemId,
+      quantity,
+      modifierIds: args.modifierIds || [],
+      specialInstructions: args.specialInstructions,
     }),
   ]);
 
   if (!table) throw new Error("Table not found");
-  if (!menuItem) throw new Error("Menu item not found");
-  if (!menuItem.available) throw new Error(`${menuItem.name || "Selected item"} is unavailable`);
 
   let orderId = args.orderId || null;
   let order: any = null;
@@ -156,12 +158,20 @@ export default async function addServiceFloorItem(
     data: {
       order: { connect: { id: orderId } },
       course: { connect: { id: course.id } },
-      menuItem: { connect: { id: args.menuItemId } },
-      quantity,
-      price: Number(menuItem.price || 0),
+      menuItem: { connect: { id: validatedItem.menuItem.id } },
+      appliedModifiers: validatedItem.modifiers.length
+        ? { connect: validatedItem.modifiers.map((modifier) => ({ id: modifier.id })) }
+        : undefined,
+      quantity: validatedItem.quantity,
+      price: validatedItem.unitPrice,
+      itemNameSnapshot: validatedItem.menuItem.name,
+      itemThumbnailSnapshot: validatedItem.menuItem.thumbnail || "",
+      kitchenStationSnapshot: validatedItem.menuItem.kitchenStation || "expo",
+      menuItemIdSnapshot: validatedItem.menuItem.id,
+      modifiersSnapshot: validatedItem.modifiers,
       courseNumber,
       seatNumber: args.seatNumber ?? undefined,
-      specialInstructions: args.specialInstructions || "",
+      specialInstructions: validatedItem.specialInstructions,
     },
   });
 

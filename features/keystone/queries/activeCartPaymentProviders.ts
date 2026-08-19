@@ -1,4 +1,5 @@
 import type { Context } from ".keystone/types";
+import { isPaymentProviderConfigured } from "../utils/paymentProviderConfig";
 
 export default async function activeCartPaymentProviders(
   root: any,
@@ -17,5 +18,7 @@ export default async function activeCartPaymentProviders(
     `,
   });
 
-  return providers;
+  return providers.filter((provider: any) =>
+    isPaymentProviderConfigured(provider.code || '')
+  );
 }

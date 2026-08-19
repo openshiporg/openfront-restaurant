@@ -4,6 +4,7 @@ import { SECTION_DEFINITIONS } from '../config/templates';
 import { getItemsFromJsonData } from '../utils/dataUtils';
 import { TemplateType, OnboardingStep } from './useOnboardingState';
 import { inferDefaultDeliveryPostalCodes, normalizeCountryCode } from '@/features/lib/delivery-zones';
+import { DEFAULT_STORE_LOGO_COLOR, DEFAULT_STORE_LOGO_ICON } from '@/features/lib/store-logo';
 
 const GRAPHQL_ENDPOINT = '/api/graphql';
 
@@ -106,6 +107,8 @@ export function useOnboardingApi({
         data: {
           name: storeInfo.name,
           tagline: storeInfo.tagline,
+          logoIcon: storeInfo.logoIcon || DEFAULT_STORE_LOGO_ICON,
+          logoColor: storeInfo.logoColor || DEFAULT_STORE_LOGO_COLOR,
           address: storeInfo.address,
           phone: storeInfo.phone,
           currencyCode: storeInfo.currencyCode || 'USD',
@@ -304,8 +307,12 @@ export function useOnboardingApi({
   const createPaymentMethods = async (client: GraphQLClient, data: any) => {
     setProgress('Creating payment methods...');
 
+    const selectedMethods = new Set(
+      (data.paymentMethods || []).map((method: any) => method.name)
+    );
     const providers = [
       {
+        seedName: 'Credit Card',
         name: 'Stripe',
         code: 'pp_stripe_stripe',
         isInstalled: true,
@@ -317,6 +324,7 @@ export function useOnboardingApi({
         handleWebhookFunction: 'stripe',
       },
       {
+        seedName: 'Mobile Payment',
         name: 'PayPal',
         code: 'pp_paypal_paypal',
         isInstalled: true,
@@ -328,6 +336,7 @@ export function useOnboardingApi({
         handleWebhookFunction: 'paypal',
       },
       {
+        seedName: 'Cash',
         name: 'Manual / Cash',
         code: 'pp_system_default',
         isInstalled: true,
@@ -338,9 +347,9 @@ export function useOnboardingApi({
         generatePaymentLinkFunction: 'manual',
         handleWebhookFunction: 'manual',
       }
-    ];
+    ].filter((provider) => selectedMethods.size === 0 || selectedMethods.has(provider.seedName));
 
-    for (const provider of providers) {
+    for (const { seedName: _seedName, ...provider } of providers) {
       setItemLoading('paymentMethods', provider.name);
 
       try {

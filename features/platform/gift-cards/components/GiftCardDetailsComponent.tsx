@@ -22,7 +22,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { MoreVertical, ShoppingBag, CreditCard, History, Calendar, ExternalLink, ArrowRight } from "lucide-react";
+import { MoreVertical, ShoppingBag, CreditCard, History, Calendar, ExternalLink } from "lucide-react";
 import Link from "next/link";
 import { EditItemDrawerClientWrapper } from "../../components/EditItemDrawerClientWrapper";
 import { GiftCard } from "../actions";
@@ -261,11 +261,8 @@ export function GiftCardDetailsComponent({
                       </DropdownMenuContent>
                     </DropdownMenu>
 
-                    <AccordionTrigger asChild>
-                      <Button variant="outline" size="sm" className="h-9 px-4 rounded-xl border-2 font-black uppercase tracking-widest text-[10px] hover:bg-muted group">
-                        Timeline
-                        <ArrowRight className="size-3.5 ml-2 group-data-[state=open]:rotate-90 transition-transform" />
-                      </Button>
+                    <AccordionTrigger className="h-9 flex-none gap-2 rounded-xl border-2 px-4 py-0 text-[10px] font-black uppercase tracking-widest hover:bg-muted hover:no-underline [&>svg]:size-3.5">
+                      Timeline
                     </AccordionTrigger>
                   </div>
                 </div>

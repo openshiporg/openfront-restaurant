@@ -28,14 +28,16 @@ function StatusDot({ status }: { status: string }) {
 
 export default async function AccountOrdersPage() {
   const user = await getUser()
-  const orders = await getUserOrders()
-  const storeSettings = await getStoreSettings()
+  if (!user) notFound()
+
+  const [orders, storeSettings] = await Promise.all([
+    getUserOrders(),
+    getStoreSettings(),
+  ])
   const currencyConfig = {
     currencyCode: storeSettings?.currencyCode || "USD",
     locale: storeSettings?.locale || "en-US",
   }
-
-  if (!user) notFound()
 
   return (
     <div className="w-full animate-in fade-in slide-in-from-bottom-4 duration-500">

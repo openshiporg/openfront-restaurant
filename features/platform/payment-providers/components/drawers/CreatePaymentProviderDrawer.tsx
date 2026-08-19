@@ -105,9 +105,14 @@ export function CreatePaymentProviderDrawer({
     
     try {
       // Build provider data with function fields based on selection
+      const providerCodes: Record<string, string> = {
+        stripe: 'pp_stripe_stripe',
+        paypal: 'pp_paypal_paypal',
+        manual: 'pp_system_default',
+      }
       let providerData: any = {
         name: providerName,
-        code: `pp_${selectedPreset}`,
+        code: providerCodes[selectedPreset],
         isInstalled: true
       }
 

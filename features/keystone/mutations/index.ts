@@ -2,12 +2,16 @@ import { mergeSchemas } from "@graphql-tools/schema";
 import type { GraphQLSchema } from 'graphql';
 import redirectToInit from "./redirectToInit";
 import updateActiveUser from "./updateActiveUser";
-import processPayment, { capturePaymentMutation, getPaymentStatus } from "./processPayment";
+import processPayment, { capturePaymentMutation, getPaymentStatus, reconcilePaymentMutation } from "./processPayment";
+import redeemGiftCard, { lookupGiftCard } from "./redeemGiftCard";
+import refundPayment from "./refundPayment";
 import { splitCheckByItem, splitCheckByGuest } from "./splitCheck";
 import { voidOrderItem, compOrderItem, voidOrder } from "./voidComp";
 import initiatePaymentSession from "./initiatePaymentSession";
 import completeActiveCart from "./completeActiveCart";
 import activeCart from "./activeCart";
+import createActiveCart from "./createActiveCart";
+import addActiveCartItem from "./addActiveCartItem";
 import updateActiveCart from "./updateActiveCart";
 import updateCartItemQuantity from "./updateCartItemQuantity";
 import removeCartItem from "./removeCartItem";
@@ -26,6 +30,11 @@ import { createWaitlistEntry, updateWaitlistStatus } from "./waitlistManagement"
 import { updateReservationStatus, upsertReservation } from "./reservationManagement";
 import { updateShiftStatus, upsertShift } from "./shiftManagement";
 import { createTipPoolLedger, updateTipPoolStatus } from "./tipManagement";
+import { adjustInventory, recordWaste, reverseWaste } from "./wasteManagement";
+import reconcileOrderInventory from "./reconcileOrderInventory";
+import transitionRestaurantOrder from "./transitionRestaurantOrder";
+import setGiftCardStatus from "./setGiftCardStatus";
+import { requestManagerApproval, approveManagerApproval } from "./managerApprovals";
 
 const graphql = String.raw;
 
@@ -41,6 +50,28 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
         onboardingStatus: String
       }
 
+      input ActiveCartUpdateInput {
+        orderType: String
+        email: String
+        customerName: String
+        customerPhone: String
+        deliveryAddress: String
+        deliveryAddress2: String
+        deliveryCity: String
+        deliveryState: String
+        deliveryZip: String
+        deliveryCountryCode: String
+        tipPercent: String
+        userId: ID
+      }
+
+      input ActiveCartItemInput {
+        menuItemId: ID!
+        quantity: Int!
+        modifierIds: [ID!]
+        specialInstructions: String
+      }
+
       type Query {
         redirectToInit: Boolean
         getPaymentStatus(paymentIntentId: String!): GetPaymentStatusResult
@@ -48,24 +79,48 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
         activeCartPaymentProviders: [PaymentProvider!]
         getCustomerOrder(orderId: ID!, secretKey: String): JSON
         getCustomerOrders(limit: Int, offset: Int): JSON
+        lookupGiftCard(code: String!): JSON
       }
 
       type Mutation {
         updateActiveUser(data: UserUpdateProfileInput!): User
-        updateActiveCart(cartId: ID!, data: CartUpdateInput!): Cart
+        createActiveCart(orderType: String): Cart
+        addActiveCartItem(cartId: ID!, input: ActiveCartItemInput!): Cart
+        updateActiveCart(cartId: ID!, data: ActiveCartUpdateInput!): Cart
         updateCartItemQuantity(cartItemId: ID!, quantity: Int!): Cart
         removeCartItem(cartItemId: ID!): Cart
 
         processPayment(
           orderId: String!
-          amount: Int!
+          amount: Int
           paymentMethod: String!
           tipAmount: Int
+          idempotencyKey: String!
         ): ProcessPaymentResult
+
+        setGiftCardStatus(giftCardId: ID!, isDisabled: Boolean!, reason: String): GiftCard
+
+        redeemGiftCard(
+          orderId: String!
+          code: String!
+          tipAmount: Int
+          idempotencyKey: String!
+        ): GiftCardRedemptionResult
+
+        refundPayment(
+          paymentId: ID!
+          amount: Int
+          reason: String!
+          idempotencyKey: String!
+          managerApproval: Boolean @deprecated(reason: "Caller assertions do not constitute approval")
+          managerApprovalId: ID
+        ): RefundPaymentResult
 
         capturePayment(
           paymentIntentId: String!
         ): CapturePaymentResult
+
+        reconcilePayment(paymentId: ID!): CapturePaymentResult
 
         splitCheckByItem(
           orderId: String!
@@ -80,24 +135,39 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
         voidOrderItem(
           orderItemId: String!
           reason: String!
-          managerApproval: Boolean
-          managerId: String
+          managerApproval: Boolean @deprecated(reason: "Caller assertions do not constitute approval")
+          managerId: String @deprecated(reason: "Use managerApprovalId")
+          managerApprovalId: ID
+          idempotencyKey: String
         ): VoidCompResult
 
         compOrderItem(
           orderItemId: String!
           reason: String!
           compAmount: Int
-          managerApproval: Boolean
-          managerId: String
+          managerApproval: Boolean @deprecated(reason: "Caller assertions do not constitute approval")
+          managerId: String @deprecated(reason: "Use managerApprovalId")
+          managerApprovalId: ID
+          idempotencyKey: String
         ): VoidCompResult
 
         voidOrder(
           orderId: String!
           reason: String!
-          managerApproval: Boolean
-          managerId: String
+          managerApproval: Boolean @deprecated(reason: "Caller assertions do not constitute approval")
+          managerId: String @deprecated(reason: "Use managerApprovalId")
+          managerApprovalId: ID
+          idempotencyKey: String
         ): VoidCompResult
+
+        requestManagerApproval(
+          actionType: String!
+          targetId: ID!
+          reason: String!
+          amount: Int
+        ): ManagerApprovalResult
+
+        approveManagerApproval(approvalId: ID!): ManagerApprovalResult
 
         initiatePaymentSession(
           cartId: ID!
@@ -107,6 +177,12 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
         completeActiveCart(
           cartId: ID!
           paymentSessionId: ID
+        ): RestaurantOrder
+
+        transitionRestaurantOrder(
+          orderId: ID!
+          status: String!
+          reason: String
         ): RestaurantOrder
 
         createPOSOrder(
@@ -126,6 +202,7 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
           courseNumber: Int
           seatNumber: Int
           specialInstructions: String
+          modifierIds: [ID!]
         ): RestaurantOrder
 
         updateServiceFloorItem(
@@ -135,6 +212,7 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
           seatNumber: Int
           specialInstructions: String
           voidReason: String
+          managerApprovalId: ID
         ): RestaurantOrder
 
         updateServiceFloorTableStatus(
@@ -206,6 +284,29 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
           action: String!
         ): TipPoolMutationResult
 
+        adjustInventory(
+          ingredientId: ID!
+          quantity: String!
+          reason: String!
+          idempotencyKey: String!
+        ): WasteMutationResult
+
+        recordWaste(
+          ingredientId: ID!
+          quantity: String!
+          reason: String!
+          notes: String
+          idempotencyKey: String!
+        ): WasteMutationResult
+
+        reverseWaste(
+          wasteLogId: ID!
+          reason: String!
+          idempotencyKey: String!
+        ): WasteMutationResult
+
+        reconcileOrderInventory(orderId: ID!): InventoryReconciliationResult
+
         transferTable(
           orderId: String!
           fromTableId: String!
@@ -242,6 +343,7 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
           providerCode: String!
           event: JSON!
           headers: JSON!
+          rawBody: String
         ): HandleWebhookResult
       }
 
@@ -249,6 +351,23 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
         success: Boolean!
         paymentId: String
         clientSecret: String
+        amount: Int
+        remainingBalance: Int
+        error: String
+      }
+
+      type GiftCardRedemptionResult {
+        success: Boolean!
+        paymentId: String
+        amount: Int!
+        remainingBalance: Int!
+        error: String
+      }
+
+      type RefundPaymentResult {
+        success: Boolean!
+        refundId: ID
+        status: String
         error: String
       }
 
@@ -277,10 +396,21 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
         error: String
       }
 
+      type ManagerApprovalResult {
+        id: ID
+        status: String
+        actionType: String
+        targetId: ID
+        expiresAt: String
+        error: String
+      }
+
       input POSOrderItemInput {
         menuItemId: ID!
         quantity: Int!
         courseNumber: Int
+        modifierIds: [ID!]
+        specialInstructions: String
       }
 
       type InitiatePaymentSessionResult {
@@ -319,6 +449,18 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
         error: String
       }
 
+      type WasteMutationResult {
+        success: Boolean!
+        wasteLogId: ID
+        error: String
+      }
+
+      type InventoryReconciliationResult {
+        success: Boolean!
+        created: Int!
+        error: String
+      }
+
       type CourseManagementResult {
         success: Boolean!
         error: String
@@ -349,14 +491,23 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
         activeCartPaymentProviders,
         getCustomerOrder,
         getCustomerOrders,
+        lookupGiftCard,
       },
       Mutation: {
         updateActiveUser,
+        createActiveCart,
+        addActiveCartItem,
         updateActiveCart,
         updateCartItemQuantity,
         removeCartItem,
         processPayment,
+        setGiftCardStatus,
+        redeemGiftCard,
+        refundPayment,
+        requestManagerApproval,
+        approveManagerApproval,
         capturePayment: capturePaymentMutation,
+        reconcilePayment: reconcilePaymentMutation,
         splitCheckByItem,
         splitCheckByGuest,
         voidOrderItem,
@@ -364,6 +515,7 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
         voidOrder,
         initiatePaymentSession,
         completeActiveCart,
+        transitionRestaurantOrder,
         createPOSOrder,
         addServiceFloorItem,
         updateServiceFloorItem,
@@ -377,6 +529,10 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
         updateShiftStatus,
         createTipPoolLedger,
         updateTipPoolStatus,
+        adjustInventory,
+        recordWaste,
+        reverseWaste,
+        reconcileOrderInventory,
         transferTable,
         combineTables,
         fireCourse,

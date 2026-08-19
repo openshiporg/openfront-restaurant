@@ -45,27 +45,28 @@ __export(stripe_exports, {
   handleWebhookFunction: () => handleWebhookFunction,
   refundPaymentFunction: () => refundPaymentFunction
 });
-async function createPaymentFunction({ order, amount, currency }) {
-  const stripe2 = getStripeClient2();
-  const paymentIntent = await stripe2.paymentIntents.create({
-    amount,
-    currency: currency.toLowerCase(),
-    automatic_payment_methods: {
-      enabled: true
+async function createPaymentFunction({ order, amount, currency, idempotencyKey }) {
+  const stripe = getStripeClient();
+  const paymentIntent = await stripe.paymentIntents.create(
+    {
+      amount,
+      currency: currency.toLowerCase(),
+      automatic_payment_methods: { enabled: true },
+      metadata: {
+        orderId: order?.id || "",
+        orderNumber: order?.orderNumber || ""
+      }
     },
-    metadata: {
-      orderId: order?.id || "",
-      orderNumber: order?.orderNumber || ""
-    }
-  });
+    idempotencyKey ? { idempotencyKey } : void 0
+  );
   return {
     clientSecret: paymentIntent.client_secret,
     paymentIntentId: paymentIntent.id
   };
 }
 async function capturePaymentFunction({ paymentId, amount }) {
-  const stripe2 = getStripeClient2();
-  const paymentIntent = await stripe2.paymentIntents.capture(paymentId, {
+  const stripe = getStripeClient();
+  const paymentIntent = await stripe.paymentIntents.capture(paymentId, {
     amount_to_capture: amount
   });
   return {
@@ -74,21 +75,23 @@ async function capturePaymentFunction({ paymentId, amount }) {
     data: paymentIntent
   };
 }
-async function refundPaymentFunction({ paymentId, amount }) {
-  const stripe2 = getStripeClient2();
-  const refund = await stripe2.refunds.create({
-    payment_intent: paymentId,
-    amount
-  });
+async function refundPaymentFunction({ paymentId, amount, idempotencyKey }) {
+  const stripe = getStripeClient();
+  const refund = await stripe.refunds.create(
+    { payment_intent: paymentId, amount },
+    idempotencyKey ? { idempotencyKey } : void 0
+  );
   return {
+    id: refund.id,
+    refundId: refund.id,
     status: refund.status,
     amount: refund.amount,
     data: refund
   };
 }
 async function getPaymentStatusFunction({ paymentId }) {
-  const stripe2 = getStripeClient2();
-  const paymentIntent = await stripe2.paymentIntents.retrieve(paymentId);
+  const stripe = getStripeClient();
+  const paymentIntent = await stripe.paymentIntents.retrieve(paymentId);
   return {
     status: paymentIntent.status,
     amount: paymentIntent.amount,
@@ -98,17 +101,18 @@ async function getPaymentStatusFunction({ paymentId }) {
 async function generatePaymentLinkFunction({ paymentId }) {
   return `https://dashboard.stripe.com/payments/${paymentId}`;
 }
-async function handleWebhookFunction({ event, headers }) {
-  const webhookSecret2 = process.env.STRIPE_WEBHOOK_SECRET;
-  if (!webhookSecret2) {
+async function handleWebhookFunction({ event, headers, rawBody }) {
+  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+  if (!webhookSecret) {
     throw new Error("Stripe webhook secret is not configured");
   }
-  const stripe2 = getStripeClient2();
+  const stripe = getStripeClient();
   try {
-    const stripeEvent = stripe2.webhooks.constructEvent(
-      JSON.stringify(event),
+    if (!rawBody) throw new Error("Stripe webhook raw body is required");
+    const stripeEvent = stripe.webhooks.constructEvent(
+      rawBody,
       headers["stripe-signature"],
-      webhookSecret2
+      webhookSecret
     );
     return {
       isValid: true,
@@ -120,17 +124,17 @@ async function handleWebhookFunction({ event, headers }) {
     throw new Error(`Webhook signature verification failed: ${err?.message || "Unknown error"}`);
   }
 }
-var import_stripe2, getStripeClient2;
+var import_stripe, getStripeClient;
 var init_stripe = __esm({
   "features/integrations/payment/stripe.ts"() {
     "use strict";
-    import_stripe2 = __toESM(require("stripe"));
-    getStripeClient2 = () => {
+    import_stripe = __toESM(require("stripe"));
+    getStripeClient = () => {
       const stripeKey = process.env.STRIPE_SECRET_KEY;
       if (!stripeKey) {
         throw new Error("Stripe secret key not configured");
       }
-      return new import_stripe2.default(stripeKey);
+      return new import_stripe.default(stripeKey);
     };
   }
 });
@@ -143,6 +147,7 @@ __export(paypal_exports, {
   generatePaymentLinkFunction: () => generatePaymentLinkFunction2,
   getPaymentStatusFunction: () => getPaymentStatusFunction2,
   handleWebhookFunction: () => handleWebhookFunction2,
+  normalizePayPalStatus: () => normalizePayPalStatus,
   refundPaymentFunction: () => refundPaymentFunction2
 });
 async function handleWebhookFunction2({ event, headers }) {
@@ -183,17 +188,18 @@ async function handleWebhookFunction2({ event, headers }) {
     resource: event.resource
   };
 }
-async function createPaymentFunction2({ order, amount, currency }) {
+async function createPaymentFunction2({ order, amount, currency, idempotencyKey }) {
   const accessToken = await getPayPalAccessToken();
   const baseUrl = getPayPalBaseUrl();
   const response = await fetch(`${baseUrl}/v2/checkout/orders`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${accessToken}`
+      Authorization: `Bearer ${accessToken}`,
+      ...idempotencyKey ? { "PayPal-Request-Id": idempotencyKey } : {}
     },
     body: JSON.stringify({
-      intent: "AUTHORIZE",
+      intent: "CAPTURE",
       purchase_units: [
         {
           amount: {
@@ -233,12 +239,12 @@ async function capturePaymentFunction2({ paymentId }) {
   }
   const capturedAmount = capture.purchase_units[0].payments.captures[0].amount;
   return {
-    status: capture.status,
+    status: normalizePayPalStatus(capture.status),
     amount: parsePayPalAmount(capturedAmount.value, capturedAmount.currency_code),
     data: capture
   };
 }
-async function refundPaymentFunction2({ paymentId, amount, currency = "USD" }) {
+async function refundPaymentFunction2({ paymentId, amount, currency = "USD", idempotencyKey }) {
   const accessToken = await getPayPalAccessToken();
   const baseUrl = getPayPalBaseUrl();
   const response = await fetch(
@@ -247,7 +253,8 @@ async function refundPaymentFunction2({ paymentId, amount, currency = "USD" }) {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${accessToken}`
+        Authorization: `Bearer ${accessToken}`,
+        ...idempotencyKey ? { "PayPal-Request-Id": idempotencyKey } : {}
       },
       body: JSON.stringify({
         amount: {
@@ -262,6 +269,8 @@ async function refundPaymentFunction2({ paymentId, amount, currency = "USD" }) {
     throw new Error(`PayPal refund failed: ${refund.error.message}`);
   }
   return {
+    id: refund.id,
+    refundId: refund.id,
     status: refund.status,
     amount: parsePayPalAmount(refund.amount.value, refund.amount.currency_code),
     data: refund
@@ -282,7 +291,7 @@ async function getPaymentStatusFunction2({ paymentId }) {
   }
   const orderAmount = orderResult.purchase_units[0].amount;
   return {
-    status: orderResult.status,
+    status: normalizePayPalStatus(orderResult.status),
     amount: parsePayPalAmount(orderAmount.value, orderAmount.currency_code),
     data: orderResult
   };
@@ -290,7 +299,7 @@ async function getPaymentStatusFunction2({ paymentId }) {
 async function generatePaymentLinkFunction2({ paymentId }) {
   return `https://www.paypal.com/activity/payment/${paymentId}`;
 }
-var NO_DIVISION_CURRENCIES, getPayPalBaseUrl, formatPayPalAmount, parsePayPalAmount, getPayPalAccessToken;
+var NO_DIVISION_CURRENCIES, getPayPalBaseUrl, formatPayPalAmount, parsePayPalAmount, normalizePayPalStatus, getPayPalAccessToken;
 var init_paypal = __esm({
   "features/integrations/payment/paypal.ts"() {
     "use strict";
@@ -334,6 +343,18 @@ var init_paypal = __esm({
         return parseInt(value, 10);
       }
       return Math.round(parseFloat(value) * 100);
+    };
+    normalizePayPalStatus = (status) => {
+      switch ((status || "").toUpperCase()) {
+        case "COMPLETED":
+          return "succeeded";
+        case "APPROVED":
+          return "requires_capture";
+        case "VOIDED":
+          return "canceled";
+        default:
+          return "pending";
+      }
     };
     getPayPalAccessToken = async () => {
       const clientId = process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID;
@@ -454,7 +475,7 @@ module.exports = __toCommonJS(keystone_exports);
 
 // features/keystone/index.ts
 var import_auth = require("@keystone-6/auth");
-var import_core42 = require("@keystone-6/core");
+var import_core50 = require("@keystone-6/core");
 var import_config = require("dotenv/config");
 
 // features/keystone/models/User.ts
@@ -1404,11 +1425,42 @@ var MenuItemModifier = (0, import_core9.list)({
 // features/keystone/models/RestaurantOrder.ts
 var import_core10 = require("@keystone-6/core");
 var import_fields11 = require("@keystone-6/core/fields");
+var import_crypto2 = __toESM(require("crypto"));
+
+// features/keystone/utils/kitchenTicketSync.ts
 var import_crypto = __toESM(require("crypto"));
+
+// features/keystone/utils/kitchenTicketEvents.ts
+var import_node_crypto = __toESM(require("node:crypto"));
+async function appendKitchenTicketEventWithClient(prisma, actorId, input) {
+  const eventKey = input.eventKey || import_node_crypto.default.randomUUID();
+  return prisma.kitchenTicketEvent.upsert({
+    where: { eventKey },
+    update: {},
+    create: {
+      eventKey,
+      eventType: input.eventType,
+      payload: input.payload,
+      ticketId: input.ticketId || null,
+      orderId: input.orderId || null,
+      orderItemId: input.orderItemId || null,
+      actorId: actorId || null
+    }
+  });
+}
+async function appendKitchenTicketEvent(context, input) {
+  return appendKitchenTicketEventWithClient(context.prisma, context.session?.itemId, input);
+}
 
 // features/keystone/utils/kitchenTicketSync.ts
 var ACTIVE_ORDER_STATUSES = ["sent_to_kitchen", "in_progress", "ready"];
 var ACTIVE_TICKET_STATUSES = ["new", "in_progress", "ready"];
+async function mutateKitchenState(context, operation) {
+  await context.prisma.$transaction(
+    (tx) => operation(tx, context.session?.itemId || null),
+    { isolationLevel: "Serializable" }
+  );
+}
 function normalizeStationName(name) {
   return name.trim().toLowerCase();
 }
@@ -1446,20 +1498,60 @@ async function getOrCreateStation(stationKey, context, cachedStations) {
   cachedStations.push(createdStation);
   return createdStation;
 }
+function normalizeKitchenWork(item) {
+  return {
+    id: item.id,
+    name: item.name,
+    quantity: Number(item.quantity || 1),
+    notes: item.notes || null,
+    station: normalizeStationName(item.station || "expo"),
+    modifiersSnapshot: item.modifiersSnapshot ?? null
+  };
+}
+function createKitchenWorkSignature(item) {
+  return import_crypto.default.createHash("sha256").update(JSON.stringify(normalizeKitchenWork(item))).digest("hex");
+}
+function isSameKitchenWork(historical, desired) {
+  if (historical.workSignature && desired.workSignature) {
+    return historical.workSignature === desired.workSignature;
+  }
+  return historical.id === desired.id && historical.name === desired.name && Number(historical.quantity || 1) === Number(desired.quantity || 1) && (historical.notes || null) === (desired.notes || null) && normalizeStationName(historical.station || "expo") === normalizeStationName(desired.station || "expo");
+}
+function getUncoveredKitchenWorkItems(desiredItems, stationTickets) {
+  const handledItems = stationTickets.filter((ticket) => ["served", "completed"].includes(ticket.status || "")).flatMap((ticket) => ticket.items || []);
+  const activeItems = stationTickets.filter((ticket) => ACTIVE_TICKET_STATUSES.includes(ticket.status || "")).flatMap((ticket) => ticket.items || []);
+  const cancelledItems = stationTickets.filter((ticket) => ticket.status === "cancelled").flatMap((ticket) => ticket.items || []);
+  return desiredItems.filter((desired) => {
+    if (handledItems.some((historical) => isSameKitchenWork(historical, desired))) return false;
+    if (activeItems.some((active) => isSameKitchenWork(active, desired))) return true;
+    return !cancelledItems.some((historical) => isSameKitchenWork(historical, desired));
+  });
+}
 function mapOrderItemsByStation(order) {
   const grouped = {};
   for (const item of order.orderItems || []) {
-    if (!item?.id) continue;
-    const station = item.menuItem?.kitchenStation || "expo";
+    if (!item?.id || item.isVoided) continue;
+    const station = item.kitchenStationSnapshot || item.menuItem?.kitchenStation || "expo";
+    const name = item.itemNameSnapshot || item.menuItem?.name || "Item";
+    const quantity = item.quantity || 1;
+    const notes = item.specialInstructions || null;
     if (!grouped[station]) grouped[station] = [];
     grouped[station].push({
       id: item.id,
-      name: item.menuItem?.name || "Item",
-      quantity: item.quantity || 1,
-      notes: item.specialInstructions || null,
+      name,
+      quantity,
+      notes,
       station,
       status: "new",
-      fulfilledAt: null
+      fulfilledAt: null,
+      workSignature: createKitchenWorkSignature({
+        id: item.id,
+        name,
+        quantity,
+        notes,
+        station,
+        modifiersSnapshot: item.modifiersSnapshot
+      })
     });
   }
   return grouped;
@@ -1508,6 +1600,10 @@ async function syncKitchenTicketsForOrder(orderId, context) {
         id
         quantity
         specialInstructions
+        itemNameSnapshot
+        kitchenStationSnapshot
+        modifiersSnapshot
+        isVoided
         menuItem { id name kitchenStation }
       }
     `
@@ -1520,20 +1616,30 @@ async function syncKitchenTicketsForOrder(orderId, context) {
       order: { id: { equals: order.id } },
       status: { in: [...ACTIVE_TICKET_STATUSES, "served", "cancelled"] }
     },
-    query: "id items status firedAt station { id name }",
+    query: "id items status priority ticketType firedAt station { id name }",
     orderBy: { firedAt: "asc" }
   });
   if (order.status === "completed" || order.status === "cancelled") {
     const now = (/* @__PURE__ */ new Date()).toISOString();
     let updated2 = 0;
     for (const ticket of existingTickets.filter((t) => ACTIVE_TICKET_STATUSES.includes(t.status))) {
-      await sudo.db.KitchenTicket.updateOne({
-        where: { id: ticket.id },
-        data: {
-          status: order.status === "completed" ? "served" : "cancelled",
-          completedAt: order.status === "completed" ? now : void 0,
-          servedAt: order.status === "completed" ? now : void 0
-        }
+      const nextStatus = order.status === "completed" ? "served" : "cancelled";
+      await mutateKitchenState(context, async (tx, actorId) => {
+        await tx.kitchenTicket.update({
+          where: { id: ticket.id },
+          data: {
+            status: nextStatus,
+            completedAt: order.status === "completed" ? new Date(now) : void 0,
+            servedAt: order.status === "completed" ? new Date(now) : void 0
+          }
+        });
+        await appendKitchenTicketEventWithClient(tx, actorId, {
+          eventType: order.status === "completed" ? "status" : "cancel",
+          ticketId: ticket.id,
+          orderId: order.id,
+          payload: { from: ticket.status, to: nextStatus, source: "order_terminal_state" },
+          eventKey: `ticket-terminal:${ticket.id}:${nextStatus}`
+        });
       });
       updated2 += 1;
     }
@@ -1554,56 +1660,138 @@ async function syncKitchenTicketsForOrder(orderId, context) {
   const desiredStationKeys = new Set(Object.keys(stationItemMap).map(normalizeStationName));
   if (desiredStationKeys.size === 0) {
     for (const ticket of existingTickets.filter((t) => ACTIVE_TICKET_STATUSES.includes(t.status))) {
-      await sudo.db.KitchenTicket.deleteOne({ where: { id: ticket.id } });
-      removed += 1;
+      await mutateKitchenState(context, async (tx, actorId) => {
+        await tx.kitchenTicket.update({
+          where: { id: ticket.id },
+          data: {
+            status: "cancelled",
+            items: (ticket.items || []).map((item) => ({ ...item, status: "cancelled" }))
+          }
+        });
+        await appendKitchenTicketEventWithClient(tx, actorId, {
+          eventType: "cancel",
+          ticketId: ticket.id,
+          orderId: order.id,
+          payload: { reason: "No active order items remain", previousItems: ticket.items || [] },
+          eventKey: `ticket-cancel-empty:${ticket.id}`
+        });
+      });
+      updated += 1;
     }
     return { created, updated, removed };
   }
   for (const [stationKey, items] of Object.entries(stationItemMap)) {
     const station = await getOrCreateStation(stationKey, context, stations);
-    const matchingTickets = existingTickets.filter(
+    const stationTickets = existingTickets.filter(
       (ticket) => normalizeStationName(ticket.station?.name || "") === normalizeStationName(station.name)
     );
+    const matchingTickets = stationTickets.filter(
+      (ticket) => ACTIVE_TICKET_STATUSES.includes(ticket.status)
+    );
+    const workItems = getUncoveredKitchenWorkItems(items, stationTickets);
     const priority = order.isUrgent ? 100 : order.onHold ? -10 : 0;
     const ticketType = isExpediterStation(station.name) ? "expediter" : "prep";
+    if (workItems.length === 0) {
+      for (const stale of matchingTickets) {
+        await mutateKitchenState(context, async (tx, actorId) => {
+          await tx.kitchenTicket.update({
+            where: { id: stale.id },
+            data: {
+              status: "cancelled",
+              items: (stale.items || []).map((item) => ({
+                ...item,
+                status: "cancelled"
+              }))
+            }
+          });
+          await appendKitchenTicketEventWithClient(tx, actorId, {
+            eventType: "cancel",
+            ticketId: stale.id,
+            orderId: order.id,
+            payload: { reason: "Terminal ticket already covers unchanged kitchen work" },
+            eventKey: `ticket-terminal-covered-cancel:${stale.id}`
+          });
+        });
+        updated += 1;
+      }
+      continue;
+    }
     if (matchingTickets.length > 0) {
       const existing = matchingTickets[0];
       const existingItems = existing.items || [];
       const existingMap = new Map(existingItems.map((i) => [i.id, i]));
-      const mergedItems = items.map((item) => {
-        const prev = existingMap.get(item.id);
-        if (!prev) return item;
-        return {
-          ...item,
-          status: prev.status || "new",
-          fulfilledAt: prev.fulfilledAt || null
-        };
-      });
-      await sudo.db.KitchenTicket.updateOne({
-        where: { id: existing.id },
-        data: {
-          items: mergedItems,
-          priority,
-          ticketType,
-          firedAt: existing.firedAt || order.createdAt
-        }
-      });
-      updated += 1;
+      const currentIds = new Set(workItems.map((item) => item.id));
+      const cancelledItems = existingItems.filter((item) => !currentIds.has(item.id)).map((item) => ({ ...item, status: "cancelled" }));
+      const mergedItems = [
+        ...workItems.map((item) => {
+          const prev = existingMap.get(item.id);
+          if (!prev) return item;
+          return {
+            ...item,
+            status: prev.status === "cancelled" ? "new" : prev.status || "new",
+            fulfilledAt: prev.fulfilledAt || null
+          };
+        }),
+        ...cancelledItems
+      ];
+      const projectionChanged = JSON.stringify(existingItems) !== JSON.stringify(mergedItems) || Number(existing.priority || 0) !== priority || existing.ticketType !== ticketType || !existing.firedAt;
+      if (projectionChanged) {
+        const digest = import_crypto.default.createHash("sha256").update(JSON.stringify({ mergedItems, priority, ticketType })).digest("hex");
+        await mutateKitchenState(context, async (tx, actorId) => {
+          await tx.kitchenTicket.update({
+            where: { id: existing.id },
+            data: {
+              items: mergedItems,
+              orderItems: { set: mergedItems.map((item) => ({ id: item.id })) },
+              priority,
+              ticketType,
+              firedAt: existing.firedAt ? new Date(existing.firedAt) : new Date(order.createdAt)
+            }
+          });
+          await appendKitchenTicketEventWithClient(tx, actorId, {
+            eventType: "delta",
+            ticketId: existing.id,
+            orderId: order.id,
+            payload: { before: existingItems, after: mergedItems, priority, ticketType },
+            eventKey: `ticket-delta:${existing.id}:${digest}`
+          });
+        });
+        updated += 1;
+      }
       for (const duplicate of matchingTickets.slice(1)) {
-        await sudo.db.KitchenTicket.deleteOne({ where: { id: duplicate.id } });
-        removed += 1;
+        await mutateKitchenState(context, async (tx, actorId) => {
+          await tx.kitchenTicket.update({ where: { id: duplicate.id }, data: { status: "cancelled" } });
+          await appendKitchenTicketEventWithClient(tx, actorId, {
+            eventType: "cancel",
+            ticketId: duplicate.id,
+            orderId: order.id,
+            payload: { reason: "Duplicate active projection superseded", canonicalTicketId: existing.id },
+            eventKey: `ticket-duplicate-cancel:${duplicate.id}`
+          });
+        });
+        updated += 1;
       }
     } else {
-      await sudo.db.KitchenTicket.createOne({
-        data: {
-          order: { connect: { id: order.id } },
-          station: { connect: { id: station.id } },
-          items,
-          priority,
-          ticketType,
-          status: getTicketStatusForOrderStatus(order.status),
-          firedAt: order.createdAt
-        }
+      await mutateKitchenState(context, async (tx, actorId) => {
+        const createdTicket = await tx.kitchenTicket.create({
+          data: {
+            orderId: order.id,
+            stationId: station.id,
+            items: workItems,
+            orderItems: { connect: workItems.map((item) => ({ id: item.id })) },
+            priority,
+            ticketType,
+            status: getTicketStatusForOrderStatus(order.status),
+            firedAt: new Date(order.createdAt)
+          }
+        });
+        await appendKitchenTicketEventWithClient(tx, actorId, {
+          eventType: "dispatch",
+          ticketId: createdTicket.id,
+          orderId: order.id,
+          payload: { station: station.name, items: workItems, priority, ticketType },
+          eventKey: `ticket-dispatch:${createdTicket.id}`
+        });
       });
       created += 1;
     }
@@ -1611,8 +1799,23 @@ async function syncKitchenTicketsForOrder(orderId, context) {
   for (const ticket of existingTickets.filter((ticket2) => ACTIVE_TICKET_STATUSES.includes(ticket2.status))) {
     const stationName = normalizeStationName(ticket.station?.name || "");
     if (!desiredStationKeys.has(stationName)) {
-      await sudo.db.KitchenTicket.deleteOne({ where: { id: ticket.id } });
-      removed += 1;
+      await mutateKitchenState(context, async (tx, actorId) => {
+        await tx.kitchenTicket.update({
+          where: { id: ticket.id },
+          data: {
+            status: "cancelled",
+            items: (ticket.items || []).map((item) => ({ ...item, status: "cancelled" }))
+          }
+        });
+        await appendKitchenTicketEventWithClient(tx, actorId, {
+          eventType: "cancel",
+          ticketId: ticket.id,
+          orderId: order.id,
+          payload: { reason: "Station no longer has active items", previousItems: ticket.items || [] },
+          eventKey: `ticket-station-cancel:${ticket.id}`
+        });
+      });
+      updated += 1;
     }
   }
   await reconcileRestaurantOrderStatus(order.id, context);
@@ -1630,12 +1833,84 @@ async function syncKitchenTicketsForActiveOrders(context) {
   let updated = 0;
   let removed = 0;
   for (const order of orders) {
-    const result = await syncKitchenTicketsForOrder(order.id, context);
-    created += result.created;
-    updated += result.updated;
-    removed += result.removed;
+    const result2 = await syncKitchenTicketsForOrder(order.id, context);
+    created += result2.created;
+    updated += result2.updated;
+    removed += result2.removed;
   }
   return { created, updated, removed };
+}
+
+// features/keystone/utils/inventoryLedger.ts
+async function depleteInventoryForCompletedOrder(orderId, context) {
+  const sudo = context.sudo();
+  const order = await sudo.query.RestaurantOrder.findOne({
+    where: { id: orderId },
+    query: "id orderNumber status orderItems { id quantity menuItem { id } }"
+  });
+  if (!order) throw new Error("Order not found");
+  if (order.status !== "completed") throw new Error("Inventory can only be depleted for a completed order");
+  const lines = [];
+  for (const orderItem of order.orderItems || []) {
+    if (!orderItem.menuItem?.id) continue;
+    const recipes = await sudo.query.Recipe.findMany({
+      where: { menuItem: { id: { equals: orderItem.menuItem.id } } },
+      query: "id recipeIngredients yield",
+      take: 1
+    });
+    const recipe = recipes[0];
+    if (!recipe || !Array.isArray(recipe.recipeIngredients)) continue;
+    const recipeYield = Math.max(1, Number(recipe.yield || 1));
+    const portions = Number(orderItem.quantity || 0) / recipeYield;
+    for (const recipeIngredient of recipe.recipeIngredients) {
+      const ingredientId = String(recipeIngredient?.ingredientId || "");
+      const quantity = Number(recipeIngredient?.quantity || 0) * portions;
+      if (!ingredientId || !Number.isFinite(quantity) || quantity <= 0) continue;
+      lines.push({
+        eventKey: `sale:${order.id}:${orderItem.id}:${ingredientId}`,
+        orderItemId: orderItem.id,
+        ingredientId,
+        quantity: Math.round(quantity * 100) / 100,
+        recipeId: recipe.id,
+        recipeYield
+      });
+    }
+  }
+  const prisma = context.prisma;
+  return prisma.$transaction(async (tx) => {
+    let created = 0;
+    for (const line of lines) {
+      const existing = await tx.stockMovement.findUnique({ where: { eventKey: line.eventKey } });
+      if (existing) continue;
+      const ingredient = await tx.ingredient.findUnique({ where: { id: line.ingredientId } });
+      if (!ingredient) throw new Error(`Ingredient not found: ${line.ingredientId}`);
+      const nextStock = Number(ingredient.currentStock || 0) - line.quantity;
+      await tx.stockMovement.create({
+        data: {
+          eventKey: line.eventKey,
+          referenceType: "OrderItem",
+          referenceId: line.orderItemId,
+          metadata: {
+            orderId: order.id,
+            recipeId: line.recipeId,
+            recipeYield: line.recipeYield,
+            theoretical: true
+          },
+          ingredientId: line.ingredientId,
+          orderId: order.id,
+          type: "sale",
+          quantity: (-line.quantity).toFixed(2),
+          reason: `Theoretical depletion for order ${order.orderNumber}`
+        }
+      });
+      await tx.ingredient.update({
+        where: { id: line.ingredientId },
+        data: { currentStock: nextStock.toFixed(2) }
+      });
+      created += 1;
+    }
+    return { created, existing: lines.length - created };
+  }, { isolationLevel: "Serializable" });
 }
 
 // features/keystone/models/RestaurantOrder.ts
@@ -1643,9 +1918,9 @@ var RestaurantOrder = (0, import_core10.list)({
   access: {
     operation: {
       query: ({ session }) => permissions.canReadOrders({ session }) || permissions.canManageOrders({ session }),
-      create: permissions.canManageOrders,
-      update: permissions.canManageOrders,
-      delete: permissions.canManageOrders
+      create: () => false,
+      update: () => false,
+      delete: () => false
     }
   },
   ui: {
@@ -1694,47 +1969,9 @@ var RestaurantOrder = (0, import_core10.list)({
       }
       if (operation === "update" && item?.status === "completed" && originalItem?.status !== "completed") {
         try {
-          const orderItems = await sudo.query.OrderItem.findMany({
-            where: { order: { id: { equals: item.id } } },
-            query: "id quantity menuItem { id }"
-          });
-          for (const orderItem of orderItems) {
-            if (!orderItem.menuItem?.id) continue;
-            const recipes = await sudo.query.Recipe.findMany({
-              where: { menuItem: { id: { equals: orderItem.menuItem.id } } },
-              query: "id recipeIngredients yield"
-            });
-            if (recipes.length === 0) continue;
-            const recipe = recipes[0];
-            if (!recipe.recipeIngredients) continue;
-            const recipeIngredients = recipe.recipeIngredients;
-            const portionsOrdered = orderItem.quantity / (recipe.yield || 1);
-            for (const ri of recipeIngredients) {
-              if (!ri.ingredientId) continue;
-              const depleteAmount = ri.quantity * portionsOrdered;
-              const ingredient = await sudo.query.Ingredient.findOne({
-                where: { id: ri.ingredientId },
-                query: "id currentStock"
-              });
-              if (ingredient) {
-                const newStock = Math.max(0, parseFloat(ingredient.currentStock || "0") - depleteAmount);
-                await sudo.db.Ingredient.updateOne({
-                  where: { id: ri.ingredientId },
-                  data: { currentStock: newStock.toFixed(2) }
-                });
-                await sudo.db.StockMovement.createOne({
-                  data: {
-                    ingredient: { connect: { id: ri.ingredientId } },
-                    type: "sale",
-                    quantity: (-depleteAmount).toFixed(2),
-                    notes: `Auto-depleted for order ${item.orderNumber}`
-                  }
-                });
-              }
-            }
-          }
+          await depleteInventoryForCompletedOrder(String(item.id), context);
         } catch (err) {
-          console.error("Auto-depletion error:", err);
+          console.error("Transactional inventory depletion failed; reconciliation is required:", err);
         }
       }
     }
@@ -1814,7 +2051,7 @@ var RestaurantOrder = (0, import_core10.list)({
       hooks: {
         resolveInput: ({ operation }) => {
           if (operation === "create") {
-            return import_crypto.default.randomBytes(32).toString("hex");
+            return import_crypto2.default.randomBytes(32).toString("hex");
           }
           return void 0;
         }
@@ -1946,9 +2183,9 @@ var OrderItem = (0, import_core12.list)({
   access: {
     operation: {
       query: permissions.canReadOrders,
-      create: permissions.canManageOrders,
-      update: permissions.canManageOrders,
-      delete: permissions.canManageOrders
+      create: () => false,
+      update: () => false,
+      delete: () => false
     }
   },
   ui: {
@@ -1983,23 +2220,48 @@ var OrderItem = (0, import_core12.list)({
         }
       })
     }),
+    itemNameSnapshot: (0, import_fields13.text)({
+      validation: { isRequired: true },
+      ui: { description: "Immutable menu item name captured when ordered" }
+    }),
+    itemThumbnailSnapshot: (0, import_fields13.text)({
+      ui: { description: "Immutable menu image URL captured when ordered" }
+    }),
+    kitchenStationSnapshot: (0, import_fields13.text)({
+      ui: { description: "Kitchen routing station captured when ordered" }
+    }),
+    menuItemIdSnapshot: (0, import_fields13.text)({
+      ui: { description: "Historical menu item identifier; not an authority for display" }
+    }),
+    originalOrderIdSnapshot: (0, import_fields13.text)({
+      ui: { description: "Original check identifier retained when an item is split" }
+    }),
+    modifiersSnapshot: (0, import_fields13.json)({
+      ui: { description: "Immutable modifier names, groups, and prices captured when ordered" }
+    }),
     thumbnail: (0, import_fields13.virtual)({
       field: import_core12.graphql.field({
         type: import_core12.graphql.String,
         async resolve(item, args, context) {
-          const sudoContext = context.sudo();
-          const orderItem = await sudoContext.query.OrderItem.findOne({
+          if (item.itemThumbnailSnapshot) return item.itemThumbnailSnapshot;
+          const orderItem = await context.sudo().query.OrderItem.findOne({
             where: { id: String(item.id) },
-            query: `
-              menuItem {
-                thumbnail
-              }
-            `
+            query: "itemThumbnailSnapshot menuItem { thumbnail }"
           });
-          return orderItem?.menuItem?.thumbnail || null;
+          return orderItem?.itemThumbnailSnapshot || orderItem?.menuItem?.thumbnail || null;
         }
       })
     }),
+    adjustmentTotal: (0, import_fields13.integer)({
+      defaultValue: 0,
+      validation: { min: 0 },
+      ui: { description: "Append-derived comp/correction amount; original price remains unchanged" }
+    }),
+    isVoided: (0, import_fields13.checkbox)({ defaultValue: false }),
+    voidedAt: (0, import_fields13.timestamp)(),
+    voidReason: (0, import_fields13.text)({ ui: { displayMode: "textarea" } }),
+    voidedBy: (0, import_fields13.relationship)({ ref: "User" }),
+    approvedBy: (0, import_fields13.relationship)({ ref: "User" }),
     specialInstructions: (0, import_fields13.text)({
       ui: {
         displayMode: "textarea"
@@ -2394,9 +2656,9 @@ var Payment = (0, import_core17.list)({
   access: {
     operation: {
       query: ({ session }) => permissions.canReadPayments({ session }) || permissions.canManagePayments({ session }),
-      create: permissions.canManagePayments,
-      update: permissions.canManagePayments,
-      delete: permissions.canManagePayments
+      create: () => false,
+      update: () => false,
+      delete: () => false
     }
   },
   ui: {
@@ -2405,6 +2667,9 @@ var Payment = (0, import_core17.list)({
     }
   },
   fields: {
+    idempotencyKey: (0, import_fields18.text)({ validation: { isRequired: true }, isIndexed: "unique" }),
+    reservedAt: (0, import_fields18.timestamp)(),
+    refundedAmount: (0, import_fields18.integer)({ defaultValue: 0, validation: { min: 0 } }),
     amount: (0, import_fields18.integer)({
       validation: { isRequired: true },
       ui: {
@@ -2437,6 +2702,8 @@ var Payment = (0, import_core17.list)({
       options: [
         { label: "Pending", value: "pending" },
         { label: "Processing", value: "processing" },
+        { label: "Authorized", value: "authorized" },
+        { label: "Unknown", value: "unknown" },
         { label: "Succeeded", value: "succeeded" },
         { label: "Failed", value: "failed" },
         { label: "Cancelled", value: "cancelled" },
@@ -2555,9 +2822,9 @@ var PaymentCollection = (0, import_core18.list)({
   access: {
     operation: {
       query: ({ session }) => permissions.canManageOrders({ session }),
-      create: ({ session }) => permissions.canManageOrders({ session }),
-      update: ({ session }) => permissions.canManageOrders({ session }),
-      delete: ({ session }) => permissions.canManageOrders({ session })
+      create: () => false,
+      update: () => false,
+      delete: () => false
     }
   },
   fields: {
@@ -2601,9 +2868,9 @@ var PaymentSession = (0, import_core19.list)({
   access: {
     operation: {
       query: ({ session }) => permissions.canManageOrders({ session }),
-      create: ({ session }) => permissions.canManageOrders({ session }),
-      update: ({ session }) => permissions.canManageOrders({ session }),
-      delete: ({ session }) => permissions.canManageOrders({ session })
+      create: () => false,
+      update: () => false,
+      delete: () => false
     }
   },
   fields: {
@@ -2620,7 +2887,8 @@ var PaymentSession = (0, import_core19.list)({
       defaultValue: {}
     }),
     idempotencyKey: (0, import_fields20.text)({
-      isIndexed: true
+      validation: { isRequired: true },
+      isIndexed: "unique"
     }),
     paymentCollection: (0, import_fields20.relationship)({
       ref: "PaymentCollection.paymentSessions"
@@ -2641,9 +2909,9 @@ var Cart = (0, import_core20.list)({
   access: {
     operation: {
       query: ({ session }) => permissions.canManageOrders({ session }) || permissions.canReadOrders({ session }),
-      create: () => true,
-      update: permissions.canManageOrders,
-      delete: permissions.canManageOrders
+      create: () => false,
+      update: () => false,
+      delete: () => false
     },
     filter: {
       query: ({ session }) => {
@@ -2717,12 +2985,10 @@ var import_fields22 = require("@keystone-6/core/fields");
 var CartItem = (0, import_core21.list)({
   access: {
     operation: {
-      query: () => true,
-      // Public read for storefront
-      create: () => true,
-      // Allow adding items for guests
-      update: permissions.canManageCart,
-      delete: permissions.canManageCart
+      query: ({ session }) => permissions.canManageCart({ session }) || permissions.canReadCart({ session }),
+      create: () => false,
+      update: () => false,
+      delete: () => false
     }
   },
   fields: {
@@ -3061,8 +3327,8 @@ var GiftCard = (0, import_core26.list)({
     operation: {
       query: permissions.canReadGiftCards,
       create: permissions.canManageGiftCards,
-      update: permissions.canManageGiftCards,
-      delete: permissions.canManageGiftCards
+      update: () => false,
+      delete: () => false
     }
   },
   ui: {
@@ -3102,9 +3368,9 @@ var GiftCardTransaction = (0, import_core27.list)({
   access: {
     operation: {
       query: permissions.canReadGiftCards,
-      create: permissions.canManageGiftCards,
-      update: permissions.canManageGiftCards,
-      delete: permissions.canManageGiftCards
+      create: () => false,
+      update: () => false,
+      delete: () => false
     }
   },
   ui: {
@@ -3113,6 +3379,18 @@ var GiftCardTransaction = (0, import_core27.list)({
     }
   },
   fields: {
+    idempotencyKey: (0, import_fields28.text)({ validation: { isRequired: true }, isIndexed: "unique" }),
+    type: (0, import_fields28.select)({
+      type: "string",
+      options: [
+        { label: "Issue", value: "issue" },
+        { label: "Redeem", value: "redeem" },
+        { label: "Refund", value: "refund" },
+        { label: "Adjustment", value: "adjustment" }
+      ],
+      validation: { isRequired: true }
+    }),
+    balanceAfter: (0, import_fields28.integer)({ validation: { isRequired: true } }),
     amount: (0, import_fields28.integer)({
       validation: { isRequired: true }
     }),
@@ -3235,9 +3513,9 @@ var KitchenTicket = (0, import_core30.list)({
   access: {
     operation: {
       query: permissions.canReadKitchen,
-      create: permissions.canManageKitchen,
-      update: permissions.canManageKitchen,
-      delete: permissions.canManageKitchen
+      create: () => false,
+      update: () => false,
+      delete: () => false
     }
   },
   ui: {
@@ -3508,6 +3786,7 @@ var Ingredient = (0, import_core33.list)({
       }
     }),
     currentStock: (0, import_fields34.decimal)({
+      access: { create: () => false, update: () => false },
       precision: 10,
       scale: 2,
       defaultValue: "0.00",
@@ -3584,9 +3863,9 @@ var StockMovement = (0, import_core34.list)({
   access: {
     operation: {
       query: permissions.canReadInventory,
-      create: permissions.canManageInventory,
-      update: permissions.canManageInventory,
-      delete: permissions.canManageInventory
+      create: () => false,
+      update: () => false,
+      delete: () => false
     }
   },
   ui: {
@@ -3595,6 +3874,10 @@ var StockMovement = (0, import_core34.list)({
     }
   },
   fields: {
+    eventKey: (0, import_fields35.text)({ validation: { isRequired: true }, isIndexed: "unique" }),
+    referenceType: (0, import_fields35.text)(),
+    referenceId: (0, import_fields35.text)({ isIndexed: true }),
+    metadata: (0, import_fields35.json)(),
     type: (0, import_fields35.select)({
       type: "string",
       options: [
@@ -3654,6 +3937,138 @@ var StockMovement = (0, import_core34.list)({
 // features/keystone/models/StoreSettings.ts
 var import_core35 = require("@keystone-6/core");
 var import_fields36 = require("@keystone-6/core/fields");
+
+// features/lib/store-logo.ts
+var DEFAULT_STORE_LOGO_ICON = '<svg xmlns="http://www.w3.org/2000/svg" fill="none" height="100%" width="100%" viewBox="0 0 200 200"><g clip-path="url(#restaurant-logo-clip)"><path fill-rule="evenodd" clip-rule="evenodd" d="M107.143 0H92.8571V63.2531L69.1621 4.60582L55.9166 9.95735L80.2255 70.1239L34.3401 24.2385L24.2386 34.3401L68.2177 78.3191L11.2241 53.4181L5.50459 66.5089L65.8105 92.8571H0V107.143H65.8104L5.50461 133.491L11.2241 146.582L68.2176 121.681L24.2386 165.66L34.3401 175.761L80.2255 129.876L55.9166 190.043L69.1621 195.394L92.8571 136.747V200H107.143V136.747L130.838 195.394L144.083 190.043L119.775 129.876L165.66 175.761L175.761 165.66L131.782 121.681L188.776 146.582L194.495 133.491L134.19 107.143H200V92.8571H134.189L194.495 66.5089L188.776 53.4181L131.782 78.3191L175.761 34.34L165.66 24.2385L119.775 70.1238L144.083 9.95735L130.838 4.60582L107.143 63.2531V0Z" fill="url(#restaurant-logo-gradient)"/></g><defs><linearGradient id="restaurant-logo-gradient" x1="14" y1="26" x2="179" y2="179.5" gradientUnits="userSpaceOnUse"><stop stop-color="#5c6bc0"/><stop offset="1" stop-color="#4f39f6"/></linearGradient><clipPath id="restaurant-logo-clip"><rect width="200" height="200" fill="white"/></clipPath></defs></svg>';
+var DEFAULT_STORE_LOGO_COLOR = "0";
+function normalizeStoreLogoColor(value) {
+  const numeric = Number.parseFloat(String(value ?? DEFAULT_STORE_LOGO_COLOR));
+  if (!Number.isFinite(numeric)) return DEFAULT_STORE_LOGO_COLOR;
+  return String((numeric % 360 + 360) % 360);
+}
+
+// features/lib/sanitize-store-logo.ts
+var ALLOWED_ELEMENTS = /* @__PURE__ */ new Set([
+  "svg",
+  "g",
+  "path",
+  "defs",
+  "lineargradient",
+  "radialgradient",
+  "stop",
+  "clippath",
+  "rect",
+  "circle",
+  "ellipse",
+  "line",
+  "polyline",
+  "polygon",
+  "title",
+  "desc"
+]);
+var ALLOWED_ATTRIBUTES = /* @__PURE__ */ new Set([
+  "xmlns",
+  "fill",
+  "fill-rule",
+  "clip-rule",
+  "height",
+  "width",
+  "viewbox",
+  "d",
+  "clip-path",
+  "id",
+  "x1",
+  "x2",
+  "y1",
+  "y2",
+  "gradientunits",
+  "gradienttransform",
+  "offset",
+  "stop-color",
+  "stop-opacity",
+  "opacity",
+  "cx",
+  "cy",
+  "r",
+  "rx",
+  "ry",
+  "x",
+  "y",
+  "transform",
+  "stroke",
+  "stroke-width",
+  "stroke-linecap",
+  "stroke-linejoin",
+  "points",
+  "role",
+  "aria-hidden",
+  "aria-label",
+  "preserveaspectratio"
+]);
+var ATTRIBUTE_PATTERN = /\s+([A-Za-z_:][\w:.-]*)\s*=\s*("[^"]*"|'[^']*')/g;
+var TAG_PATTERN = /<\/?\s*([A-Za-z][\w:-]*)([^<>]*)>/g;
+function sanitizeStoreLogoSvg(svg) {
+  const source = svg.trim();
+  if (!source.startsWith("<svg") || !source.endsWith("</svg>") || source.length > 1e5) return "";
+  if (/<!|<\?|\b(?:javascript|data|vbscript):|\bon[a-z]+\s*=|\b(?:href|src|style)\s*=/i.test(source)) return "";
+  let tagCount = 0;
+  let match;
+  TAG_PATTERN.lastIndex = 0;
+  while (match = TAG_PATTERN.exec(source)) {
+    tagCount += 1;
+    const element = match[1].toLowerCase();
+    if (!ALLOWED_ELEMENTS.has(element)) return "";
+    if (match[0].startsWith("</")) continue;
+    const attributes = match[2];
+    let consumed = "";
+    ATTRIBUTE_PATTERN.lastIndex = 0;
+    let attributeMatch;
+    while (attributeMatch = ATTRIBUTE_PATTERN.exec(attributes)) {
+      consumed += attributeMatch[0];
+      const attribute = attributeMatch[1].toLowerCase();
+      const value = attributeMatch[2].slice(1, -1);
+      if (!ALLOWED_ATTRIBUTES.has(attribute)) return "";
+      if (attribute === "id" && !/^[A-Za-z_][\w:.-]*$/.test(value)) return "";
+      if (/url\(/i.test(value) && !/^url\(#[A-Za-z_][\w:.-]*\)$/.test(value)) return "";
+    }
+    const remainder = attributes.replace(consumed, "").replace(/\//g, "").trim();
+    if (remainder) return "";
+  }
+  TAG_PATTERN.lastIndex = 0;
+  if (tagCount === 0 || source.replace(TAG_PATTERN, "").trim()) return "";
+  return source;
+}
+
+// features/keystone/utils/paymentProviderConfig.ts
+function isPaymentProviderConfigured(code) {
+  if (code.startsWith("pp_stripe")) {
+    return Boolean(
+      (process.env.NEXT_PUBLIC_STRIPE_KEY || process.env.STRIPE_PUBLISHABLE_KEY) && process.env.STRIPE_SECRET_KEY
+    );
+  }
+  if (code.startsWith("pp_paypal")) {
+    return Boolean(process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID && process.env.PAYPAL_CLIENT_SECRET);
+  }
+  return code === "pp_system_default" || code.startsWith("pp_manual");
+}
+function getPublicPaymentProviderConfig(code) {
+  if (!isPaymentProviderConfigured(code)) return null;
+  if (code.startsWith("pp_stripe")) {
+    return {
+      provider: "stripe",
+      publishableKey: process.env.NEXT_PUBLIC_STRIPE_KEY || process.env.STRIPE_PUBLISHABLE_KEY || ""
+    };
+  }
+  if (code.startsWith("pp_paypal")) {
+    return {
+      provider: "paypal",
+      publishableKey: process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID || ""
+    };
+  }
+  return null;
+}
+
+// features/keystone/models/StoreSettings.ts
 var StoreSettings = (0, import_core35.list)({
   access: {
     operation: {
@@ -3681,6 +4096,54 @@ var StoreSettings = (0, import_core35.list)({
     }),
     tagline: (0, import_fields36.text)({
       ui: { description: "Short tagline (e.g., 'Artisan Burgers & Craft Sides')" }
+    }),
+    logoIcon: (0, import_fields36.text)({
+      defaultValue: DEFAULT_STORE_LOGO_ICON,
+      ui: { description: "Sanitized SVG used by the storefront and marketplace" },
+      hooks: {
+        resolveInput: ({ resolvedData, fieldKey }) => {
+          const value = resolvedData[fieldKey];
+          if (value === void 0 || value === null || value === "") return value;
+          return typeof value === "string" ? sanitizeStoreLogoSvg(value) : "";
+        },
+        validate: ({ inputData, resolvedData, fieldKey, addValidationError }) => {
+          const submitted = inputData?.[fieldKey];
+          if (typeof submitted === "string" && submitted.trim() && !resolvedData?.[fieldKey]) {
+            addValidationError("Logo must be a valid, safe SVG document");
+          }
+        }
+      }
+    }),
+    logoColor: (0, import_fields36.text)({
+      defaultValue: DEFAULT_STORE_LOGO_COLOR,
+      ui: { description: "CSS hue rotation in degrees" },
+      hooks: {
+        resolveInput: ({ resolvedData, fieldKey }) => {
+          const value = resolvedData[fieldKey];
+          return value === void 0 ? value : normalizeStoreLogoColor(value);
+        }
+      }
+    }),
+    paymentProviders: (0, import_fields36.virtual)({
+      field: import_core35.graphql.field({
+        type: import_core35.graphql.list(
+          import_core35.graphql.object()({
+            name: "RestaurantPaymentProviderConfig",
+            fields: {
+              provider: import_core35.graphql.field({ type: import_core35.graphql.String }),
+              publishableKey: import_core35.graphql.field({ type: import_core35.graphql.String })
+            }
+          })
+        ),
+        resolve: async (_item, _args, context) => {
+          const installedProviders = await context.sudo().query.PaymentProvider.findMany({
+            where: { isInstalled: { equals: true } },
+            query: "code"
+          });
+          return installedProviders.map((provider) => getPublicPaymentProviderConfig(provider.code || "")).filter((provider) => Boolean(provider));
+        }
+      }),
+      ui: { query: "{ provider publishableKey }" }
     }),
     // Contact
     address: (0, import_fields36.text)({
@@ -3993,9 +4456,9 @@ var TipPool = (0, import_core38.list)({
   access: {
     operation: {
       query: permissions.canReadStaff,
-      create: permissions.canManageStaff,
-      update: permissions.canManageStaff,
-      delete: permissions.canManageStaff
+      create: () => false,
+      update: () => false,
+      delete: () => false
     }
   },
   ui: {
@@ -4158,10 +4621,10 @@ var import_fields41 = require("@keystone-6/core/fields");
 var WasteLog = (0, import_core40.list)({
   access: {
     operation: {
-      query: permissions.canReadKitchen,
-      create: permissions.canManageKitchen,
-      update: permissions.canManageKitchen,
-      delete: permissions.canManageKitchen
+      query: permissions.canReadInventory,
+      create: () => false,
+      update: () => false,
+      delete: () => false
     }
   },
   ui: {
@@ -4170,6 +4633,10 @@ var WasteLog = (0, import_core40.list)({
     }
   },
   fields: {
+    eventKey: (0, import_fields41.text)({ validation: { isRequired: true }, isIndexed: "unique" }),
+    reversedAt: (0, import_fields41.timestamp)(),
+    reversedBy: (0, import_fields41.relationship)({ ref: "User" }),
+    reversalReason: (0, import_fields41.text)({ ui: { displayMode: "textarea" } }),
     quantity: (0, import_fields41.decimal)({
       precision: 10,
       scale: 2,
@@ -4306,6 +4773,306 @@ var PurchaseOrder = (0, import_core41.list)({
   }
 });
 
+// features/keystone/models/AuditEvent.ts
+var import_core42 = require("@keystone-6/core");
+var import_fields43 = require("@keystone-6/core/fields");
+var AuditEvent = (0, import_core42.list)({
+  access: {
+    operation: {
+      query: ({ session }) => permissions.canManageOrders({ session }) || permissions.canManagePayments({ session }) || permissions.canManageInventory({ session }) || permissions.canManageStaff({ session }),
+      create: () => false,
+      update: () => false,
+      delete: () => false
+    }
+  },
+  fields: {
+    eventKey: (0, import_fields43.text)({ validation: { isRequired: true }, isIndexed: "unique" }),
+    eventType: (0, import_fields43.text)({ validation: { isRequired: true }, isIndexed: true }),
+    entityType: (0, import_fields43.text)({ validation: { isRequired: true }, isIndexed: true }),
+    entityId: (0, import_fields43.text)({ validation: { isRequired: true }, isIndexed: true }),
+    reason: (0, import_fields43.text)({ ui: { displayMode: "textarea" } }),
+    before: (0, import_fields43.json)(),
+    after: (0, import_fields43.json)(),
+    metadata: (0, import_fields43.json)(),
+    occurredAt: (0, import_fields43.timestamp)({ defaultValue: { kind: "now" }, isIndexed: true }),
+    actor: (0, import_fields43.relationship)({ ref: "User" }),
+    approver: (0, import_fields43.relationship)({ ref: "User" }),
+    ...trackingFields
+  }
+});
+
+// features/keystone/models/OrderAdjustment.ts
+var import_core43 = require("@keystone-6/core");
+var import_fields44 = require("@keystone-6/core/fields");
+var OrderAdjustment = (0, import_core43.list)({
+  access: {
+    operation: {
+      query: ({ session }) => permissions.canReadOrders({ session }) || permissions.canManageOrders({ session }),
+      create: () => false,
+      update: () => false,
+      delete: () => false
+    }
+  },
+  fields: {
+    idempotencyKey: (0, import_fields44.text)({ validation: { isRequired: true }, isIndexed: "unique" }),
+    type: (0, import_fields44.select)({
+      type: "string",
+      options: [
+        { label: "Void", value: "void" },
+        { label: "Comp", value: "comp" },
+        { label: "Split", value: "split" },
+        { label: "Correction", value: "correction" }
+      ],
+      validation: { isRequired: true }
+    }),
+    amount: (0, import_fields44.integer)({ validation: { isRequired: true, min: 0 } }),
+    reason: (0, import_fields44.text)({ validation: { isRequired: true }, ui: { displayMode: "textarea" } }),
+    metadata: (0, import_fields44.json)(),
+    order: (0, import_fields44.relationship)({ ref: "RestaurantOrder" }),
+    orderItem: (0, import_fields44.relationship)({ ref: "OrderItem" }),
+    actor: (0, import_fields44.relationship)({ ref: "User" }),
+    approvedBy: (0, import_fields44.relationship)({ ref: "User" }),
+    ...trackingFields
+  }
+});
+
+// features/keystone/models/Receipt.ts
+var import_core44 = require("@keystone-6/core");
+var import_fields45 = require("@keystone-6/core/fields");
+var Receipt = (0, import_core44.list)({
+  access: {
+    operation: {
+      query: ({ session }) => permissions.canReadPayments({ session }) || permissions.canManagePayments({ session }),
+      create: () => false,
+      update: () => false,
+      delete: () => false
+    }
+  },
+  fields: {
+    receiptNumber: (0, import_fields45.text)({ validation: { isRequired: true }, isIndexed: "unique" }),
+    kind: (0, import_fields45.select)({
+      type: "string",
+      options: [
+        { label: "Sale", value: "sale" },
+        { label: "Refund", value: "refund" },
+        { label: "Correction", value: "correction" }
+      ],
+      defaultValue: "sale",
+      validation: { isRequired: true }
+    }),
+    amount: (0, import_fields45.integer)({ validation: { isRequired: true } }),
+    currencyCode: (0, import_fields45.text)({ validation: { isRequired: true } }),
+    snapshot: (0, import_fields45.json)(),
+    issuedAt: (0, import_fields45.timestamp)({ defaultValue: { kind: "now" }, isIndexed: true }),
+    order: (0, import_fields45.relationship)({ ref: "RestaurantOrder" }),
+    payment: (0, import_fields45.relationship)({ ref: "Payment" }),
+    refund: (0, import_fields45.relationship)({ ref: "Refund" }),
+    correctsReceipt: (0, import_fields45.relationship)({ ref: "Receipt" }),
+    issuedBy: (0, import_fields45.relationship)({ ref: "User" }),
+    ...trackingFields
+  }
+});
+
+// features/keystone/models/Refund.ts
+var import_core45 = require("@keystone-6/core");
+var import_fields46 = require("@keystone-6/core/fields");
+var Refund = (0, import_core45.list)({
+  access: {
+    operation: {
+      query: ({ session }) => permissions.canReadPayments({ session }) || permissions.canManagePayments({ session }),
+      create: () => false,
+      update: () => false,
+      delete: () => false
+    }
+  },
+  fields: {
+    idempotencyKey: (0, import_fields46.text)({ validation: { isRequired: true }, isIndexed: "unique" }),
+    amount: (0, import_fields46.integer)({ validation: { isRequired: true, min: 1 } }),
+    currencyCode: (0, import_fields46.text)({ validation: { isRequired: true } }),
+    status: (0, import_fields46.select)({
+      type: "string",
+      options: [
+        { label: "Processing", value: "processing" },
+        { label: "Succeeded", value: "succeeded" },
+        { label: "Failed", value: "failed" },
+        { label: "Unknown", value: "unknown" }
+      ],
+      defaultValue: "processing",
+      validation: { isRequired: true }
+    }),
+    reason: (0, import_fields46.text)({ validation: { isRequired: true }, ui: { displayMode: "textarea" } }),
+    providerRefundId: (0, import_fields46.text)(),
+    providerData: (0, import_fields46.json)(),
+    processedAt: (0, import_fields46.timestamp)(),
+    payment: (0, import_fields46.relationship)({ ref: "Payment" }),
+    order: (0, import_fields46.relationship)({ ref: "RestaurantOrder" }),
+    requestedBy: (0, import_fields46.relationship)({ ref: "User" }),
+    approvedBy: (0, import_fields46.relationship)({ ref: "User" }),
+    ...trackingFields
+  }
+});
+
+// features/keystone/models/PaymentWebhookEvent.ts
+var import_core46 = require("@keystone-6/core");
+var import_fields47 = require("@keystone-6/core/fields");
+var PaymentWebhookEvent = (0, import_core46.list)({
+  access: {
+    operation: {
+      query: permissions.canManagePayments,
+      create: () => false,
+      update: () => false,
+      delete: () => false
+    }
+  },
+  fields: {
+    eventKey: (0, import_fields47.text)({ validation: { isRequired: true }, isIndexed: "unique" }),
+    providerCode: (0, import_fields47.text)({ validation: { isRequired: true }, isIndexed: true }),
+    providerEventId: (0, import_fields47.text)({ isIndexed: true }),
+    eventType: (0, import_fields47.text)({ isIndexed: true }),
+    status: (0, import_fields47.select)({
+      type: "string",
+      options: [
+        { label: "Received", value: "received" },
+        { label: "Processed", value: "processed" },
+        { label: "Ignored", value: "ignored" },
+        { label: "Failed", value: "failed" }
+      ],
+      defaultValue: "received"
+    }),
+    payload: (0, import_fields47.json)(),
+    rawBody: (0, import_fields47.text)({ ui: { displayMode: "textarea" } }),
+    error: (0, import_fields47.text)({ ui: { displayMode: "textarea" } }),
+    attempts: (0, import_fields47.integer)({ defaultValue: 0 }),
+    receivedAt: (0, import_fields47.timestamp)({ defaultValue: { kind: "now" }, isIndexed: true }),
+    processedAt: (0, import_fields47.timestamp)(),
+    payment: (0, import_fields47.relationship)({ ref: "Payment" }),
+    ...trackingFields
+  }
+});
+
+// features/keystone/models/KitchenTicketEvent.ts
+var import_core47 = require("@keystone-6/core");
+var import_fields48 = require("@keystone-6/core/fields");
+var KitchenTicketEvent = (0, import_core47.list)({
+  access: {
+    operation: {
+      query: ({ session }) => permissions.canReadKitchen({ session }) || permissions.canManageKitchen({ session }),
+      create: () => false,
+      update: () => false,
+      delete: () => false
+    }
+  },
+  fields: {
+    eventType: (0, import_fields48.select)({
+      type: "string",
+      options: [
+        { label: "Dispatch", value: "dispatch" },
+        { label: "Delta", value: "delta" },
+        { label: "Status", value: "status" },
+        { label: "Item Status", value: "item_status" },
+        { label: "Recall", value: "recall" },
+        { label: "Cancel", value: "cancel" }
+      ],
+      validation: { isRequired: true }
+    }),
+    eventKey: (0, import_fields48.text)({ isIndexed: "unique", validation: { isRequired: true } }),
+    payload: (0, import_fields48.json)(),
+    occurredAt: (0, import_fields48.timestamp)({ defaultValue: { kind: "now" }, isIndexed: true }),
+    ticket: (0, import_fields48.relationship)({ ref: "KitchenTicket" }),
+    order: (0, import_fields48.relationship)({ ref: "RestaurantOrder" }),
+    orderItem: (0, import_fields48.relationship)({ ref: "OrderItem" }),
+    actor: (0, import_fields48.relationship)({ ref: "User" }),
+    ...trackingFields
+  }
+});
+
+// features/keystone/models/IdempotencyKey.ts
+var import_core48 = require("@keystone-6/core");
+var import_fields49 = require("@keystone-6/core/fields");
+var IdempotencyKey = (0, import_core48.list)({
+  access: {
+    operation: {
+      query: () => false,
+      create: () => false,
+      update: () => false,
+      delete: () => false
+    }
+  },
+  ui: { isHidden: true },
+  fields: {
+    idempotencyKey: (0, import_fields49.text)({
+      isIndexed: "unique",
+      validation: { isRequired: true }
+    }),
+    requestMethod: (0, import_fields49.text)({ validation: { isRequired: true } }),
+    requestParams: (0, import_fields49.json)(),
+    requestPath: (0, import_fields49.text)({ validation: { isRequired: true } }),
+    responseCode: (0, import_fields49.integer)(),
+    responseBody: (0, import_fields49.json)(),
+    recoveryPoint: (0, import_fields49.text)({
+      defaultValue: "started",
+      validation: { isRequired: true }
+    }),
+    lockedAt: (0, import_fields49.timestamp)(),
+    ...trackingFields
+  }
+});
+
+// features/keystone/models/ManagerApproval.ts
+var import_core49 = require("@keystone-6/core");
+var import_fields50 = require("@keystone-6/core/fields");
+var ManagerApproval = (0, import_core49.list)({
+  access: {
+    operation: {
+      query: ({ session }) => permissions.canManageOrders({ session }) || permissions.canManagePayments({ session }),
+      create: () => false,
+      update: () => false,
+      delete: () => false
+    }
+  },
+  fields: {
+    actionType: (0, import_fields50.select)({
+      type: "string",
+      options: [
+        { label: "Void order item", value: "void_item" },
+        { label: "Comp order item", value: "comp_item" },
+        { label: "Void order", value: "void_order" },
+        { label: "Refund payment", value: "refund_payment" }
+      ],
+      validation: { isRequired: true },
+      isIndexed: true
+    }),
+    targetId: (0, import_fields50.text)({ validation: { isRequired: true }, isIndexed: true }),
+    reason: (0, import_fields50.text)({ validation: { isRequired: true }, ui: { displayMode: "textarea" } }),
+    amount: (0, import_fields50.integer)(),
+    requestFingerprint: (0, import_fields50.text)({ validation: { isRequired: true } }),
+    requestPayload: (0, import_fields50.json)(),
+    status: (0, import_fields50.select)({
+      type: "string",
+      options: [
+        { label: "Pending", value: "pending" },
+        { label: "Approved", value: "approved" },
+        { label: "Rejected", value: "rejected" },
+        { label: "Consumed", value: "consumed" },
+        { label: "Expired", value: "expired" }
+      ],
+      defaultValue: "pending",
+      validation: { isRequired: true },
+      isIndexed: true
+    }),
+    requestedAt: (0, import_fields50.timestamp)({ defaultValue: { kind: "now" }, isIndexed: true }),
+    approvedAt: (0, import_fields50.timestamp)(),
+    consumedAt: (0, import_fields50.timestamp)(),
+    expiresAt: (0, import_fields50.timestamp)({ validation: { isRequired: true }, isIndexed: true }),
+    consumedEntityType: (0, import_fields50.text)(),
+    consumedEntityId: (0, import_fields50.text)(),
+    requestedBy: (0, import_fields50.relationship)({ ref: "User" }),
+    approvedBy: (0, import_fields50.relationship)({ ref: "User" }),
+    ...trackingFields
+  },
+  ui: { isHidden: true }
+});
+
 // features/keystone/models/index.ts
 var models = {
   User,
@@ -4348,7 +5115,15 @@ var models = {
   TipPool,
   TimeEntry,
   WasteLog,
-  PurchaseOrder
+  PurchaseOrder,
+  AuditEvent,
+  OrderAdjustment,
+  Receipt,
+  Refund,
+  PaymentWebhookEvent,
+  KitchenTicketEvent,
+  IdempotencyKey,
+  ManagerApproval
 };
 
 // features/keystone/mutations/index.ts
@@ -4383,55 +5158,6 @@ async function updateActiveUser(root, { data }, context) {
   });
 }
 var updateActiveUser_default = updateActiveUser;
-
-// lib/stripe.ts
-var import_stripe = __toESM(require("stripe"));
-var getStripeClient = () => {
-  const stripeKey = process.env.STRIPE_SECRET_KEY;
-  if (!stripeKey) {
-    throw new Error("Stripe secret key not configured. Set STRIPE_SECRET_KEY environment variable.");
-  }
-  return new import_stripe.default(stripeKey);
-};
-var stripeClient = null;
-var stripe = new Proxy({}, {
-  get(_, prop) {
-    if (!stripeClient) {
-      stripeClient = getStripeClient();
-    }
-    return stripeClient[prop];
-  }
-});
-var webhookSecret = process.env.STRIPE_WEBHOOK_SECRET || "";
-async function createPaymentIntent({
-  amount,
-  currency = "usd",
-  orderId,
-  customerId,
-  metadata = {}
-}) {
-  const paymentIntent = await stripe.paymentIntents.create({
-    amount,
-    currency,
-    customer: customerId,
-    metadata: {
-      orderId,
-      ...metadata
-    },
-    automatic_payment_methods: {
-      enabled: true
-    }
-  });
-  return paymentIntent;
-}
-async function capturePayment(paymentIntentId) {
-  const paymentIntent = await stripe.paymentIntents.capture(paymentIntentId);
-  return paymentIntent;
-}
-async function getPaymentIntent(paymentIntentId) {
-  const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
-  return paymentIntent;
-}
 
 // import("../../integrations/payment/**/*.ts") in features/keystone/utils/paymentProviderAdapter.ts
 var globImport_integrations_payment_ts = __glob({
@@ -4470,18 +5196,25 @@ async function executeAdapterFunction({ provider, functionName, args }) {
     );
   }
 }
-async function createPayment({ provider, cart, order, amount, currency }) {
+async function createPayment({ provider, cart, order, amount, currency, idempotencyKey }) {
   return executeAdapterFunction({
     provider,
     functionName: "createPaymentFunction",
-    args: { cart, order, amount, currency }
+    args: { cart, order, amount, currency, idempotencyKey }
   });
 }
-async function capturePayment2({ provider, paymentId, amount }) {
+async function capturePayment({ provider, paymentId, amount }) {
   return executeAdapterFunction({
     provider,
     functionName: "capturePaymentFunction",
     args: { paymentId, amount }
+  });
+}
+async function refundPayment({ provider, paymentId, amount, currency, idempotencyKey }) {
+  return executeAdapterFunction({
+    provider,
+    functionName: "refundPaymentFunction",
+    args: { paymentId, amount, currency, idempotencyKey }
   });
 }
 async function getPaymentStatus({ provider, paymentId }) {
@@ -4491,286 +5224,1058 @@ async function getPaymentStatus({ provider, paymentId }) {
     args: { paymentId }
   });
 }
-async function handleWebhook({ provider, event, headers }) {
+async function handleWebhook({ provider, event, headers, rawBody }) {
   return executeAdapterFunction({
     provider,
     functionName: "handleWebhookFunction",
-    args: { event, headers }
+    args: { event, headers, rawBody }
+  });
+}
+
+// features/keystone/utils/audit.ts
+var import_node_crypto2 = __toESM(require("node:crypto"));
+async function appendAuditEventWithClient(prisma, actorId, input) {
+  const eventKey = input.eventKey || import_node_crypto2.default.randomUUID();
+  return prisma.auditEvent.upsert({
+    where: { eventKey },
+    update: {},
+    create: {
+      eventKey,
+      eventType: input.eventType,
+      entityType: input.entityType,
+      entityId: input.entityId,
+      reason: input.reason || "",
+      before: input.before ?? void 0,
+      after: input.after ?? void 0,
+      metadata: input.metadata ?? void 0,
+      actorId: actorId || null,
+      approverId: input.approverId || null
+    }
+  });
+}
+async function appendAuditEvent(context, input) {
+  return appendAuditEventWithClient(context.prisma, context.session?.itemId, input);
+}
+
+// features/keystone/utils/receipt.ts
+function receiptNumber(kind, entityId) {
+  return `${kind === "sale" ? "R" : kind === "refund" ? "RF" : "RC"}-${entityId}`;
+}
+async function issueReceiptWithClient(prisma, issuedById, input) {
+  const number = receiptNumber(input.kind, input.entityId);
+  return prisma.receipt.upsert({
+    where: { receiptNumber: number },
+    update: {},
+    create: {
+      receiptNumber: number,
+      kind: input.kind,
+      amount: input.amount,
+      currencyCode: input.currencyCode,
+      snapshot: input.snapshot,
+      orderId: input.orderId,
+      paymentId: input.paymentId || null,
+      refundId: input.refundId || null,
+      correctsReceiptId: input.correctsReceiptId || null,
+      issuedById: issuedById || null
+    }
+  });
+}
+
+// features/keystone/utils/orderCompletion.ts
+function cents(value) {
+  const parsed = Number(value || 0);
+  return Number.isFinite(parsed) ? Math.max(0, Math.round(parsed)) : 0;
+}
+async function finalizePaidOrderWithClient(prisma, orderId, actorId) {
+  const order = await prisma.restaurantOrder.findUnique({
+    where: { id: orderId },
+    include: { payments: { select: { amount: true, status: true } } }
+  });
+  if (!order) throw new Error("Order not found");
+  const paid = order.payments.filter((payment) => payment.status === "succeeded").reduce((sum, payment) => sum + cents(payment.amount), 0);
+  if (paid < cents(order.total)) return false;
+  if (order.status === "cancelled") throw new Error("A cancelled order cannot be completed");
+  if (order.status !== "completed") {
+    await prisma.restaurantOrder.update({ where: { id: orderId }, data: { status: "completed" } });
+    await appendAuditEventWithClient(prisma, actorId, {
+      eventKey: `order-completed-after-payment:${orderId}`,
+      eventType: "order.completed_after_payment",
+      entityType: "RestaurantOrder",
+      entityId: orderId,
+      before: { status: order.status },
+      after: { status: "completed", paid, total: order.total }
+    });
+  }
+  return true;
+}
+async function reconcileCompletedOrderOperations(orderId, context) {
+  const order = await context.sudo().query.RestaurantOrder.findOne({
+    where: { id: orderId },
+    query: "id status tables { id }"
+  });
+  if (!order || order.status !== "completed") return;
+  await syncKitchenTicketsForOrder(orderId, context);
+  await depleteInventoryForCompletedOrder(orderId, context);
+  await Promise.all((order.tables || []).map(
+    (table) => context.sudo().db.Table.updateOne({ where: { id: table.id }, data: { status: "cleaning" } })
+  ));
+}
+async function finalizePaidOrder(orderId, context) {
+  const finalized = await context.prisma.$transaction(
+    (tx) => finalizePaidOrderWithClient(tx, orderId, context.session?.itemId),
+    { isolationLevel: "Serializable" }
+  );
+  if (finalized) await reconcileCompletedOrderOperations(orderId, context);
+  return finalized;
+}
+
+// features/keystone/utils/idempotency.ts
+var import_node_crypto3 = __toESM(require("node:crypto"));
+function normalize(value) {
+  if (value === null || value === void 0) return null;
+  if (typeof value === "string" || typeof value === "boolean") return value;
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) throw new Error("Idempotency request contains a non-finite number");
+    return value;
+  }
+  if (value instanceof Date) return value.toISOString();
+  if (Array.isArray(value)) return value.map(normalize);
+  if (typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).filter(([, entry]) => entry !== void 0).sort(([left], [right]) => left.localeCompare(right)).map(([key, entry]) => [key, normalize(entry)])
+    );
+  }
+  throw new Error(`Unsupported idempotency request value: ${typeof value}`);
+}
+function canonicalIdempotencyParams(params) {
+  return normalize(params);
+}
+function idempotencyFingerprint(params) {
+  return import_node_crypto3.default.createHash("sha256").update(JSON.stringify(canonicalIdempotencyParams(params))).digest("hex");
+}
+function storedFingerprint(requestParams) {
+  const params = requestParams && typeof requestParams === "object" ? { ...requestParams } : {};
+  const recorded = typeof params._fingerprint === "string" ? params._fingerprint : null;
+  delete params._fingerprint;
+  const calculated = idempotencyFingerprint(params);
+  if (recorded && recorded !== calculated) {
+    throw new Error("Stored idempotency request fingerprint is invalid");
+  }
+  return calculated;
+}
+function assertIdempotencyRequest(attempt, request) {
+  const method = request.requestMethod || "POST";
+  const expectedFingerprint = idempotencyFingerprint(request.requestParams);
+  if (attempt.requestMethod !== method || attempt.requestPath !== request.requestPath || storedFingerprint(attempt.requestParams) !== expectedFingerprint) {
+    throw new Error("Idempotency key was already used with a different request");
+  }
+}
+async function findIdempotencyAttempt(prisma, request) {
+  const key = request.key.trim();
+  if (!key) throw new Error("Idempotency key is required");
+  const existing = await prisma.idempotencyKey.findUnique({ where: { idempotencyKey: key } });
+  if (existing) assertIdempotencyRequest(existing, { ...request, key });
+  return existing;
+}
+async function getOrCreateIdempotencyAttempt(prisma, request) {
+  const key = request.key.trim();
+  if (!key) throw new Error("Idempotency key is required");
+  const normalizedParams = canonicalIdempotencyParams(request.requestParams);
+  const data = {
+    idempotencyKey: key,
+    requestMethod: request.requestMethod || "POST",
+    requestPath: request.requestPath,
+    requestParams: {
+      ...normalizedParams,
+      _fingerprint: idempotencyFingerprint(request.requestParams)
+    },
+    recoveryPoint: "started",
+    lockedAt: /* @__PURE__ */ new Date()
+  };
+  const existing = await findIdempotencyAttempt(prisma, { ...request, key });
+  if (existing) return { attempt: existing, replay: true };
+  try {
+    const attempt = await prisma.idempotencyKey.create({ data });
+    return { attempt, replay: false };
+  } catch (error) {
+    if (error?.code !== "P2002") throw error;
+    const raced = await prisma.idempotencyKey.findUnique({ where: { idempotencyKey: key } });
+    if (!raced) throw error;
+    assertIdempotencyRequest(raced, { ...request, key });
+    return { attempt: raced, replay: true };
+  }
+}
+async function updateIdempotencyAttempt(prisma, attemptId, recoveryPoint, responseBody, responseCode) {
+  await prisma.idempotencyKey.update({
+    where: { id: attemptId },
+    data: {
+      recoveryPoint,
+      responseBody,
+      responseCode,
+      lockedAt: ["completed", "failed"].includes(recoveryPoint) ? null : /* @__PURE__ */ new Date()
+    }
   });
 }
 
 // features/keystone/mutations/processPayment.ts
-function cents(value) {
+function cents2(value) {
   const parsed = Number(value || 0);
-  return Number.isFinite(parsed) ? Math.round(parsed) : 0;
+  return Number.isFinite(parsed) ? Math.max(0, Math.round(parsed)) : 0;
 }
-async function applyTipToOrder(orderId, tipAmount, context) {
-  const sudo = context.sudo();
-  const order = await sudo.query.RestaurantOrder.findOne({
-    where: { id: orderId },
-    query: "id total tip"
-  });
-  if (!order) {
-    return null;
+function providerCodeForMethod(method) {
+  if (method === "cash") return "pp_system_default";
+  if (["credit_card", "debit_card", "apple_pay", "google_pay"].includes(method)) {
+    return "pp_stripe_stripe";
   }
-  const currentTip = cents(order.tip);
-  const nextTip = Math.max(currentTip, cents(tipAmount));
-  if (nextTip !== currentTip) {
-    const baseTotal = Math.max(0, cents(order.total) - currentTip);
-    const nextTotal = baseTotal + nextTip;
-    await sudo.db.RestaurantOrder.updateOne({
-      where: { id: orderId },
-      data: {
-        tip: nextTip,
-        total: nextTotal
+  if (method === "paypal") return "pp_paypal_paypal";
+  return null;
+}
+async function getProvider(context, code) {
+  if (!code) return null;
+  const providers = await context.sudo().query.PaymentProvider.findMany({
+    where: { code: { equals: code }, isInstalled: { equals: true } },
+    query: "id code isInstalled createPaymentFunction capturePaymentFunction refundPaymentFunction getPaymentStatusFunction generatePaymentLinkFunction handleWebhookFunction credentials metadata",
+    take: 1
+  });
+  return providers[0] || null;
+}
+async function writeSaleEvidence(prisma, actorId, input) {
+  await appendAuditEventWithClient(prisma, actorId, {
+    eventKey: `payment-succeeded:${input.payment.id}`,
+    eventType: "payment.succeeded",
+    entityType: "Payment",
+    entityId: input.payment.id,
+    after: {
+      amount: input.payment.amount,
+      method: input.payment.paymentMethod,
+      remainingBalance: input.remainingBalance
+    },
+    metadata: { idempotencyKey: input.payment.idempotencyKey }
+  });
+  await issueReceiptWithClient(prisma, actorId, {
+    kind: "sale",
+    entityId: input.payment.id,
+    orderId: input.order.id,
+    paymentId: input.payment.id,
+    amount: cents2(input.payment.amount),
+    currencyCode: input.order.currencyCode || "USD",
+    snapshot: {
+      orderId: input.order.id,
+      orderNumber: input.order.orderNumber,
+      tender: input.payment.paymentMethod,
+      amount: cents2(input.payment.amount),
+      remainingBalance: input.remainingBalance
+    }
+  });
+}
+async function processPayment(_root, args, context) {
+  if (!permissions.canManagePayments({ session: context.session })) {
+    return { success: false, paymentId: null, clientSecret: null, amount: null, remainingBalance: null, error: "Not authorized to process payment" };
+  }
+  try {
+    if (!args.idempotencyKey?.trim()) throw new Error("Idempotency key is required");
+    const providerCode = providerCodeForMethod(args.paymentMethod);
+    if (!providerCode || args.paymentMethod === "gift_card") {
+      throw new Error(args.paymentMethod === "gift_card" ? "Use the atomic gift-card redemption operation" : "Unsupported payment method");
+    }
+    const provider = await getProvider(context, providerCode);
+    if (args.paymentMethod !== "cash" && (!provider || !isPaymentProviderConfigured(provider.code))) {
+      throw new Error("The selected payment provider is not installed and configured");
+    }
+    const prisma = context.prisma;
+    const priorPayment = await prisma.payment.findUnique({ where: { idempotencyKey: args.idempotencyKey } });
+    if (priorPayment) {
+      const requestedAmount = args.amount == null ? null : cents2(args.amount);
+      if (priorPayment.orderId !== args.orderId || priorPayment.paymentMethod !== args.paymentMethod || requestedAmount !== null && cents2(priorPayment.amount) !== requestedAmount) {
+        throw new Error("Idempotency key was already used with a different payment request");
+      }
+    }
+    const { attempt } = await getOrCreateIdempotencyAttempt(prisma, {
+      key: `process-payment:${args.idempotencyKey.trim()}`,
+      requestPath: "processPayment",
+      requestParams: {
+        orderId: args.orderId,
+        paymentMethod: args.paymentMethod,
+        amount: args.amount ?? null,
+        tipAmount: args.tipAmount ?? 0
       }
     });
-    return {
-      ...order,
-      tip: nextTip,
-      total: nextTotal
-    };
-  }
-  return order;
-}
-async function maybeCompleteOrder(orderId, context) {
-  const sudo = context.sudo();
-  const [order, payments] = await Promise.all([
-    sudo.query.RestaurantOrder.findOne({
-      where: { id: orderId },
-      query: "id status total"
-    }),
-    sudo.query.Payment.findMany({
-      where: {
-        order: { id: { equals: orderId } },
-        status: { equals: "succeeded" }
-      },
-      query: "id amount"
-    })
-  ]);
-  if (!order) {
-    return;
-  }
-  const totalPaid = payments.reduce((sum, payment) => sum + cents(payment.amount), 0);
-  const totalDue = cents(order.total);
-  if (totalPaid >= totalDue && order.status !== "completed") {
-    await sudo.db.RestaurantOrder.updateOne({
-      where: { id: orderId },
-      data: { status: "completed" }
-    });
-  }
-}
-async function processPayment(root, args, context) {
-  if (!permissions.canManagePayments({ session: context.session })) {
-    return {
-      success: false,
-      paymentId: null,
-      clientSecret: null,
-      error: "Not authorized to process payment"
-    };
-  }
-  const { orderId, amount, paymentMethod, tipAmount = 0 } = args;
-  try {
-    const sudo = context.sudo();
-    const settings = await sudo.query.StoreSettings.findOne({
-      where: { id: "1" },
-      query: "currencyCode"
-    });
-    const currency = (settings?.currencyCode || "USD").toLowerCase();
-    const order = await sudo.query.RestaurantOrder.findOne({
-      where: { id: orderId },
-      query: "id orderNumber status total tip"
-    });
-    if (!order) {
-      return {
-        success: false,
-        paymentId: null,
-        clientSecret: null,
-        error: "Order not found"
-      };
-    }
-    if (order.status === "completed") {
-      return {
-        success: false,
-        paymentId: null,
-        clientSecret: null,
-        error: "Order is already completed"
-      };
-    }
-    await applyTipToOrder(orderId, tipAmount, context);
-    const isImmediateSettlement = ["cash", "gift_card"].includes(paymentMethod);
-    const providerCode = paymentMethod === "cash" ? "pp_system_default" : ["credit_card", "debit_card", "apple_pay", "google_pay"].includes(paymentMethod) ? "pp_stripe_stripe" : null;
-    const providers = providerCode ? await context.query.PaymentProvider.findMany({
-      where: {
-        code: { equals: providerCode },
-        isInstalled: { equals: true }
-      },
-      query: "id code isInstalled createPaymentFunction capturePaymentFunction refundPaymentFunction getPaymentStatusFunction generatePaymentLinkFunction handleWebhookFunction credentials metadata"
-    }) : [];
-    const provider = providers[0] || null;
-    let clientSecret = null;
-    let providerPaymentId = null;
-    let paymentStatus = isImmediateSettlement ? "succeeded" : "pending";
-    if (!isImmediateSettlement && provider && provider.isInstalled) {
-      const providerResponse = await createPayment({
-        provider,
-        order,
-        amount,
-        currency
+    const reservation = await prisma.$transaction(async (tx) => {
+      const existing = await tx.payment.findUnique({ where: { idempotencyKey: args.idempotencyKey } });
+      if (existing) {
+        const requestedAmount2 = args.amount == null ? null : cents2(args.amount);
+        if (existing.orderId !== args.orderId || existing.paymentMethod !== args.paymentMethod || requestedAmount2 !== null && cents2(existing.amount) !== requestedAmount2) {
+          throw new Error("Idempotency key was already used with a different payment request");
+        }
+        const order2 = await tx.restaurantOrder.findUnique({ where: { id: existing.orderId } });
+        const payments = await tx.payment.findMany({
+          where: {
+            orderId: existing.orderId,
+            status: { in: ["processing", "authorized", "succeeded", "unknown"] }
+          }
+        });
+        const reserved2 = payments.reduce((sum, payment2) => sum + cents2(payment2.amount), 0);
+        return {
+          payment: existing,
+          order: order2,
+          remainingBalance: Math.max(0, cents2(order2?.total) - reserved2),
+          replay: true
+        };
+      }
+      const order = await tx.restaurantOrder.findUnique({ where: { id: args.orderId } });
+      if (!order) throw new Error("Order not found");
+      if (["completed", "cancelled"].includes(order.status || "")) {
+        throw new Error("Order cannot accept another tender");
+      }
+      const recoverable = await tx.payment.findFirst({
+        where: {
+          orderId: order.id,
+          paymentMethod: args.paymentMethod,
+          status: { in: ["processing", "authorized", "unknown"] }
+        },
+        orderBy: { createdAt: "desc" }
       });
-      clientSecret = providerResponse?.clientSecret || null;
-      providerPaymentId = providerResponse?.paymentIntentId || providerResponse?.orderId || providerResponse?.paymentId || null;
-      paymentStatus = providerResponse?.status || "pending";
-    } else if (!isImmediateSettlement) {
-      const paymentIntent = await createPaymentIntent({
-        amount,
-        orderId,
-        metadata: {
-          orderNumber: order.orderNumber || "",
-          paymentMethod
+      if (recoverable) {
+        const reservedRows = await tx.payment.findMany({
+          where: {
+            orderId: order.id,
+            status: { in: ["processing", "authorized", "succeeded", "unknown"] }
+          }
+        });
+        const reservedTotal = reservedRows.reduce((sum, payment2) => sum + cents2(payment2.amount), 0);
+        return {
+          payment: recoverable,
+          order,
+          remainingBalance: Math.max(0, cents2(order.total) - reservedTotal),
+          replay: true
+        };
+      }
+      const desiredTip = Math.max(cents2(order.tip), cents2(args.tipAmount));
+      const total = Math.max(0, cents2(order.total) - cents2(order.tip) + desiredTip);
+      const reservedPayments = await tx.payment.findMany({
+        where: {
+          orderId: order.id,
+          status: { in: ["processing", "authorized", "succeeded", "unknown"] }
         }
       });
-      clientSecret = paymentIntent.client_secret;
-      providerPaymentId = paymentIntent.id;
-    }
-    const payment = await context.db.Payment.createOne({
-      data: {
-        amount,
-        status: paymentStatus,
-        paymentMethod,
-        currencyCode: currency.toUpperCase(),
-        providerPaymentId,
+      const reserved = reservedPayments.reduce((sum, payment2) => sum + cents2(payment2.amount), 0);
+      const remainingBalance = total - reserved;
+      if (remainingBalance <= 0) throw new Error("Order has no unreserved balance");
+      const requestedAmount = cents2(args.amount);
+      const amount = requestedAmount > 0 ? requestedAmount : remainingBalance;
+      if (amount > remainingBalance) throw new Error("Tender amount exceeds the server-calculated remaining balance");
+      const immediate = args.paymentMethod === "cash";
+      const payment = await tx.payment.create({
         data: {
-          paymentIntentId: providerPaymentId,
-          clientSecret
-        },
-        paymentProvider: provider ? { connect: { id: provider.id } } : void 0,
-        tipAmount,
-        processedAt: paymentStatus === "succeeded" ? (/* @__PURE__ */ new Date()).toISOString() : void 0,
-        order: { connect: { id: orderId } },
-        processedBy: { connect: { id: context.session.itemId } }
+          idempotencyKey: args.idempotencyKey,
+          reservedAt: /* @__PURE__ */ new Date(),
+          amount,
+          status: immediate ? "succeeded" : "processing",
+          paymentMethod: args.paymentMethod,
+          currencyCode: order.currencyCode || "USD",
+          tipAmount: desiredTip,
+          paymentProviderId: provider?.id || null,
+          processedAt: immediate ? /* @__PURE__ */ new Date() : null,
+          orderId: order.id,
+          processedById: context.session?.itemId || null,
+          data: { providerCode }
+        }
+      });
+      const remainingAfterTender = remainingBalance - amount;
+      const nextOrder = await tx.restaurantOrder.update({
+        where: { id: order.id },
+        data: {
+          tip: desiredTip,
+          total,
+          status: order.status
+        }
+      });
+      if (immediate) {
+        await writeSaleEvidence(tx, context.session?.itemId, {
+          payment,
+          order: nextOrder,
+          remainingBalance: remainingAfterTender
+        });
+        if (remainingAfterTender === 0) {
+          await finalizePaidOrderWithClient(tx, order.id, context.session?.itemId);
+        }
+      }
+      return { payment, order: nextOrder, remainingBalance: remainingAfterTender, replay: false };
+    }, { isolationLevel: "Serializable" });
+    const existingData = reservation.payment?.data || {};
+    const needsProviderRecovery = reservation.replay && args.paymentMethod !== "cash" && !reservation.payment.providerPaymentId && !existingData.clientSecret;
+    if (reservation.replay && !needsProviderRecovery) {
+      await updateIdempotencyAttempt(prisma, attempt.id, "completed", {
+        paymentId: reservation.payment.id,
+        orderId: reservation.order?.id || args.orderId
+      }, 200);
+      return {
+        success: !["failed", "cancelled"].includes(reservation.payment.status),
+        paymentId: reservation.payment.id,
+        clientSecret: existingData.clientSecret || null,
+        amount: cents2(reservation.payment.amount),
+        remainingBalance: reservation.remainingBalance,
+        error: reservation.payment.errorMessage || null
+      };
+    }
+    if (args.paymentMethod === "cash") {
+      if (reservation.remainingBalance === 0) {
+        await reconcileCompletedOrderOperations(reservation.order.id, context);
+      }
+      await updateIdempotencyAttempt(prisma, attempt.id, "completed", {
+        paymentId: reservation.payment.id,
+        orderId: reservation.order.id
+      }, 200);
+      return {
+        success: true,
+        paymentId: reservation.payment.id,
+        clientSecret: null,
+        amount: cents2(reservation.payment.amount),
+        remainingBalance: reservation.remainingBalance,
+        error: null
+      };
+    }
+    try {
+      const providerResult = await createPayment({
+        provider,
+        order: reservation.order,
+        amount: cents2(reservation.payment.amount),
+        currency: String(reservation.order.currencyCode || "USD").toLowerCase(),
+        idempotencyKey: reservation.payment.idempotencyKey || args.idempotencyKey
+      });
+      const providerPaymentId = providerResult?.paymentIntentId || providerResult?.orderId || providerResult?.paymentId || null;
+      const status = providerResult?.status === "succeeded" ? "succeeded" : providerResult?.status === "requires_capture" ? "authorized" : "processing";
+      const data = { ...providerResult, providerCode };
+      await prisma.$transaction(async (tx) => {
+        const updated = await tx.payment.update({
+          where: { id: reservation.payment.id },
+          data: {
+            providerPaymentId: providerPaymentId || "",
+            data,
+            status,
+            processedAt: status === "succeeded" ? /* @__PURE__ */ new Date() : void 0
+          }
+        });
+        if (status === "succeeded") {
+          await writeSaleEvidence(tx, context.session?.itemId, { ...reservation, payment: updated });
+          if (reservation.remainingBalance === 0) {
+            await finalizePaidOrderWithClient(tx, reservation.order.id, context.session?.itemId);
+          }
+        }
+      }, { isolationLevel: "Serializable" });
+      if (status === "succeeded" && reservation.remainingBalance === 0) {
+        await reconcileCompletedOrderOperations(reservation.order.id, context);
+      }
+      await updateIdempotencyAttempt(prisma, attempt.id, "completed", {
+        paymentId: reservation.payment.id,
+        orderId: reservation.order.id,
+        providerPaymentId,
+        status
+      }, 200);
+      return {
+        success: true,
+        paymentId: reservation.payment.id,
+        clientSecret: providerResult?.clientSecret || null,
+        amount: cents2(reservation.payment.amount),
+        remainingBalance: reservation.remainingBalance,
+        error: null
+      };
+    } catch (error) {
+      await context.sudo().db.Payment.updateOne({
+        where: { id: reservation.payment.id },
+        data: { status: "failed", errorMessage: error instanceof Error ? error.message : "Provider initiation failed" }
+      });
+      await updateIdempotencyAttempt(prisma, attempt.id, "failed", {
+        paymentId: reservation.payment.id,
+        error: error instanceof Error ? error.message : "Provider initiation failed"
+      }, 502);
+      throw error;
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    return { success: false, paymentId: null, clientSecret: null, amount: null, remainingBalance: null, error: message };
+  }
+}
+async function capturePaymentMutation(_root, args, context) {
+  if (!permissions.canManagePayments({ session: context.session })) {
+    return { success: false, status: null, error: "Not authorized to capture payment" };
+  }
+  try {
+    const payments = await context.sudo().query.Payment.findMany({
+      where: { providerPaymentId: { equals: args.paymentIntentId } },
+      query: "id idempotencyKey amount status paymentMethod currencyCode providerPaymentId data order { id orderNumber total currencyCode status } paymentProvider { id code isInstalled createPaymentFunction capturePaymentFunction refundPaymentFunction getPaymentStatusFunction generatePaymentLinkFunction handleWebhookFunction credentials metadata }",
+      take: 1
+    });
+    const payment = payments[0];
+    if (!payment) throw new Error("Payment not found");
+    if (payment.status === "succeeded") return { success: true, status: "succeeded", error: null };
+    if (!payment.paymentProvider) throw new Error("Payment provider is missing");
+    const captured = await capturePayment({
+      provider: payment.paymentProvider,
+      paymentId: payment.providerPaymentId || args.paymentIntentId,
+      amount: cents2(payment.amount)
+    });
+    const didSucceed = ["succeeded", "captured"].includes(captured.status);
+    const nextStatus = didSucceed ? "succeeded" : captured.status === "failed" ? "failed" : "unknown";
+    const prisma = context.prisma;
+    await prisma.$transaction(async (tx) => {
+      const updated = await tx.payment.update({
+        where: { id: payment.id },
+        data: {
+          status: nextStatus,
+          processedAt: didSucceed ? /* @__PURE__ */ new Date() : void 0,
+          data: { ...payment.data || {}, capture: captured.data || captured }
+        }
+      });
+      if (didSucceed && payment.order?.id) {
+        const order = await tx.restaurantOrder.findUnique({ where: { id: payment.order.id } });
+        const succeeded = await tx.payment.findMany({ where: { orderId: order.id, status: "succeeded" } });
+        const paid = succeeded.reduce((sum, row) => sum + cents2(row.amount), 0);
+        const remainingBalance = Math.max(0, cents2(order.total) - paid);
+        await writeSaleEvidence(tx, context.session?.itemId, { payment: updated, order, remainingBalance });
+        if (remainingBalance === 0) await finalizePaidOrderWithClient(tx, order.id, context.session?.itemId);
+      }
+    }, { isolationLevel: "Serializable" });
+    if (didSucceed && payment.order?.id) await reconcileCompletedOrderOperations(payment.order.id, context);
+    return { success: didSucceed, status: nextStatus, error: didSucceed ? null : "Capture outcome is not final" };
+  } catch (error) {
+    return { success: false, status: null, error: error instanceof Error ? error.message : "Unknown error" };
+  }
+}
+async function reconcilePaymentMutation(_root, { paymentId }, context) {
+  if (!permissions.canManagePayments({ session: context.session })) {
+    return { success: false, status: null, error: "Not authorized to reconcile payment" };
+  }
+  try {
+    const payment = await context.sudo().query.Payment.findOne({
+      where: { id: paymentId },
+      query: "id idempotencyKey amount status paymentMethod currencyCode providerPaymentId data order { id orderNumber total currencyCode status } paymentProvider { id code isInstalled createPaymentFunction capturePaymentFunction refundPaymentFunction getPaymentStatusFunction generatePaymentLinkFunction handleWebhookFunction credentials metadata }"
+    });
+    if (!payment) throw new Error("Payment not found");
+    if (payment.status === "succeeded") return { success: true, status: "succeeded", error: null };
+    if (!payment.paymentProvider || !payment.providerPaymentId) throw new Error("Provider payment reference is missing");
+    const providerStatus = await getPaymentStatus({
+      provider: payment.paymentProvider,
+      paymentId: payment.providerPaymentId
+    });
+    const succeeded = providerStatus.status === "succeeded";
+    const status = succeeded ? "succeeded" : ["failed", "canceled", "cancelled"].includes(providerStatus.status) ? providerStatus.status === "failed" ? "failed" : "cancelled" : "processing";
+    const prisma = context.prisma;
+    await prisma.$transaction(async (tx) => {
+      const updated = await tx.payment.update({
+        where: { id: payment.id },
+        data: {
+          status,
+          processedAt: succeeded ? /* @__PURE__ */ new Date() : void 0,
+          data: { ...payment.data || {}, reconciliation: providerStatus.data || providerStatus }
+        }
+      });
+      if (succeeded && payment.order?.id) {
+        const order = await tx.restaurantOrder.findUnique({ where: { id: payment.order.id } });
+        const paidRows = await tx.payment.findMany({ where: { orderId: order.id, status: "succeeded" } });
+        const paid = paidRows.reduce((sum, row) => sum + cents2(row.amount), 0);
+        const remainingBalance = Math.max(0, cents2(order.total) - paid);
+        await writeSaleEvidence(tx, context.session?.itemId, { payment: updated, order, remainingBalance });
+        if (remainingBalance === 0) await finalizePaidOrderWithClient(tx, order.id, context.session?.itemId);
+      }
+    }, { isolationLevel: "Serializable" });
+    if (succeeded && payment.order?.id) await reconcileCompletedOrderOperations(payment.order.id, context);
+    return { success: succeeded, status, error: succeeded ? null : "Provider payment is not yet successful" };
+  } catch (error) {
+    return { success: false, status: null, error: error instanceof Error ? error.message : "Unknown error" };
+  }
+}
+async function getPaymentStatus2(_root, args, context) {
+  if (!(permissions.canReadPayments({ session: context.session }) || permissions.canManagePayments({ session: context.session }))) {
+    return { status: null, amount: null, error: "Not authorized to check payment status" };
+  }
+  try {
+    const payments = await context.sudo().query.Payment.findMany({
+      where: { providerPaymentId: { equals: args.paymentIntentId } },
+      query: "id amount status providerPaymentId paymentProvider { id code isInstalled createPaymentFunction capturePaymentFunction refundPaymentFunction getPaymentStatusFunction generatePaymentLinkFunction handleWebhookFunction credentials metadata }",
+      take: 1
+    });
+    const payment = payments[0];
+    if (!payment) throw new Error("Payment not found");
+    if (!payment.paymentProvider || ["cash", "gift_card"].includes(payment.paymentMethod || "")) {
+      return { status: payment.status, amount: cents2(payment.amount), error: null };
+    }
+    const status = await getPaymentStatus({
+      provider: payment.paymentProvider,
+      paymentId: payment.providerPaymentId || args.paymentIntentId
+    });
+    return { status: status.status, amount: status.amount ?? cents2(payment.amount), error: null };
+  } catch (error) {
+    return { status: null, amount: null, error: error instanceof Error ? error.message : "Unknown error" };
+  }
+}
+
+// features/keystone/mutations/redeemGiftCard.ts
+function cents3(value) {
+  const number = Number(value || 0);
+  return Number.isFinite(number) ? Math.max(0, Math.round(number)) : 0;
+}
+async function lookupGiftCard(_root, { code }, context) {
+  if (!permissions.canManagePayments({ session: context.session })) {
+    throw new Error("Not authorized to use gift-card tenders");
+  }
+  const normalized = code?.trim().toUpperCase();
+  if (!normalized) throw new Error("Gift card code is required");
+  const cards = await context.sudo().query.GiftCard.findMany({
+    where: { code: { equals: normalized }, isDisabled: { equals: false } },
+    query: "id code balance endsAt",
+    take: 1
+  });
+  const card = cards[0];
+  if (!card || card.endsAt && new Date(card.endsAt) <= /* @__PURE__ */ new Date()) return null;
+  return card;
+}
+async function redeemGiftCard(_root, args, context) {
+  if (!permissions.canManagePayments({ session: context.session })) {
+    return { success: false, paymentId: null, amount: 0, remainingBalance: 0, error: "Not authorized" };
+  }
+  try {
+    if (!args.idempotencyKey?.trim()) throw new Error("Idempotency key is required");
+    const code = args.code?.trim().toUpperCase();
+    if (!code) throw new Error("Gift card code is required");
+    const prisma = context.prisma;
+    const priorTransaction = await prisma.giftCardTransaction.findUnique({
+      where: { idempotencyKey: args.idempotencyKey }
+    });
+    if (priorTransaction) {
+      const [priorPayment, priorCard] = await Promise.all([
+        prisma.payment.findUnique({ where: { idempotencyKey: args.idempotencyKey } }),
+        priorTransaction.giftCardId ? prisma.giftCard.findUnique({ where: { id: priorTransaction.giftCardId } }) : null
+      ]);
+      if (priorTransaction.orderId !== args.orderId || priorPayment?.orderId !== args.orderId || priorCard?.code !== code) {
+        throw new Error("Idempotency key was already used with a different gift-card request");
+      }
+    }
+    const { attempt } = await getOrCreateIdempotencyAttempt(prisma, {
+      key: `gift-card-redemption:${args.idempotencyKey.trim()}`,
+      requestPath: "redeemGiftCard",
+      requestParams: {
+        orderId: args.orderId,
+        code,
+        tipAmount: args.tipAmount ?? 0
       }
     });
-    if (paymentStatus === "succeeded") {
-      await maybeCompleteOrder(orderId, context);
-    }
+    const result2 = await prisma.$transaction(async (tx) => {
+      const existingTransaction = await tx.giftCardTransaction.findUnique({
+        where: { idempotencyKey: args.idempotencyKey }
+      });
+      if (existingTransaction) {
+        const existingPayment = await tx.payment.findUnique({ where: { idempotencyKey: args.idempotencyKey } });
+        const existingCard = existingTransaction.giftCardId ? await tx.giftCard.findUnique({ where: { id: existingTransaction.giftCardId } }) : null;
+        if (existingTransaction.orderId !== args.orderId || existingPayment?.orderId !== args.orderId || existingCard?.code !== code) {
+          throw new Error("Idempotency key was already used with a different gift-card request");
+        }
+        const order2 = await tx.restaurantOrder.findUnique({ where: { id: args.orderId } });
+        const payments = await tx.payment.findMany({ where: { orderId: args.orderId, status: "succeeded" } });
+        const paid = payments.reduce((sum, payment2) => sum + cents3(payment2.amount), 0);
+        return {
+          payment: existingPayment,
+          order: order2,
+          amount: Math.abs(cents3(existingTransaction.amount)),
+          remainingBalance: Math.max(0, cents3(order2?.total) - paid),
+          replay: true
+        };
+      }
+      const order = await tx.restaurantOrder.findUnique({ where: { id: args.orderId } });
+      if (!order) throw new Error("Order not found");
+      if (["completed", "cancelled"].includes(order.status || "")) throw new Error("Order cannot accept another tender");
+      const desiredTip = Math.max(cents3(order.tip), cents3(args.tipAmount));
+      const orderTotal = Math.max(0, cents3(order.total) - cents3(order.tip) + desiredTip);
+      const reservedPayments = await tx.payment.findMany({
+        where: { orderId: args.orderId, status: { in: ["processing", "authorized", "succeeded"] } }
+      });
+      const reserved = reservedPayments.reduce((sum, payment2) => sum + cents3(payment2.amount), 0);
+      const remaining = orderTotal - reserved;
+      if (remaining <= 0) throw new Error("Order has no remaining balance");
+      const giftCard = await tx.giftCard.findUnique({ where: { code } });
+      if (!giftCard || giftCard.isDisabled) throw new Error("Gift card not found or disabled");
+      if (giftCard.endsAt && new Date(giftCard.endsAt) <= /* @__PURE__ */ new Date()) throw new Error("Gift card has expired");
+      const amount = Math.min(cents3(giftCard.balance), remaining);
+      if (amount <= 0) throw new Error("Gift card has no available balance");
+      const balanceAfter = cents3(giftCard.balance) - amount;
+      await tx.giftCard.update({ where: { id: giftCard.id }, data: { balance: balanceAfter } });
+      const payment = await tx.payment.create({
+        data: {
+          idempotencyKey: args.idempotencyKey,
+          reservedAt: /* @__PURE__ */ new Date(),
+          amount,
+          currencyCode: order.currencyCode || "USD",
+          status: "succeeded",
+          paymentMethod: "gift_card",
+          tipAmount: desiredTip,
+          processedAt: /* @__PURE__ */ new Date(),
+          orderId: order.id,
+          processedById: context.session?.itemId || null,
+          data: { giftCardId: giftCard.id }
+        }
+      });
+      await tx.giftCardTransaction.create({
+        data: {
+          idempotencyKey: args.idempotencyKey,
+          type: "redeem",
+          amount: -amount,
+          balanceAfter,
+          giftCardId: giftCard.id,
+          orderId: order.id
+        }
+      });
+      const updatedOrder = await tx.restaurantOrder.update({
+        where: { id: order.id },
+        data: {
+          tip: desiredTip,
+          total: orderTotal,
+          status: order.status
+        }
+      });
+      const remainingBalance = remaining - amount;
+      await appendAuditEventWithClient(tx, context.session?.itemId, {
+        eventKey: `gift-card-redeemed:${payment.id}`,
+        eventType: "gift_card.redeemed",
+        entityType: "Payment",
+        entityId: payment.id,
+        after: { amount, remainingBalance },
+        metadata: { idempotencyKey: args.idempotencyKey }
+      });
+      await issueReceiptWithClient(tx, context.session?.itemId, {
+        kind: "sale",
+        entityId: payment.id,
+        orderId: order.id,
+        paymentId: payment.id,
+        amount,
+        currencyCode: order.currencyCode || "USD",
+        snapshot: { orderId: order.id, tender: "gift_card", amount, remainingBalance }
+      });
+      if (remainingBalance === 0) {
+        await finalizePaidOrderWithClient(tx, order.id, context.session?.itemId);
+      }
+      return { payment, order: updatedOrder, amount, remainingBalance, replay: false };
+    }, { isolationLevel: "Serializable" });
+    if (result2.remainingBalance === 0) await reconcileCompletedOrderOperations(args.orderId, context);
+    await updateIdempotencyAttempt(prisma, attempt.id, "completed", {
+      paymentId: result2.payment?.id || null,
+      orderId: args.orderId,
+      amount: result2.amount,
+      remainingBalance: result2.remainingBalance
+    }, 200);
     return {
       success: true,
-      paymentId: payment.id,
-      clientSecret,
+      paymentId: result2.payment?.id || null,
+      amount: result2.amount,
+      remainingBalance: result2.remainingBalance,
       error: null
     };
-  } catch (err) {
-    const errorMessage = err instanceof Error ? err.message : "Unknown error";
-    console.error(`Error processing payment: ${errorMessage}`);
+  } catch (error) {
     return {
       success: false,
       paymentId: null,
-      clientSecret: null,
-      error: errorMessage
+      amount: 0,
+      remainingBalance: 0,
+      error: error instanceof Error ? error.message : "Unknown error"
     };
   }
 }
-async function capturePaymentMutation(root, args, context) {
-  if (!permissions.canManagePayments({ session: context.session })) {
-    return {
-      success: false,
-      status: null,
-      error: "Not authorized to capture payment"
-    };
+
+// features/keystone/utils/managerApproval.ts
+function normalizedRequest(input) {
+  return canonicalIdempotencyParams({
+    actionType: input.actionType,
+    targetId: input.targetId,
+    reason: input.reason.trim(),
+    amount: input.amount ?? null
+  });
+}
+function canApproveAction(context, actionType) {
+  return actionType === "refund_payment" ? permissions.canManagePayments({ session: context.session }) : permissions.canManageOrders({ session: context.session });
+}
+async function requestManagerApproval(_root, input, context) {
+  const requesterId = context.session?.itemId;
+  if (!requesterId || !canApproveAction(context, input.actionType)) {
+    throw new Error("Not authorized to request this manager approval");
   }
-  const { paymentIntentId } = args;
-  try {
-    const sudoContext = context.sudo();
-    const payments = await sudoContext.query.Payment.findMany({
-      where: {
-        providerPaymentId: { equals: paymentIntentId }
-      },
-      query: "id providerPaymentId data order { id } paymentProvider { id code isInstalled createPaymentFunction capturePaymentFunction refundPaymentFunction getPaymentStatusFunction generatePaymentLinkFunction handleWebhookFunction credentials metadata }"
-    });
-    const payment = payments[0];
-    if (!payment) {
-      return {
-        success: false,
-        status: null,
-        error: "Payment not found"
-      };
+  if (!input.targetId?.trim()) throw new Error("Approval target is required");
+  if (!input.reason?.trim()) throw new Error("Approval reason is required");
+  const requestPayload = normalizedRequest(input);
+  return context.prisma.managerApproval.create({
+    data: {
+      actionType: input.actionType,
+      targetId: input.targetId.trim(),
+      reason: input.reason.trim(),
+      amount: input.amount ?? null,
+      requestPayload,
+      requestFingerprint: idempotencyFingerprint(requestPayload),
+      status: "pending",
+      requestedById: requesterId,
+      expiresAt: new Date(Date.now() + 15 * 60 * 1e3)
     }
-    const provider = payment.paymentProvider;
-    const capturedPayment = provider ? await capturePayment2({
-      provider,
-      paymentId: payment.providerPaymentId || paymentIntentId,
-      amount: args.amount ?? void 0
-    }) : await capturePayment(paymentIntentId);
-    const didSucceed = ["succeeded", "captured"].includes(capturedPayment.status);
-    await context.db.Payment.updateOne({
-      where: { id: payment.id },
-      data: {
-        status: didSucceed ? "succeeded" : "processing",
-        processedAt: didSucceed ? (/* @__PURE__ */ new Date()).toISOString() : void 0
+  });
+}
+async function approveManagerApproval(_root, { approvalId }, context) {
+  const approverId = context.session?.itemId;
+  if (!approverId) throw new Error("Not authorized to approve manager actions");
+  const prisma = context.prisma;
+  const outcome = await prisma.$transaction(async (tx) => {
+    const approval = await tx.managerApproval.findUnique({ where: { id: approvalId } });
+    if (!approval) throw new Error("Manager approval request not found");
+    if (!canApproveAction(context, approval.actionType)) {
+      throw new Error("Not authorized to approve this manager action");
+    }
+    if (approval.requestedById === approverId) {
+      throw new Error("A manager cannot approve their own correction request");
+    }
+    if (approval.status !== "pending") throw new Error(`Manager approval is already ${approval.status}`);
+    if (new Date(approval.expiresAt) <= /* @__PURE__ */ new Date()) {
+      const expired = await tx.managerApproval.update({ where: { id: approval.id }, data: { status: "expired" } });
+      return { expired };
+    }
+    const updated = await tx.managerApproval.updateMany({
+      where: { id: approval.id, status: "pending", requestedById: { not: approverId } },
+      data: { status: "approved", approvedById: approverId, approvedAt: /* @__PURE__ */ new Date() }
+    });
+    if (updated.count !== 1) throw new Error("Manager approval changed concurrently");
+    return { approval: await tx.managerApproval.findUnique({ where: { id: approval.id } }) };
+  }, { isolationLevel: "Serializable" });
+  if (outcome.expired) throw new Error("Manager approval request has expired");
+  return outcome.approval;
+}
+async function consumeManagerApproval(tx, input) {
+  if (!input.approvalId) throw new Error("Independent manager approval is required");
+  if (!input.actorId) throw new Error("Authenticated correction actor is required");
+  const approval = await tx.managerApproval.findUnique({ where: { id: input.approvalId } });
+  if (!approval) throw new Error("Manager approval request not found");
+  const requestPayload = normalizedRequest(input);
+  if (approval.requestFingerprint !== idempotencyFingerprint(approval.requestPayload || {}) || approval.requestFingerprint !== idempotencyFingerprint(requestPayload) || approval.requestedById !== input.actorId) {
+    throw new Error("Manager approval does not match this correction request");
+  }
+  if (!approval.approvedById || approval.approvedById === input.actorId) {
+    throw new Error("Correction requires approval by a different manager");
+  }
+  if (approval.status !== "approved") throw new Error(`Manager approval is ${approval.status}`);
+  if (new Date(approval.expiresAt) <= /* @__PURE__ */ new Date()) throw new Error("Manager approval has expired");
+  const consumed = await tx.managerApproval.updateMany({
+    where: {
+      id: approval.id,
+      status: "approved",
+      requestedById: input.actorId,
+      approvedById: { not: input.actorId },
+      expiresAt: { gt: /* @__PURE__ */ new Date() }
+    },
+    data: {
+      status: "consumed",
+      consumedAt: /* @__PURE__ */ new Date(),
+      consumedEntityType: input.entityType,
+      consumedEntityId: input.entityId
+    }
+  });
+  if (consumed.count !== 1) throw new Error("Manager approval was already consumed or expired");
+  return approval;
+}
+
+// features/keystone/mutations/refundPayment.ts
+function cents4(value) {
+  const number = Number(value || 0);
+  return Number.isFinite(number) ? Math.max(0, Math.round(number)) : 0;
+}
+async function refundPayment2(_root, args, context) {
+  if (!permissions.canManagePayments({ session: context.session })) {
+    return { success: false, refundId: null, status: null, error: "Not authorized to approve refunds" };
+  }
+  try {
+    if (!args.managerApprovalId) throw new Error("Independent manager approval is required");
+    if (!args.reason?.trim()) throw new Error("Refund reason is required");
+    if (!args.idempotencyKey?.trim()) throw new Error("Idempotency key is required");
+    const prisma = context.prisma;
+    const priorRefund = await prisma.refund.findUnique({ where: { idempotencyKey: args.idempotencyKey } });
+    if (priorRefund) {
+      const requestedAmount = args.amount == null ? null : cents4(args.amount);
+      if (priorRefund.paymentId !== args.paymentId || priorRefund.reason !== args.reason.trim() || requestedAmount !== null && cents4(priorRefund.amount) !== requestedAmount) {
+        throw new Error("Idempotency key was already used with a different refund request");
+      }
+    }
+    const { attempt } = await getOrCreateIdempotencyAttempt(prisma, {
+      key: `refund:${args.idempotencyKey.trim()}`,
+      requestPath: "refundPayment",
+      requestParams: {
+        paymentId: args.paymentId,
+        amount: args.amount ?? null,
+        reason: args.reason.trim(),
+        managerApprovalId: args.managerApprovalId
       }
     });
-    if (didSucceed && payment.order?.id) {
-      await maybeCompleteOrder(payment.order.id, context);
-    }
-    return {
-      success: true,
-      status: didSucceed ? "succeeded" : capturedPayment.status,
-      error: null
-    };
-  } catch (err) {
-    const errorMessage = err instanceof Error ? err.message : "Unknown error";
-    console.error(`Error capturing payment: ${errorMessage}`);
-    return {
-      success: false,
-      status: null,
-      error: errorMessage
-    };
-  }
-}
-async function getPaymentStatus2(root, args, context) {
-  if (!(permissions.canReadPayments({ session: context.session }) || permissions.canManagePayments({ session: context.session }))) {
-    return {
-      status: null,
-      amount: null,
-      error: "Not authorized to check payment status"
-    };
-  }
-  try {
-    const sudoContext = context.sudo();
-    const payments = await sudoContext.query.Payment.findMany({
-      where: {
-        providerPaymentId: { equals: args.paymentIntentId }
-      },
-      query: "id providerPaymentId data paymentProvider { id code isInstalled createPaymentFunction capturePaymentFunction refundPaymentFunction getPaymentStatusFunction generatePaymentLinkFunction handleWebhookFunction credentials metadata }"
-    });
-    const payment = payments[0];
-    if (!payment) {
+    const reservation = await prisma.$transaction(async (tx) => {
+      const existing = await tx.refund.findUnique({ where: { idempotencyKey: args.idempotencyKey } });
+      if (existing) {
+        const requestedAmount = args.amount == null ? null : cents4(args.amount);
+        if (existing.paymentId !== args.paymentId || existing.reason !== args.reason.trim() || requestedAmount !== null && cents4(existing.amount) !== requestedAmount) {
+          throw new Error("Idempotency key was already used with a different refund request");
+        }
+        return { refund: existing, replay: true };
+      }
+      const payment2 = await tx.payment.findUnique({ where: { id: args.paymentId } });
+      if (!payment2 || !["succeeded", "partially_refunded"].includes(payment2.status)) {
+        throw new Error("Only a successful payment can be refunded");
+      }
+      const pendingRefunds = await tx.refund.findMany({
+        where: { paymentId: payment2.id, status: { in: ["processing", "succeeded", "unknown"] } }
+      });
+      const reserved = pendingRefunds.reduce((sum, refund2) => sum + cents4(refund2.amount), 0);
+      const available = cents4(payment2.amount) - reserved;
+      const amount = args.amount == null ? available : cents4(args.amount);
+      if (amount <= 0 || amount > available) throw new Error("Refund amount exceeds the unrefunded payment balance");
+      const refund = await tx.refund.create({
+        data: {
+          idempotencyKey: args.idempotencyKey,
+          amount,
+          currencyCode: payment2.currencyCode || "USD",
+          status: "processing",
+          reason: args.reason.trim(),
+          paymentId: payment2.id,
+          orderId: payment2.orderId,
+          requestedById: context.session?.itemId || null,
+          approvedById: null
+        }
+      });
+      const approval = await consumeManagerApproval(tx, {
+        approvalId: args.managerApprovalId,
+        actorId: context.session?.itemId,
+        actionType: "refund_payment",
+        targetId: args.paymentId,
+        reason: args.reason,
+        amount: args.amount ?? null,
+        entityType: "Refund",
+        entityId: refund.id
+      });
+      const approvedRefund = await tx.refund.update({
+        where: { id: refund.id },
+        data: { approvedById: approval.approvedById }
+      });
+      return { refund: approvedRefund, payment: payment2, replay: false };
+    }, { isolationLevel: "Serializable" });
+    if (reservation.replay && ["succeeded", "failed"].includes(reservation.refund.status)) {
+      await updateIdempotencyAttempt(
+        prisma,
+        attempt.id,
+        reservation.refund.status === "succeeded" ? "completed" : "failed",
+        { refundId: reservation.refund.id, status: reservation.refund.status },
+        reservation.refund.status === "succeeded" ? 200 : 422
+      );
       return {
-        status: null,
-        amount: null,
-        error: "Payment not found"
+        success: reservation.refund.status === "succeeded",
+        refundId: reservation.refund.id,
+        status: reservation.refund.status,
+        error: reservation.refund.status === "failed" ? "Previous refund attempt failed; use a new approved idempotency key to retry" : null
       };
     }
-    const provider = payment.paymentProvider;
-    const paymentStatus = provider ? await getPaymentStatus({
-      provider,
-      paymentId: payment.providerPaymentId || args.paymentIntentId
-    }) : await getPaymentIntent(args.paymentIntentId);
-    return {
-      status: paymentStatus.status,
-      amount: paymentStatus.amount ?? null,
-      error: null
-    };
-  } catch (err) {
-    const errorMessage = err instanceof Error ? err.message : "Unknown error";
-    return {
-      status: null,
-      amount: null,
-      error: errorMessage
-    };
+    const payment = await context.sudo().query.Payment.findOne({
+      where: { id: args.paymentId },
+      query: "id amount refundedAmount currencyCode paymentMethod providerPaymentId data order { id orderNumber } paymentProvider { id code isInstalled createPaymentFunction capturePaymentFunction refundPaymentFunction getPaymentStatusFunction generatePaymentLinkFunction handleWebhookFunction credentials metadata }"
+    });
+    if (!payment?.order?.id) throw new Error("Payment order is missing");
+    const providerReference = payment.data?.captureId || payment.data?.chargeId || payment.providerPaymentId;
+    let providerResult = { status: "succeeded", amount: reservation.refund.amount };
+    if (!["cash", "gift_card"].includes(payment.paymentMethod || "")) {
+      if (!payment.paymentProvider || !providerReference) throw new Error("Provider refund reference is missing");
+      providerResult = await refundPayment({
+        provider: payment.paymentProvider,
+        paymentId: providerReference,
+        amount: reservation.refund.amount,
+        currency: payment.currencyCode || "USD",
+        idempotencyKey: args.idempotencyKey
+      });
+    }
+    const succeeded = ["succeeded", "refunded", "completed", "COMPLETED"].includes(providerResult.status);
+    const finalStatus = succeeded ? "succeeded" : providerResult.status === "failed" ? "failed" : "unknown";
+    const isLocalTender = ["cash", "gift_card"].includes(payment.paymentMethod || "");
+    const providerRefundId = providerResult.id || providerResult.refundId || providerResult.data?.id || providerResult.data?.refundId || (isLocalTender ? `local:${reservation.refund.id}` : null);
+    if (succeeded && !providerRefundId) {
+      throw new Error("Provider reported a successful refund without a refund reference");
+    }
+    const final = await prisma.$transaction(async (tx) => {
+      const refund = await tx.refund.update({
+        where: { id: reservation.refund.id },
+        data: {
+          status: finalStatus,
+          providerRefundId: providerRefundId || "",
+          providerData: providerResult.data || providerResult,
+          processedAt: succeeded ? /* @__PURE__ */ new Date() : null
+        }
+      });
+      if (succeeded) {
+        if (payment.paymentMethod === "gift_card") {
+          const giftCardId = payment.data?.giftCardId;
+          if (!giftCardId) throw new Error("Gift card reference is missing from the original tender");
+          const giftCard = await tx.giftCard.findUnique({ where: { id: giftCardId } });
+          if (!giftCard) throw new Error("Gift card not found");
+          const balanceAfter = cents4(giftCard.balance) + cents4(refund.amount);
+          await tx.giftCard.update({ where: { id: giftCard.id }, data: { balance: balanceAfter } });
+          await tx.giftCardTransaction.create({
+            data: {
+              idempotencyKey: `refund:${args.idempotencyKey}`,
+              type: "refund",
+              amount: cents4(refund.amount),
+              balanceAfter,
+              giftCardId: giftCard.id,
+              orderId: payment.order.id
+            }
+          });
+        }
+        const nextRefunded = cents4(payment.refundedAmount) + cents4(refund.amount);
+        await tx.payment.update({
+          where: { id: payment.id },
+          data: {
+            refundedAmount: nextRefunded,
+            status: nextRefunded >= cents4(payment.amount) ? "refunded" : "partially_refunded"
+          }
+        });
+        await appendAuditEventWithClient(tx, context.session?.itemId, {
+          eventKey: `payment-refunded:${refund.id}`,
+          eventType: "payment.refunded",
+          entityType: "Refund",
+          entityId: refund.id,
+          reason: args.reason,
+          after: { amount: refund.amount, paymentId: payment.id },
+          approverId: reservation.refund.approvedById,
+          metadata: { idempotencyKey: args.idempotencyKey, managerApprovalId: args.managerApprovalId }
+        });
+        await issueReceiptWithClient(tx, context.session?.itemId, {
+          kind: "refund",
+          entityId: refund.id,
+          orderId: payment.order.id,
+          paymentId: payment.id,
+          refundId: refund.id,
+          amount: -cents4(refund.amount),
+          currencyCode: payment.currencyCode || "USD",
+          snapshot: {
+            orderNumber: payment.order.orderNumber,
+            originalPaymentId: payment.id,
+            refundAmount: cents4(refund.amount),
+            reason: args.reason,
+            providerRefundId: refund.providerRefundId,
+            managerApprovalId: args.managerApprovalId
+          }
+        });
+      }
+      return refund;
+    }, { isolationLevel: "Serializable" });
+    await updateIdempotencyAttempt(
+      prisma,
+      attempt.id,
+      succeeded ? "completed" : finalStatus === "failed" ? "failed" : "provider_pending",
+      { refundId: final.id, status: final.status, providerRefundId: final.providerRefundId },
+      succeeded ? 200 : finalStatus === "failed" ? 422 : 202
+    );
+    return { success: succeeded, refundId: final.id, status: final.status, error: succeeded ? null : "Refund provider outcome is not final" };
+  } catch (error) {
+    return { success: false, refundId: null, status: null, error: error instanceof Error ? error.message : "Unknown error" };
   }
 }
+
+// features/keystone/mutations/splitCheck.ts
+var import_crypto3 = __toESM(require("crypto"));
 
 // features/lib/restaurant-order-pricing.ts
 var NO_DIVISION_CURRENCIES2 = [
@@ -4988,462 +6493,399 @@ function normalizeDeliveryFields(data) {
   return next;
 }
 
+// features/keystone/utils/orderItemFinancials.ts
+function getOrderItemOriginalTotal(item) {
+  return Math.max(0, Math.round(Number(item.price || 0))) * Math.max(0, Math.round(Number(item.quantity || 0)));
+}
+function getOrderItemEffectiveTotal(item) {
+  if (item.isVoided) return 0;
+  return Math.max(0, getOrderItemOriginalTotal(item) - Math.max(0, Math.round(Number(item.adjustmentTotal || 0))));
+}
+function getOrderItemsSubtotal(items) {
+  return items.reduce((sum, item) => sum + getOrderItemEffectiveTotal(item), 0);
+}
+
 // features/keystone/mutations/splitCheck.ts
-function cents2(value) {
-  const n = Number(value || 0);
-  return Number.isFinite(n) ? Math.round(n) : 0;
+function splitKey(orderId, itemIds) {
+  return import_crypto3.default.createHash("sha256").update(`split:${orderId}:${[...itemIds].sort().join(":")}`).digest("hex");
 }
-async function calculateTotalsFromItems(items, orderType, context) {
-  const settings = await getStoreDeliverySettings(context);
-  const subtotal = items.reduce((sum, item) => {
-    return sum + cents2(item.price) * (item.quantity || 0);
-  }, 0);
-  const { tax, total } = calculateRestaurantTotals({
-    subtotal,
-    orderType,
-    taxRate: settings?.taxRate,
-    currencyCode: settings?.currencyCode || "USD"
-  });
-  return { subtotal, tax, total };
+function buildSplitOrderNumber() {
+  return `SPL-${Date.now().toString(36).toUpperCase()}-${import_crypto3.default.randomBytes(3).toString("hex").toUpperCase()}`;
 }
-function buildSplitOrderNumber(suffix) {
-  const now = /* @__PURE__ */ new Date();
-  const datePart = now.toISOString().slice(2, 10).replace(/-/g, "");
-  const timePart = now.getTime().toString().slice(-4);
-  return `${datePart}-${timePart}-${suffix}`;
-}
-async function splitCheckByItem(root, args, context) {
+async function splitCheckByItem(_root, args, context) {
   if (!permissions.canManageOrders({ session: context.session })) {
-    return {
-      success: false,
-      newOrderIds: [],
-      error: "Not authorized to split check"
-    };
-  }
-  const { orderId, itemIds } = args;
-  if (!itemIds || itemIds.length === 0) {
-    return {
-      success: false,
-      newOrderIds: [],
-      error: "Must select at least one item to split"
-    };
+    return { success: false, newOrderIds: [], error: "Not authorized to split check" };
   }
   try {
-    const originalOrder = await context.query.RestaurantOrder.findOne({
-      where: { id: orderId },
-      query: "id orderNumber orderType orderSource status specialInstructions server { id } tables { id }"
-    });
-    if (!originalOrder) {
-      return {
-        success: false,
-        newOrderIds: [],
-        error: "Order not found"
-      };
-    }
-    const itemsToMove = await context.query.OrderItem.findMany({
-      where: {
-        id: { in: itemIds },
-        order: { id: { equals: orderId } }
-      },
-      query: "id quantity price"
-    });
-    if (itemsToMove.length === 0) {
-      return {
-        success: false,
-        newOrderIds: [],
-        error: "No valid items found to split"
-      };
-    }
-    const newTotals = await calculateTotalsFromItems(itemsToMove, originalOrder.orderType, context);
-    const newOrder = await context.db.RestaurantOrder.createOne({
-      data: {
-        orderNumber: buildSplitOrderNumber("S"),
-        orderType: originalOrder.orderType || "dine_in",
-        orderSource: originalOrder.orderSource || "pos",
-        status: originalOrder.status || "open",
-        guestCount: 1,
-        subtotal: newTotals.subtotal,
-        tax: newTotals.tax,
-        total: newTotals.total,
-        specialInstructions: originalOrder.specialInstructions ? `${originalOrder.specialInstructions} | Split from ${originalOrder.orderNumber}` : `Split from ${originalOrder.orderNumber}`,
-        tables: (originalOrder.tables || []).length ? { connect: (originalOrder.tables || []).map((t) => ({ id: t.id })) } : void 0,
-        server: originalOrder.server?.id ? { connect: { id: originalOrder.server.id } } : void 0
+    const itemIds = Array.from(new Set(args.itemIds || []));
+    if (!itemIds.length) throw new Error("Must select at least one item to split");
+    const settings = await getStoreDeliverySettings(context);
+    const key = splitKey(args.orderId, itemIds);
+    const prisma = context.prisma;
+    const result2 = await prisma.$transaction(async (tx) => {
+      const existing = await tx.orderAdjustment.findUnique({ where: { idempotencyKey: key } });
+      if (existing?.metadata?.newOrderId) {
+        return { originalOrderId: args.orderId, newOrderId: existing.metadata.newOrderId, replay: true };
       }
-    });
-    for (const item of itemsToMove) {
-      await context.db.OrderItem.updateOne({
-        where: { id: item.id },
-        data: {
-          order: { connect: { id: newOrder.id } }
-        }
+      const order = await tx.restaurantOrder.findUnique({
+        where: { id: args.orderId },
+        include: { tables: true, orderItems: true }
       });
-    }
-    const remainingItems = await context.query.OrderItem.findMany({
-      where: {
-        order: { id: { equals: orderId } }
-      },
-      query: "id quantity price"
-    });
-    const remainingTotals = await calculateTotalsFromItems(remainingItems, originalOrder.orderType, context);
-    await context.db.RestaurantOrder.updateOne({
-      where: { id: orderId },
-      data: {
-        subtotal: remainingTotals.subtotal,
-        tax: remainingTotals.tax,
-        total: remainingTotals.total
-      }
-    });
-    return {
-      success: true,
-      newOrderIds: [newOrder.id],
-      error: null
-    };
-  } catch (err) {
-    const errorMessage = err instanceof Error ? err.message : "Unknown error";
-    console.error(`Error splitting check by item: ${errorMessage}`);
-    return {
-      success: false,
-      newOrderIds: [],
-      error: errorMessage
-    };
-  }
-}
-async function splitCheckByGuest(root, args, context) {
-  if (!permissions.canManageOrders({ session: context.session })) {
-    return {
-      success: false,
-      newOrderIds: [],
-      error: "Not authorized to split check"
-    };
-  }
-  const { orderId, guestCount } = args;
-  if (guestCount < 2) {
-    return {
-      success: false,
-      newOrderIds: [],
-      error: "Guest count must be at least 2 to split"
-    };
-  }
-  try {
-    const originalOrder = await context.query.RestaurantOrder.findOne({
-      where: { id: orderId },
-      query: "id orderNumber orderType orderSource status specialInstructions total subtotal tax server { id } tables { id }"
-    });
-    if (!originalOrder) {
-      return {
-        success: false,
-        newOrderIds: [],
-        error: "Order not found"
-      };
-    }
-    const totalAmount = cents2(originalOrder.total);
-    const totalSubtotal = cents2(originalOrder.subtotal);
-    const totalTax = cents2(originalOrder.tax);
-    const splitTotalBase = Math.floor(totalAmount / guestCount);
-    const splitSubtotalBase = Math.floor(totalSubtotal / guestCount);
-    const splitTaxBase = Math.floor(totalTax / guestCount);
-    let totalRemainder = totalAmount - splitTotalBase * guestCount;
-    let subtotalRemainder = totalSubtotal - splitSubtotalBase * guestCount;
-    let taxRemainder = totalTax - splitTaxBase * guestCount;
-    const newOrderIds = [];
-    for (let i = 1; i < guestCount; i++) {
-      const thisTotal = splitTotalBase + (totalRemainder > 0 ? 1 : 0);
-      const thisSubtotal = splitSubtotalBase + (subtotalRemainder > 0 ? 1 : 0);
-      const thisTax = splitTaxBase + (taxRemainder > 0 ? 1 : 0);
-      if (totalRemainder > 0) totalRemainder -= 1;
-      if (subtotalRemainder > 0) subtotalRemainder -= 1;
-      if (taxRemainder > 0) taxRemainder -= 1;
-      const newOrder = await context.db.RestaurantOrder.createOne({
+      if (!order) throw new Error("Order not found");
+      if (["completed", "cancelled"].includes(order.status || "")) throw new Error("Closed checks cannot be split");
+      const reservedPayments = await tx.payment.count({
+        where: { orderId: order.id, status: { in: ["processing", "authorized", "succeeded", "unknown"] } }
+      });
+      if (reservedPayments) throw new Error("A check with reserved or successful tenders cannot be split");
+      const selected = order.orderItems.filter((item) => itemIds.includes(item.id));
+      if (selected.length !== itemIds.length) throw new Error("One or more selected items do not belong to this check");
+      if (selected.length === order.orderItems.length) throw new Error("At least one item must remain on the original check");
+      const originalSubtotalBefore = getOrderItemsSubtotal(order.orderItems);
+      const movedSubtotal = getOrderItemsSubtotal(selected);
+      const remainingItems = order.orderItems.filter((item) => !itemIds.includes(item.id));
+      const remainingSubtotal = getOrderItemsSubtotal(remainingItems);
+      const ratio = originalSubtotalBefore > 0 ? movedSubtotal / originalSubtotalBefore : 0;
+      const movedTip = Math.round(Number(order.tip || 0) * ratio);
+      const movedDiscount = Math.round(Number(order.discount || 0) * ratio);
+      const remainingTip = Number(order.tip || 0) - movedTip;
+      const remainingDiscount = Number(order.discount || 0) - movedDiscount;
+      const movedPricing = calculateRestaurantTotals({
+        subtotal: movedSubtotal,
+        orderType: order.orderType,
+        taxRate: settings?.taxRate,
+        currencyCode: settings?.currencyCode || order.currencyCode || "USD"
+      });
+      const remainingPricing = calculateRestaurantTotals({
+        subtotal: remainingSubtotal,
+        orderType: order.orderType,
+        taxRate: settings?.taxRate,
+        currencyCode: settings?.currencyCode || order.currencyCode || "USD"
+      });
+      const movedTotal = Math.max(0, movedSubtotal + movedPricing.tax + movedTip - movedDiscount);
+      const remainingTotal = Math.max(0, remainingSubtotal + remainingPricing.tax + remainingTip - remainingDiscount);
+      const newOrder = await tx.restaurantOrder.create({
         data: {
-          orderNumber: buildSplitOrderNumber(`G${i + 1}`),
-          orderType: originalOrder.orderType || "dine_in",
-          orderSource: originalOrder.orderSource || "pos",
-          status: originalOrder.status || "open",
+          orderNumber: buildSplitOrderNumber(),
+          orderType: order.orderType,
+          orderSource: order.orderSource,
+          status: order.status,
           guestCount: 1,
-          subtotal: thisSubtotal,
-          tax: thisTax,
-          total: thisTotal,
-          specialInstructions: `Split from order ${originalOrder.orderNumber} (Guest ${i + 1} of ${guestCount})`,
-          tables: (originalOrder.tables || []).length ? { connect: (originalOrder.tables || []).map((t) => ({ id: t.id })) } : void 0,
-          server: originalOrder.server?.id ? { connect: { id: originalOrder.server.id } } : void 0
+          specialInstructions: order.specialInstructions || "",
+          subtotal: movedSubtotal,
+          tax: movedPricing.tax,
+          tip: movedTip,
+          discount: movedDiscount,
+          total: movedTotal,
+          currencyCode: order.currencyCode,
+          customerId: order.customerId,
+          serverId: order.serverId,
+          createdById: context.session?.itemId || order.createdById,
+          customerName: order.customerName,
+          customerEmail: order.customerEmail,
+          customerPhone: order.customerPhone,
+          deliveryAddress: order.deliveryAddress,
+          deliveryAddress2: order.deliveryAddress2,
+          deliveryCity: order.deliveryCity,
+          deliveryState: order.deliveryState,
+          deliveryZip: order.deliveryZip,
+          deliveryCountryCode: order.deliveryCountryCode,
+          tables: order.tables.length ? { connect: order.tables.map((table) => ({ id: table.id })) } : void 0
         }
       });
-      newOrderIds.push(newOrder.id);
+      await tx.orderItem.updateMany({
+        where: { id: { in: itemIds }, orderId: order.id },
+        data: { orderId: newOrder.id, originalOrderIdSnapshot: order.id }
+      });
+      await tx.restaurantOrder.update({
+        where: { id: order.id },
+        data: {
+          subtotal: remainingSubtotal,
+          tax: remainingPricing.tax,
+          tip: remainingTip,
+          discount: remainingDiscount,
+          total: remainingTotal
+        }
+      });
+      await tx.orderAdjustment.create({
+        data: {
+          idempotencyKey: key,
+          type: "split",
+          amount: movedTotal,
+          reason: "Item split",
+          metadata: { newOrderId: newOrder.id, itemIds, originalOrderId: order.id },
+          orderId: order.id,
+          actorId: context.session?.itemId || null,
+          approvedById: context.session?.itemId || null
+        }
+      });
+      return { originalOrderId: order.id, newOrderId: newOrder.id, replay: false };
+    }, { isolationLevel: "Serializable" });
+    if (!result2.replay) {
+      await appendAuditEvent(context, {
+        eventType: "check.split_by_item",
+        entityType: "RestaurantOrder",
+        entityId: args.orderId,
+        after: { newOrderId: result2.newOrderId, itemIds },
+        metadata: { idempotencyKey: key }
+      }).catch((error) => console.error("Split audit event failed:", error));
+      await Promise.all([
+        syncKitchenTicketsForOrder(result2.originalOrderId, context),
+        syncKitchenTicketsForOrder(result2.newOrderId, context)
+      ]);
     }
-    const originalTotal = splitTotalBase + (totalRemainder > 0 ? 1 : 0);
-    const originalSubtotal = splitSubtotalBase + (subtotalRemainder > 0 ? 1 : 0);
-    const originalTax = splitTaxBase + (taxRemainder > 0 ? 1 : 0);
-    await context.db.RestaurantOrder.updateOne({
-      where: { id: orderId },
-      data: {
-        guestCount: 1,
-        subtotal: originalSubtotal,
-        tax: originalTax,
-        total: originalTotal,
-        specialInstructions: originalOrder.specialInstructions ? `${originalOrder.specialInstructions} | Split check (Guest 1 of ${guestCount})` : `Split check (Guest 1 of ${guestCount})`
-      }
-    });
-    return {
-      success: true,
-      newOrderIds,
-      error: null
-    };
-  } catch (err) {
-    const errorMessage = err instanceof Error ? err.message : "Unknown error";
-    console.error(`Error splitting check by guest: ${errorMessage}`);
-    return {
-      success: false,
-      newOrderIds: [],
-      error: errorMessage
-    };
+    return { success: true, newOrderIds: [result2.newOrderId], error: null };
+  } catch (error) {
+    return { success: false, newOrderIds: [], error: error instanceof Error ? error.message : "Unknown error" };
   }
+}
+async function splitCheckByGuest(_root, _args, context) {
+  if (!permissions.canManageOrders({ session: context.session })) {
+    return { success: false, newOrderIds: [], error: "Not authorized to split check" };
+  }
+  return {
+    success: false,
+    newOrderIds: [],
+    error: "Equal guest splits are disabled until financial check-allocation records and tender UI are migrated. Split by item instead."
+  };
 }
 
 // features/keystone/mutations/voidComp.ts
-function canManageOrders(context) {
-  return permissions.canManageOrders({ session: context.session });
+var import_crypto4 = __toESM(require("crypto"));
+function operationKey(type, targetId, reason, amount, supplied) {
+  if (supplied?.trim()) return supplied.trim();
+  return import_crypto4.default.createHash("sha256").update(`${type}:${targetId}:${reason.trim()}:${amount ?? "full"}`).digest("hex");
 }
-async function recalculateOrderTotals({
-  order,
-  subtotal,
-  context
-}) {
-  const settings = await getStoreDeliverySettings(context);
-  const safeSubtotal = Math.max(0, subtotal);
-  const { tax } = calculateRestaurantTotals({
-    subtotal: safeSubtotal,
-    orderType: order.orderType,
-    taxRate: settings?.taxRate,
-    currencyCode: settings?.currencyCode || order.currencyCode || "USD"
-  });
-  const tip = Math.max(0, order.tip || 0);
-  const discount = Math.max(0, order.discount || 0);
-  const total = Math.max(0, safeSubtotal + tax + tip - discount);
-  return {
-    subtotal: safeSubtotal,
-    tax: Math.max(0, tax),
-    total
-  };
+function authorize(context, approvalId) {
+  if (!permissions.canManageOrders({ session: context.session })) throw new Error("Not authorized to request order corrections");
+  if (!approvalId) throw new Error("Independent manager approval is required for this correction");
 }
-async function voidOrderItem(root, args, context) {
-  if (!canManageOrders(context)) {
-    return {
-      success: false,
-      requiresManagerApproval: false,
-      adjustedAmount: null,
-      error: "Not authorized to void items"
-    };
-  }
-  const { orderItemId, reason } = args;
-  if (!reason || reason.trim() === "") {
-    return {
-      success: false,
-      requiresManagerApproval: false,
-      adjustedAmount: null,
-      error: "Reason is required for void"
-    };
-  }
+async function adjustOrderItem(type, args, context) {
   try {
-    const orderItem = await context.db.OrderItem.findOne({
-      where: { id: orderItemId }
-    });
-    if (!orderItem) {
-      return {
-        success: false,
-        requiresManagerApproval: false,
-        adjustedAmount: null,
-        error: "Order item not found"
-      };
+    authorize(context, args.managerApprovalId);
+    if (!args.reason?.trim()) throw new Error("Reason is required");
+    const settings = await getStoreDeliverySettings(context);
+    const key = operationKey(type, args.orderItemId, args.reason, args.compAmount, args.idempotencyKey);
+    const prisma = context.prisma;
+    const priorAdjustment = await prisma.orderAdjustment.findUnique({ where: { idempotencyKey: key } });
+    if (priorAdjustment && (priorAdjustment.orderItemId !== args.orderItemId || priorAdjustment.type !== type || priorAdjustment.reason !== args.reason.trim())) {
+      throw new Error("Idempotency key was already used with a different order-item correction");
     }
-    const voidAmount = (orderItem.price || 0) * (orderItem.quantity || 0);
-    await context.db.OrderItem.deleteOne({
-      where: { id: orderItemId }
-    });
-    if (orderItem.orderId) {
-      const order = await context.db.RestaurantOrder.findOne({
-        where: { id: orderItem.orderId }
-      });
-      if (order) {
-        const totals = await recalculateOrderTotals({
-          order,
-          subtotal: (order.subtotal || 0) - voidAmount,
-          context
-        });
-        await context.db.RestaurantOrder.updateOne({
-          where: { id: orderItem.orderId },
-          data: {
-            ...totals,
-            specialInstructions: order.specialInstructions ? `${order.specialInstructions} | VOID: ${reason}` : `VOID: ${reason}`
-          }
-        });
+    const { attempt } = await getOrCreateIdempotencyAttempt(prisma, {
+      key: `order-adjustment:${key}`,
+      requestPath: type === "void" ? "voidOrderItem" : "compOrderItem",
+      requestParams: {
+        orderItemId: args.orderItemId,
+        reason: args.reason.trim(),
+        compAmount: args.compAmount ?? null,
+        managerApprovalId: args.managerApprovalId
       }
-    }
-    return {
-      success: true,
-      requiresManagerApproval: false,
-      adjustedAmount: voidAmount,
-      error: null
-    };
-  } catch (err) {
-    const errorMessage = err instanceof Error ? err.message : "Unknown error";
-    console.error(`Error voiding item: ${errorMessage}`);
-    return {
-      success: false,
-      requiresManagerApproval: false,
-      adjustedAmount: null,
-      error: errorMessage
-    };
-  }
-}
-async function compOrderItem(root, args, context) {
-  if (!canManageOrders(context)) {
-    return {
-      success: false,
-      requiresManagerApproval: false,
-      adjustedAmount: null,
-      error: "Not authorized to comp items"
-    };
-  }
-  const { orderItemId, reason, compAmount } = args;
-  if (!reason || reason.trim() === "") {
-    return {
-      success: false,
-      requiresManagerApproval: false,
-      adjustedAmount: null,
-      error: "Reason is required for comp"
-    };
-  }
-  try {
-    const orderItem = await context.db.OrderItem.findOne({
-      where: { id: orderItemId }
     });
-    if (!orderItem) {
-      return {
-        success: false,
-        requiresManagerApproval: false,
-        adjustedAmount: null,
-        error: "Order item not found"
-      };
-    }
-    const itemTotal = (orderItem.price || 0) * (orderItem.quantity || 0);
-    const actualCompAmount = compAmount !== void 0 && compAmount !== null ? Math.min(compAmount, itemTotal) : itemTotal;
-    const perItemComp = Math.floor(actualCompAmount / (orderItem.quantity || 1));
-    const newPrice = (orderItem.price || 0) - perItemComp;
-    if (newPrice <= 0) {
-      await context.db.OrderItem.deleteOne({
-        where: { id: orderItemId }
-      });
-    } else {
-      await context.db.OrderItem.updateOne({
-        where: { id: orderItemId },
+    const result2 = await prisma.$transaction(async (tx) => {
+      const existing = await tx.orderAdjustment.findUnique({ where: { idempotencyKey: key } });
+      if (existing) {
+        if (existing.orderItemId !== args.orderItemId || existing.type !== type || existing.reason !== args.reason.trim()) {
+          throw new Error("Idempotency key was already used with a different order-item correction");
+        }
+        return { adjustment: existing, orderId: existing.orderId, replay: true };
+      }
+      const item = await tx.orderItem.findUnique({ where: { id: args.orderItemId } });
+      if (!item?.orderId) throw new Error("Order item not found");
+      const order = await tx.restaurantOrder.findUnique({ where: { id: item.orderId } });
+      if (!order) throw new Error("Order not found");
+      if (["completed", "cancelled"].includes(order.status || "")) {
+        throw new Error("Closed checks require a refund/correction receipt instead of an item edit");
+      }
+      const originalTotal = Math.max(0, Number(item.price || 0) * Number(item.quantity || 0));
+      const alreadyAdjusted = Math.max(0, Number(item.adjustmentTotal || 0));
+      const available = Math.max(0, originalTotal - alreadyAdjusted);
+      const amount = type === "void" ? available : args.compAmount == null ? available : Math.max(0, Math.min(Math.round(args.compAmount), available));
+      if (amount <= 0) throw new Error("No remaining item value can be adjusted");
+      const adjustment = await tx.orderAdjustment.create({
         data: {
-          price: newPrice,
-          specialInstructions: orderItem.specialInstructions ? `${orderItem.specialInstructions} | COMP: ${reason}` : `COMP: ${reason}`
+          idempotencyKey: key,
+          type,
+          amount,
+          reason: args.reason.trim(),
+          metadata: { originalTotal, previousAdjustmentTotal: alreadyAdjusted, managerApprovalId: args.managerApprovalId },
+          orderId: order.id,
+          orderItemId: item.id,
+          actorId: context.session?.itemId || null,
+          approvedById: null
         }
       });
-    }
-    if (orderItem.orderId) {
-      const order = await context.db.RestaurantOrder.findOne({
-        where: { id: orderItem.orderId }
+      const approval = await consumeManagerApproval(tx, {
+        approvalId: args.managerApprovalId,
+        actorId: context.session?.itemId,
+        actionType: type === "void" ? "void_item" : "comp_item",
+        targetId: args.orderItemId,
+        reason: args.reason,
+        amount: args.compAmount ?? null,
+        entityType: "OrderAdjustment",
+        entityId: adjustment.id
       });
-      if (order) {
-        const totals = await recalculateOrderTotals({
-          order,
-          subtotal: (order.subtotal || 0) - actualCompAmount,
-          context
-        });
-        await context.db.RestaurantOrder.updateOne({
-          where: { id: orderItem.orderId },
+      await tx.orderItem.update({
+        where: { id: item.id },
+        data: type === "void" ? {
+          isVoided: true,
+          voidedAt: /* @__PURE__ */ new Date(),
+          voidReason: args.reason.trim(),
+          voidedById: context.session?.itemId || null,
+          approvedById: approval.approvedById
+        } : {
+          adjustmentTotal: alreadyAdjusted + amount,
+          approvedById: approval.approvedById
+        }
+      });
+      const approvedAdjustment = await tx.orderAdjustment.update({
+        where: { id: adjustment.id },
+        data: { approvedById: approval.approvedById }
+      });
+      const items = await tx.orderItem.findMany({ where: { orderId: order.id } });
+      const subtotal = getOrderItemsSubtotal(items);
+      const { tax } = calculateRestaurantTotals({
+        subtotal,
+        orderType: order.orderType,
+        taxRate: settings?.taxRate,
+        currencyCode: settings?.currencyCode || order.currencyCode || "USD"
+      });
+      const total = Math.max(0, subtotal + tax + Number(order.tip || 0) - Number(order.discount || 0));
+      await tx.restaurantOrder.update({ where: { id: order.id }, data: { subtotal, tax, total } });
+      await appendAuditEventWithClient(tx, context.session?.itemId, {
+        eventKey: `order-adjustment:${adjustment.id}`,
+        eventType: `order_item.${type}`,
+        entityType: "OrderItem",
+        entityId: args.orderItemId,
+        reason: args.reason,
+        after: { adjustedAmount: amount },
+        approverId: approval.approvedById,
+        metadata: { adjustmentId: adjustment.id, idempotencyKey: key, managerApprovalId: args.managerApprovalId }
+      });
+      return { adjustment: approvedAdjustment, orderId: order.id, replay: false };
+    }, { isolationLevel: "Serializable" });
+    if (!result2.replay) await syncKitchenTicketsForOrder(result2.orderId, context);
+    await updateIdempotencyAttempt(prisma, attempt.id, "completed", {
+      adjustmentId: result2.adjustment.id,
+      orderId: result2.orderId,
+      adjustedAmount: result2.adjustment.amount
+    }, 200);
+    return { success: true, requiresManagerApproval: false, adjustedAmount: result2.adjustment.amount, error: null };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    return {
+      success: false,
+      requiresManagerApproval: message.toLowerCase().includes("manager approval"),
+      adjustedAmount: null,
+      error: message
+    };
+  }
+}
+function voidOrderItem(_root, args, context) {
+  return adjustOrderItem("void", args, context);
+}
+function compOrderItem(_root, args, context) {
+  return adjustOrderItem("comp", args, context);
+}
+async function voidOrder(_root, args, context) {
+  try {
+    authorize(context, args.managerApprovalId);
+    if (!args.reason?.trim()) throw new Error("Reason is required");
+    const key = operationKey("void-order", args.orderId, args.reason, null, args.idempotencyKey);
+    const prisma = context.prisma;
+    const priorAdjustment = await prisma.orderAdjustment.findUnique({ where: { idempotencyKey: key } });
+    if (priorAdjustment && (priorAdjustment.orderId !== args.orderId || priorAdjustment.orderItemId || priorAdjustment.reason !== args.reason.trim() || !priorAdjustment.metadata?.wholeOrder)) {
+      throw new Error("Idempotency key was already used with a different order correction");
+    }
+    const { attempt } = await getOrCreateIdempotencyAttempt(prisma, {
+      key: `order-adjustment:${key}`,
+      requestPath: "voidOrder",
+      requestParams: { orderId: args.orderId, reason: args.reason.trim(), managerApprovalId: args.managerApprovalId }
+    });
+    const result2 = await prisma.$transaction(async (tx) => {
+      const existing = await tx.orderAdjustment.findUnique({ where: { idempotencyKey: key } });
+      if (existing) {
+        if (existing.orderId !== args.orderId || existing.orderItemId || existing.reason !== args.reason.trim() || !existing.metadata?.wholeOrder) {
+          throw new Error("Idempotency key was already used with a different order correction");
+        }
+        return { adjustment: existing, replay: true };
+      }
+      const order = await tx.restaurantOrder.findUnique({ where: { id: args.orderId } });
+      if (!order) throw new Error("Order not found");
+      const successfulPayments = await tx.payment.count({ where: { orderId: order.id, status: "succeeded" } });
+      if (successfulPayments > 0) throw new Error("Paid orders must be refunded before cancellation");
+      const items = await tx.orderItem.findMany({ where: { orderId: order.id } });
+      const amount = getOrderItemsSubtotal(items);
+      const adjustment = await tx.orderAdjustment.create({
+        data: {
+          idempotencyKey: key,
+          type: "void",
+          amount,
+          reason: args.reason.trim(),
+          metadata: {
+            wholeOrder: true,
+            originalSubtotal: order.subtotal,
+            originalTax: order.tax,
+            originalTotal: order.total,
+            managerApprovalId: args.managerApprovalId
+          },
+          orderId: order.id,
+          actorId: context.session?.itemId || null,
+          approvedById: null
+        }
+      });
+      const approval = await consumeManagerApproval(tx, {
+        approvalId: args.managerApprovalId,
+        actorId: context.session?.itemId,
+        actionType: "void_order",
+        targetId: args.orderId,
+        reason: args.reason,
+        amount: null,
+        entityType: "OrderAdjustment",
+        entityId: adjustment.id
+      });
+      for (const item of items.filter((candidate) => !candidate.isVoided)) {
+        await tx.orderItem.update({
+          where: { id: item.id },
           data: {
-            ...totals,
-            specialInstructions: order.specialInstructions ? `${order.specialInstructions} | COMP: ${reason}` : `COMP: ${reason}`
+            isVoided: true,
+            voidedAt: /* @__PURE__ */ new Date(),
+            voidReason: args.reason.trim(),
+            voidedById: context.session?.itemId || null,
+            approvedById: approval.approvedById
           }
         });
       }
-    }
-    return {
-      success: true,
-      requiresManagerApproval: false,
-      adjustedAmount: actualCompAmount,
-      error: null
-    };
-  } catch (err) {
-    const errorMessage = err instanceof Error ? err.message : "Unknown error";
-    console.error(`Error comping item: ${errorMessage}`);
-    return {
-      success: false,
-      requiresManagerApproval: false,
-      adjustedAmount: null,
-      error: errorMessage
-    };
-  }
-}
-async function voidOrder(root, args, context) {
-  if (!canManageOrders(context)) {
-    return {
-      success: false,
-      requiresManagerApproval: false,
-      adjustedAmount: null,
-      error: "Not authorized to void orders"
-    };
-  }
-  const { orderId, reason } = args;
-  if (!reason || reason.trim() === "") {
-    return {
-      success: false,
-      requiresManagerApproval: false,
-      adjustedAmount: null,
-      error: "Reason is required for void"
-    };
-  }
-  try {
-    const order = await context.db.RestaurantOrder.findOne({
-      where: { id: orderId }
-    });
-    if (!order) {
-      return {
-        success: false,
-        requiresManagerApproval: false,
-        adjustedAmount: null,
-        error: "Order not found"
-      };
-    }
-    const voidAmount = order.total || 0;
-    const orderItems = await context.db.OrderItem.findMany({
-      where: { order: { id: { equals: orderId } } }
-    });
-    for (const item of orderItems) {
-      await context.db.OrderItem.deleteOne({
-        where: { id: item.id }
+      const approvedAdjustment = await tx.orderAdjustment.update({
+        where: { id: adjustment.id },
+        data: { approvedById: approval.approvedById }
       });
-    }
-    await context.db.RestaurantOrder.updateOne({
-      where: { id: orderId },
-      data: {
-        status: "cancelled",
-        subtotal: 0,
-        tax: 0,
-        total: 0,
-        specialInstructions: order.specialInstructions ? `${order.specialInstructions} | VOIDED: ${reason}` : `VOIDED: ${reason}`
-      }
-    });
-    return {
-      success: true,
-      requiresManagerApproval: false,
-      adjustedAmount: voidAmount,
-      error: null
-    };
-  } catch (err) {
-    const errorMessage = err instanceof Error ? err.message : "Unknown error";
-    console.error(`Error voiding order: ${errorMessage}`);
-    return {
-      success: false,
-      requiresManagerApproval: false,
-      adjustedAmount: null,
-      error: errorMessage
-    };
+      await tx.restaurantOrder.update({ where: { id: order.id }, data: { status: "cancelled" } });
+      await appendAuditEventWithClient(tx, context.session?.itemId, {
+        eventKey: `order-adjustment:${adjustment.id}`,
+        eventType: "order.voided",
+        entityType: "RestaurantOrder",
+        entityId: args.orderId,
+        reason: args.reason,
+        after: { status: "cancelled", adjustedAmount: amount },
+        approverId: approval.approvedById,
+        metadata: { adjustmentId: adjustment.id, idempotencyKey: key, managerApprovalId: args.managerApprovalId }
+      });
+      return { adjustment: approvedAdjustment, replay: false };
+    }, { isolationLevel: "Serializable" });
+    if (!result2.replay) await syncKitchenTicketsForOrder(args.orderId, context);
+    await updateIdempotencyAttempt(prisma, attempt.id, "completed", {
+      adjustmentId: result2.adjustment.id,
+      orderId: args.orderId,
+      adjustedAmount: result2.adjustment.amount
+    }, 200);
+    return { success: true, requiresManagerApproval: false, adjustedAmount: result2.adjustment.amount, error: null };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    return { success: false, requiresManagerApproval: message.toLowerCase().includes("manager approval"), adjustedAmount: null, error: message };
   }
 }
+
+// features/keystone/mutations/initiatePaymentSession.ts
+var import_crypto5 = __toESM(require("crypto"));
 
 // features/keystone/utils/cartAccess.ts
 var cookie = __toESM(require("cookie"));
@@ -5518,58 +6960,159 @@ async function assertCanAccessCartItem(context, cartItemId, mode = "write") {
   return cartItem;
 }
 
-// features/keystone/mutations/initiatePaymentSession.ts
-async function initiatePaymentSession(root, { cartId, paymentProviderId }, context) {
-  const sudoContext = context.sudo();
-  await assertCanAccessCart(context, cartId, "write");
-  const cart = await sudoContext.query.Cart.findOne({
-    where: { id: cartId },
+// features/keystone/utils/cartItemValidation.ts
+function normalizeCartQuantity(value) {
+  const quantity = Number(value);
+  if (!Number.isInteger(quantity) || quantity < 1 || quantity > 99) {
+    throw new Error("Quantity must be a whole number between 1 and 99");
+  }
+  return quantity;
+}
+function normalizeSpecialInstructions(value) {
+  if (value == null) return "";
+  if (typeof value !== "string") throw new Error("Special instructions must be text");
+  const normalized = value.trim();
+  if (normalized.length > 500) throw new Error("Special instructions cannot exceed 500 characters");
+  return normalized;
+}
+function validateModifierSelections(availableModifiers, requestedModifierIds = []) {
+  const uniqueIds = Array.from(new Set(requestedModifierIds.filter(Boolean)));
+  if (uniqueIds.length !== requestedModifierIds.length) {
+    throw new Error("A modifier cannot be selected more than once");
+  }
+  const byId = new Map(availableModifiers.map((modifier) => [modifier.id, modifier]));
+  const selected = uniqueIds.map((id) => {
+    const modifier = byId.get(id);
+    if (!modifier) throw new Error("One or more selected modifiers do not belong to this menu item");
+    return modifier;
+  });
+  const groups = /* @__PURE__ */ new Map();
+  for (const modifier of availableModifiers) {
+    const key = modifier.modifierGroup || "addons";
+    groups.set(key, [...groups.get(key) || [], modifier]);
+  }
+  for (const [group, groupModifiers] of groups) {
+    const selectedCount = selected.filter((modifier) => modifier.modifierGroup === group).length;
+    const required = groupModifiers.some((modifier) => Boolean(modifier.required));
+    const configuredMinimum = Math.max(0, ...groupModifiers.map((modifier) => Number(modifier.minSelections || 0)));
+    const minimum = Math.max(required ? 1 : 0, configuredMinimum);
+    const configuredMaximum = groupModifiers.map((modifier) => Number(modifier.maxSelections || 0)).filter((maximum2) => maximum2 > 0);
+    const maximum = configuredMaximum.length > 0 ? Math.min(...configuredMaximum) : groupModifiers.length;
+    if (selectedCount < minimum) {
+      throw new Error(`Select at least ${minimum} option${minimum === 1 ? "" : "s"} from ${group}`);
+    }
+    if (selectedCount > maximum) {
+      throw new Error(`Select no more than ${maximum} option${maximum === 1 ? "" : "s"} from ${group}`);
+    }
+  }
+  return selected;
+}
+async function validateCartItemInput(context, input) {
+  if (!input.menuItemId) throw new Error("Menu item is required");
+  const menuItem = await context.sudo().query.MenuItem.findOne({
+    where: { id: input.menuItemId },
     query: `
       id
-      orderType
-      subtotal
-      deliveryAddress
-      deliveryCity
-      deliveryCountryCode
-      deliveryZip
-      tipPercent
-      paymentCollection {
+      name
+      price
+      available
+      thumbnail
+      kitchenStation
+      modifiers {
         id
-        amount
-        paymentSessions {
-          id
-          isSelected
-          isInitiated
-          amount
-          paymentProvider {
-            id
-            code
-          }
-          data
-        }
+        name
+        modifierGroup
+        modifierGroupLabel
+        required
+        minSelections
+        maxSelections
+        priceAdjustment
       }
     `
   });
-  if (!cart) {
-    throw new Error("Cart not found");
-  }
-  const provider = await sudoContext.query.PaymentProvider.findOne({
-    where: { code: paymentProviderId },
+  if (!menuItem) throw new Error("Menu item not found");
+  if (!menuItem.available) throw new Error(`${menuItem.name || "Selected item"} is unavailable`);
+  const quantity = normalizeCartQuantity(input.quantity);
+  const specialInstructions = normalizeSpecialInstructions(input.specialInstructions);
+  const modifiers = validateModifierSelections(
+    (menuItem.modifiers || []).map((modifier) => ({
+      ...modifier,
+      priceAdjustment: Math.round(Number(modifier.priceAdjustment || 0))
+    })),
+    input.modifierIds || []
+  );
+  const basePrice = Math.round(Number(menuItem.price || 0));
+  const modifierTotal = modifiers.reduce((sum, modifier) => sum + modifier.priceAdjustment, 0);
+  const unitPrice = basePrice + modifierTotal;
+  if (unitPrice < 0) throw new Error("Selected modifiers cannot make the item price negative");
+  return {
+    menuItem: {
+      id: menuItem.id,
+      name: menuItem.name || "Item",
+      price: basePrice,
+      thumbnail: menuItem.thumbnail || null,
+      kitchenStation: menuItem.kitchenStation || null
+    },
+    modifiers,
+    quantity,
+    specialInstructions,
+    unitPrice
+  };
+}
+
+// features/keystone/mutations/initiatePaymentSession.ts
+function sessionKey(input) {
+  return import_crypto5.default.createHash("sha256").update(JSON.stringify(input)).digest("hex");
+}
+var SESSION_QUERY = `
+  id
+  data
+  amount
+  isInitiated
+  isSelected
+  paymentProvider { id code }
+`;
+async function initiatePaymentSession(_root, { cartId, paymentProviderId }, context) {
+  await assertCanAccessCart(context, cartId, "write");
+  const sudo = context.sudo();
+  const cart = await sudo.query.Cart.findOne({
+    where: { id: cartId },
     query: `
-      id
-      code
-      isInstalled
-      createPaymentFunction
-      capturePaymentFunction
-      refundPaymentFunction
-      getPaymentStatusFunction
-      generatePaymentLinkFunction
-      credentials
+      id updatedAt orderType deliveryAddress deliveryCity deliveryCountryCode deliveryZip tipPercent
+      order { id }
+      paymentCollection {
+        id amount
+        paymentSessions { id idempotencyKey isSelected isInitiated amount data paymentProvider { id code } }
+      }
+      items {
+        id quantity specialInstructions
+        menuItem { id }
+        modifiers { id }
+      }
     `
   });
-  if (!provider || !provider.isInstalled) {
-    throw new Error(`Payment provider ${paymentProviderId} not found or not installed`);
+  if (!cart) throw new Error("Cart not found");
+  if (cart.order?.id) throw new Error("Completed carts cannot start another payment");
+  if (!cart.items?.length) throw new Error("Cart is empty");
+  const provider = await sudo.query.PaymentProvider.findOne({
+    where: { code: paymentProviderId },
+    query: `
+      id code isInstalled createPaymentFunction capturePaymentFunction refundPaymentFunction
+      getPaymentStatusFunction generatePaymentLinkFunction credentials
+    `
+  });
+  if (!provider?.isInstalled || !isPaymentProviderConfigured(provider.code)) {
+    throw new Error(`Payment provider ${paymentProviderId} is not installed and configured`);
   }
+  const validatedItems = await Promise.all(
+    cart.items.map((item) => validateCartItemInput(context, {
+      menuItemId: item.menuItem?.id,
+      quantity: item.quantity,
+      modifierIds: (item.modifiers || []).map((modifier) => modifier.id),
+      specialInstructions: item.specialInstructions
+    }))
+  );
+  const subtotal = validatedItems.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
   const settings = await getStoreDeliverySettings(context);
   const currency = settings?.currencyCode || "USD";
   assertDeliveryAddressComplete({
@@ -5586,7 +7129,7 @@ async function initiatePaymentSession(root, { cartId, paymentProviderId }, conte
     deliveryZip: cart.deliveryZip
   });
   const pricing = calculateRestaurantTotals({
-    subtotal: cart.subtotal || 0,
+    subtotal,
     orderType: cart.orderType,
     tipPercent: cart.tipPercent,
     deliveryFee: settings?.deliveryFee,
@@ -5599,99 +7142,96 @@ async function initiatePaymentSession(root, { cartId, paymentProviderId }, conte
     throw new Error(`Delivery orders require a minimum subtotal of ${settings?.deliveryMinimum || "0.00"}.`);
   }
   const amount = pricing.total;
-  if (!cart.paymentCollection) {
-    cart.paymentCollection = await sudoContext.query.PaymentCollection.createOne({
-      data: {
-        cart: { connect: { id: cart.id } },
-        amount,
-        description: "default"
-      },
-      query: "id"
-    });
-  } else if ((cart.paymentCollection.amount || 0) !== amount) {
-    await sudoContext.query.PaymentCollection.updateOne({
-      where: { id: cart.paymentCollection.id },
-      data: { amount }
-    });
-  }
-  const existingSession = cart.paymentCollection?.paymentSessions?.find(
-    (s) => s.paymentProvider.code === provider.code && s.amount === amount
-  );
-  if (existingSession) {
-    const otherSessions = cart.paymentCollection.paymentSessions.filter(
-      (s) => s.id !== existingSession.id && s.isSelected
-    );
-    for (const session of otherSessions) {
-      await sudoContext.query.PaymentSession.updateOne({
-        where: { id: session.id },
-        data: { isSelected: false }
-      });
-    }
-    await sudoContext.query.PaymentSession.updateOne({
-      where: { id: existingSession.id },
-      data: { isSelected: true }
-    });
-    return await sudoContext.query.PaymentSession.findOne({
-      where: { id: existingSession.id },
-      query: `
-        id
-        data
-        amount
-        isInitiated
-        isSelected
-        paymentProvider {
-          id
-          code
-        }
-      `
-    });
-  }
-  const normalizedCurrency = currency.toLowerCase();
-  const isManualProvider = provider.code === "pp_system_default";
-  let sessionData = { providerCode: provider.code };
-  if (!isManualProvider) {
-    const createdSessionData = await createPayment({
-      provider,
-      cart,
-      amount,
-      currency: normalizedCurrency
-    });
-    sessionData = {
-      ...createdSessionData,
-      providerCode: provider.code
-    };
-  }
-  const existingSelectedSessions = cart.paymentCollection.paymentSessions?.filter(
-    (s) => s.isSelected
-  ) || [];
-  for (const session of existingSelectedSessions) {
-    await sudoContext.query.PaymentSession.updateOne({
-      where: { id: session.id },
-      data: { isSelected: false }
-    });
-  }
-  const newSession = await sudoContext.query.PaymentSession.createOne({
-    data: {
-      paymentCollection: { connect: { id: cart.paymentCollection.id } },
-      paymentProvider: { connect: { id: provider.id } },
-      amount,
-      isSelected: true,
-      isInitiated: true,
-      data: sessionData
-    },
-    query: `
-      id
-      data
-      amount
-      isInitiated
-      isSelected
-      paymentProvider {
-        id
-        code
-      }
-    `
+  const idempotencyKey = sessionKey({
+    cartId,
+    cartUpdatedAt: cart.updatedAt,
+    provider: provider.code,
+    amount,
+    items: validatedItems.map((item) => ({
+      menuItemId: item.menuItem.id,
+      quantity: item.quantity,
+      modifierIds: item.modifiers.map((modifier) => modifier.id).sort(),
+      specialInstructions: item.specialInstructions
+    }))
   });
-  return newSession;
+  let collection = cart.paymentCollection;
+  if (!collection) {
+    collection = await sudo.query.PaymentCollection.createOne({
+      data: { cart: { connect: { id: cart.id } }, amount, description: "default" },
+      query: "id amount paymentSessions { id idempotencyKey isSelected isInitiated amount data paymentProvider { id code } }"
+    });
+  } else if (Number(collection.amount || 0) !== amount) {
+    await sudo.query.PaymentCollection.updateOne({ where: { id: collection.id }, data: { amount } });
+  }
+  let paymentSession = collection.paymentSessions?.find(
+    (candidate) => candidate.idempotencyKey === idempotencyKey
+  );
+  if (!paymentSession) {
+    try {
+      paymentSession = await sudo.query.PaymentSession.createOne({
+        data: {
+          paymentCollection: { connect: { id: collection.id } },
+          paymentProvider: { connect: { id: provider.id } },
+          amount,
+          idempotencyKey,
+          isSelected: true,
+          isInitiated: false,
+          data: { providerCode: provider.code, state: "initializing" }
+        },
+        query: SESSION_QUERY
+      });
+    } catch (error) {
+      const matches = await sudo.query.PaymentSession.findMany({
+        where: { idempotencyKey: { equals: idempotencyKey } },
+        query: SESSION_QUERY,
+        take: 1
+      });
+      paymentSession = matches[0];
+      if (!paymentSession) throw error;
+    }
+  }
+  for (const candidate of collection.paymentSessions || []) {
+    if (candidate.id !== paymentSession.id && candidate.isSelected) {
+      await sudo.query.PaymentSession.updateOne({ where: { id: candidate.id }, data: { isSelected: false } });
+    }
+  }
+  if (paymentSession.isInitiated) {
+    if (!paymentSession.isSelected) {
+      await sudo.query.PaymentSession.updateOne({ where: { id: paymentSession.id }, data: { isSelected: true } });
+    }
+    return sudo.query.PaymentSession.findOne({ where: { id: paymentSession.id }, query: SESSION_QUERY });
+  }
+  const isManual = provider.code === "pp_system_default" || provider.code.startsWith("pp_manual");
+  try {
+    const providerData = isManual ? { providerCode: provider.code, status: "pending" } : await createPayment({
+      provider,
+      cart: { ...cart, subtotal },
+      amount,
+      currency: currency.toLowerCase(),
+      idempotencyKey
+    });
+    return sudo.query.PaymentSession.updateOne({
+      where: { id: paymentSession.id },
+      data: {
+        isSelected: true,
+        isInitiated: true,
+        data: { ...providerData, providerCode: provider.code, state: "ready" }
+      },
+      query: SESSION_QUERY
+    });
+  } catch (error) {
+    await sudo.query.PaymentSession.updateOne({
+      where: { id: paymentSession.id },
+      data: {
+        data: {
+          providerCode: provider.code,
+          state: "failed",
+          error: error instanceof Error ? error.message : "Provider initiation failed"
+        }
+      }
+    });
+    throw error;
+  }
 }
 
 // features/keystone/mutations/completeActiveCart.ts
@@ -5715,11 +7255,13 @@ async function completeActiveCart(root, { cartId, paymentSessionId }, context) {
       deliveryCountryCode
       tipPercent
       user { id }
+      order { id orderNumber secretKey status }
       paymentCollection {
         id
         amount
         paymentSessions {
           id
+          idempotencyKey
           isSelected
           isInitiated
           amount
@@ -5752,7 +7294,18 @@ async function completeActiveCart(root, { cartId, paymentSessionId }, context) {
     `
   });
   if (!cart) throw new Error("Cart not found");
+  if (cart.order?.id) return cart.order;
   if (!cart.items?.length) throw new Error("Cart is empty");
+  const validatedItems = await Promise.all(
+    cart.items.map(
+      (item) => validateCartItemInput(context, {
+        menuItemId: item.menuItem?.id,
+        quantity: item.quantity,
+        modifierIds: (item.modifiers || []).map((modifier) => modifier.id),
+        specialInstructions: item.specialInstructions
+      })
+    )
+  );
   const selectedSession = paymentSessionId ? cart.paymentCollection?.paymentSessions?.find(
     (session) => session.id === paymentSessionId
   ) : cart.paymentCollection?.paymentSessions?.find((session) => session.isSelected);
@@ -5760,14 +7313,14 @@ async function completeActiveCart(root, { cartId, paymentSessionId }, context) {
     throw new Error("No selected payment session found for this cart.");
   }
   const sessionData = selectedSession.data || {};
-  const paymentData = selectedSession.data || null;
+  let paymentData = { ...sessionData };
   const providerCode = selectedSession.paymentProvider?.code || sessionData?.providerCode;
   const providerPaymentId = sessionData?.paymentIntentId || sessionData?.orderId;
   const paymentProvider = selectedSession.paymentProvider;
   if (!paymentProvider) {
     throw new Error("Selected payment session is missing payment provider information.");
   }
-  const isManual = providerCode === "pp_system_default";
+  const isManual = providerCode === "pp_system_default" || providerCode?.startsWith("pp_manual");
   let paymentResult = {
     status: "manual_pending",
     paymentIntentId: null
@@ -5783,10 +7336,16 @@ async function completeActiveCart(root, { cartId, paymentSessionId }, context) {
     if (status.status === "succeeded") {
       paymentResult = { status: "succeeded", paymentIntentId: providerPaymentId };
     } else if (status.status === "requires_capture") {
-      const captured = await capturePayment2({
+      const captured = await capturePayment({
         provider: paymentProvider,
         paymentId: providerPaymentId
       });
+      const captureId = captured.data?.purchase_units?.[0]?.payments?.captures?.[0]?.id || captured.data?.id || null;
+      paymentData = {
+        ...paymentData,
+        capture: captured.data || captured,
+        captureId
+      };
       paymentResult = {
         status: captured.status === "succeeded" ? "succeeded" : "failed",
         paymentIntentId: providerPaymentId
@@ -5800,7 +7359,10 @@ async function completeActiveCart(root, { cartId, paymentSessionId }, context) {
   }
   const settings = await getStoreDeliverySettings(context);
   const currencyCode = settings?.currencyCode || "USD";
-  const subtotal = cart.subtotal || 0;
+  const subtotal = validatedItems.reduce(
+    (sum, item) => sum + item.unitPrice * item.quantity,
+    0
+  );
   assertDeliveryAddressComplete({
     orderType: cart.orderType,
     deliveryAddress: cart.deliveryAddress,
@@ -5827,113 +7389,140 @@ async function completeActiveCart(root, { cartId, paymentSessionId }, context) {
   if (deliveryMinimumNotMet) {
     throw new Error(`Delivery orders require a minimum subtotal of ${settings?.deliveryMinimum || "0.00"}.`);
   }
-  if (cart.paymentCollection?.id && (cart.paymentCollection.amount || 0) !== total) {
-    await sudoContext.query.PaymentCollection.updateOne({
-      where: { id: cart.paymentCollection.id },
-      data: { amount: total }
-    });
-  }
   const orderTypeMap = {
     pickup: "takeout",
     delivery: "delivery"
   };
-  const orderNumber = `ORD-${Date.now().toString(36).toUpperCase()}`;
+  const orderNumber = `ORD-${Date.now().toString(36).toUpperCase()}-${require("crypto").randomBytes(3).toString("hex").toUpperCase()}`;
   const customerId = cart.user?.id;
-  const secretKey = !customerId ? require("crypto").randomBytes(32).toString("hex") : void 0;
+  const secretKey = !customerId ? require("crypto").randomBytes(32).toString("hex") : "";
   const isDeliveryOrder2 = cart.orderType === "delivery";
-  if (selectedSession.amount !== total) {
-    if (!isManual) {
-      throw new Error("Cart total changed. Please return to payment and confirm your payment method again.");
-    }
-    await sudoContext.query.PaymentSession.updateOne({
-      where: { id: selectedSession.id },
-      data: { amount: total }
-    });
-  }
-  const order = await sudoContext.query.RestaurantOrder.createOne({
-    data: {
-      orderNumber,
-      orderType: orderTypeMap[cart.orderType || "pickup"] || "takeout",
-      orderSource: "online",
-      status: isManual ? "open" : "sent_to_kitchen",
-      guestCount: 1,
-      subtotal,
-      tax,
-      tip,
-      discount: pickupDiscount,
-      total,
-      currencyCode,
-      customer: customerId ? { connect: { id: customerId } } : void 0,
-      customerName: cart.customerName || "",
-      customerEmail: cart.email || "",
-      customerPhone: cart.customerPhone || "",
-      deliveryAddress: isDeliveryOrder2 ? cart.deliveryAddress || void 0 : void 0,
-      deliveryAddress2: isDeliveryOrder2 ? cart.deliveryAddress2 || void 0 : void 0,
-      deliveryCity: isDeliveryOrder2 ? cart.deliveryCity || void 0 : void 0,
-      deliveryState: isDeliveryOrder2 ? cart.deliveryState || void 0 : void 0,
-      deliveryZip: isDeliveryOrder2 ? cart.deliveryZip || void 0 : void 0,
-      deliveryCountryCode: isDeliveryOrder2 ? cart.deliveryCountryCode || void 0 : void 0,
-      secretKey
-    },
-    query: "id orderNumber secretKey status"
-  });
-  for (const item of cart.items) {
-    const modTotal = item.modifiers?.reduce(
-      (s, m) => s + (m.priceAdjustment || 0),
-      0
-    ) || 0;
-    const unitPrice = (item.menuItem?.price || 0) + modTotal;
-    await sudoContext.query.OrderItem.createOne({
-      data: {
-        quantity: item.quantity,
-        price: Math.round(unitPrice),
-        specialInstructions: item.specialInstructions || "",
-        order: { connect: { id: order.id } },
-        menuItem: { connect: { id: item.menuItem.id } },
-        appliedModifiers: item.modifiers?.length ? { connect: item.modifiers.map((m) => ({ id: m.id })) } : void 0
-      }
-    });
-  }
-  if (isKitchenActiveOrderStatus(order.status)) {
-    await syncKitchenTicketsForOrder(order.id, context);
+  if (Number(selectedSession.amount || 0) !== total && !isManual) {
+    throw new Error("Cart total changed. Please return to payment and confirm your payment method again.");
   }
   const paymentMethodMap = {
     pp_stripe_stripe: "credit_card",
     pp_paypal_paypal: "paypal",
     pp_system_default: "cash"
   };
-  const payment = await sudoContext.query.Payment.createOne({
-    data: {
-      amount: total,
-      status: paymentResult.status === "succeeded" ? "succeeded" : "pending",
-      paymentMethod: paymentMethodMap[providerCode || "pp_system_default"] || "cash",
-      currencyCode,
-      tipAmount: tip,
-      providerPaymentId: paymentResult.paymentIntentId || void 0,
-      data: paymentData || {},
-      processedAt: paymentResult.status === "succeeded" ? (/* @__PURE__ */ new Date()).toISOString() : void 0,
-      order: { connect: { id: order.id } },
-      paymentProvider: { connect: { id: paymentProvider.id } }
+  const paymentIdempotencyKey = `checkout:${selectedSession.idempotencyKey || selectedSession.id}`;
+  const prisma = context.prisma;
+  const result2 = await prisma.$transaction(async (tx) => {
+    const lockedCart = await tx.cart.findUnique({ where: { id: cartId } });
+    if (!lockedCart) throw new Error("Cart not found");
+    if (lockedCart.orderId) {
+      const existingOrder = await tx.restaurantOrder.findUnique({ where: { id: lockedCart.orderId } });
+      return { order: existingOrder, payment: null, replay: true };
     }
-  });
-  if (cart.paymentCollection?.id) {
-    await sudoContext.query.PaymentCollection.updateOne({
-      where: { id: cart.paymentCollection.id },
+    const order = await tx.restaurantOrder.create({
       data: {
-        payments: { connect: [{ id: payment.id }] }
+        orderNumber,
+        orderType: orderTypeMap[cart.orderType || "pickup"] || "takeout",
+        orderSource: "online",
+        status: isManual ? "open" : "sent_to_kitchen",
+        guestCount: 1,
+        subtotal,
+        tax,
+        tip,
+        discount: pickupDiscount,
+        total,
+        currencyCode,
+        customerId: customerId || null,
+        customerName: cart.customerName || "",
+        customerEmail: cart.email || "",
+        customerPhone: cart.customerPhone || "",
+        deliveryAddress: isDeliveryOrder2 ? cart.deliveryAddress || "" : "",
+        deliveryAddress2: isDeliveryOrder2 ? cart.deliveryAddress2 || "" : "",
+        deliveryCity: isDeliveryOrder2 ? cart.deliveryCity || "" : "",
+        deliveryState: isDeliveryOrder2 ? cart.deliveryState || "" : "",
+        deliveryZip: isDeliveryOrder2 ? cart.deliveryZip || "" : "",
+        deliveryCountryCode: isDeliveryOrder2 ? cart.deliveryCountryCode || "" : "",
+        secretKey,
+        orderItems: {
+          create: validatedItems.map((item) => ({
+            quantity: item.quantity,
+            price: item.unitPrice,
+            itemNameSnapshot: item.menuItem.name,
+            itemThumbnailSnapshot: item.menuItem.thumbnail || "",
+            kitchenStationSnapshot: item.menuItem.kitchenStation || "expo",
+            menuItemIdSnapshot: item.menuItem.id,
+            modifiersSnapshot: item.modifiers.map((modifier) => ({
+              id: modifier.id,
+              name: modifier.name,
+              modifierGroup: modifier.modifierGroup,
+              modifierGroupLabel: modifier.modifierGroupLabel || null,
+              priceAdjustment: modifier.priceAdjustment
+            })),
+            specialInstructions: item.specialInstructions,
+            menuItemId: item.menuItem.id,
+            appliedModifiers: item.modifiers.length ? { connect: item.modifiers.map((modifier) => ({ id: modifier.id })) } : void 0
+          }))
+        }
       }
     });
-  }
-  await sudoContext.query.Cart.updateOne({
-    where: { id: cartId },
-    data: {
-      order: { connect: { id: order.id } }
+    const payment = await tx.payment.create({
+      data: {
+        idempotencyKey: paymentIdempotencyKey,
+        reservedAt: /* @__PURE__ */ new Date(),
+        amount: total,
+        status: paymentResult.status === "succeeded" ? "succeeded" : "pending",
+        paymentMethod: paymentMethodMap[providerCode || "pp_system_default"] || "cash",
+        currencyCode,
+        tipAmount: tip,
+        providerPaymentId: paymentResult.paymentIntentId || "",
+        data: paymentData || {},
+        processedAt: paymentResult.status === "succeeded" ? /* @__PURE__ */ new Date() : null,
+        orderId: order.id,
+        paymentProviderId: paymentProvider.id,
+        paymentCollectionId: cart.paymentCollection?.id || null
+      }
+    });
+    if (cart.paymentCollection?.id) {
+      await tx.paymentCollection.update({ where: { id: cart.paymentCollection.id }, data: { amount: total } });
     }
-  });
-  return await sudoContext.query.RestaurantOrder.findOne({
-    where: { id: order.id },
-    query: "id orderNumber secretKey status"
-  });
+    if (isManual && Number(selectedSession.amount || 0) !== total) {
+      await tx.paymentSession.update({ where: { id: selectedSession.id }, data: { amount: total } });
+    }
+    await tx.cart.update({ where: { id: cartId }, data: { orderId: order.id } });
+    await appendAuditEventWithClient(tx, context.session?.itemId, {
+      eventKey: `checkout-completed:${order.id}`,
+      eventType: "checkout.completed",
+      entityType: "RestaurantOrder",
+      entityId: order.id,
+      after: { total, paymentStatus: payment.status },
+      metadata: { paymentSessionId: selectedSession.id, paymentIdempotencyKey }
+    });
+    if (payment.status === "succeeded") {
+      await issueReceiptWithClient(tx, context.session?.itemId, {
+        kind: "sale",
+        entityId: payment.id,
+        orderId: order.id,
+        paymentId: payment.id,
+        amount: total,
+        currencyCode,
+        snapshot: {
+          orderNumber: order.orderNumber,
+          items: validatedItems,
+          subtotal,
+          tax,
+          tip,
+          discount: pickupDiscount,
+          deliveryFee,
+          total
+        }
+      });
+    }
+    return { order, payment, replay: false };
+  }, { isolationLevel: "Serializable" });
+  if (!result2.replay && isKitchenActiveOrderStatus(result2.order.status)) {
+    await syncKitchenTicketsForOrder(result2.order.id, context);
+  }
+  return {
+    id: result2.order.id,
+    orderNumber: result2.order.orderNumber,
+    secretKey: result2.order.secretKey,
+    status: result2.order.status
+  };
 }
 
 // features/keystone/mutations/activeCart.ts
@@ -6007,55 +7596,154 @@ async function activeCart(root, { cartId }, context) {
   }
   const settings = await sudoContext.query.StoreSettings.findOne({
     where: { id: "1" },
-    query: `currencyCode`
+    query: `currencyCode deliveryFee deliveryMinimum pickupDiscount taxRate`
+  });
+  const currencyCode = settings?.currencyCode || "USD";
+  const totals = calculateRestaurantTotals({
+    subtotal: cart.subtotal || 0,
+    orderType: cart.orderType,
+    tipPercent: cart.tipPercent,
+    deliveryFee: settings?.deliveryFee,
+    deliveryMinimum: settings?.deliveryMinimum,
+    pickupDiscountPercent: settings?.pickupDiscount,
+    taxRate: settings?.taxRate,
+    currencyCode
   });
   return {
     ...cart,
-    currencyCode: settings?.currencyCode || "USD"
+    ...totals,
+    currencyCode
   };
 }
 
-// features/keystone/mutations/updateActiveCart.ts
-async function updateActiveCart(root, { cartId, data }, context) {
-  const sudoContext = context.sudo();
+// features/keystone/mutations/createActiveCart.ts
+var ALLOWED_ORDER_TYPES = /* @__PURE__ */ new Set(["pickup", "delivery"]);
+async function createActiveCart(_root, { orderType = "pickup" }, context) {
+  const normalizedOrderType = ALLOWED_ORDER_TYPES.has(orderType || "") ? orderType : "pickup";
+  const userId = context.session?.itemId;
+  return context.sudo().query.Cart.createOne({
+    data: {
+      orderType: normalizedOrderType,
+      tipPercent: "0",
+      user: userId ? { connect: { id: userId } } : void 0
+    },
+    query: "id orderType tipPercent"
+  });
+}
+
+// features/keystone/mutations/addActiveCartItem.ts
+async function addActiveCartItem(_root, {
+  cartId,
+  input
+}, context) {
   await assertCanAccessCart(context, cartId, "write");
-  const normalizedData = normalizeDeliveryFields(data);
-  const cart = await sudoContext.query.Cart.findOne({
+  const sudo = context.sudo();
+  const cart = await sudo.query.Cart.findOne({
+    where: { id: cartId },
+    query: "id order { id }"
+  });
+  if (cart?.order?.id) throw new Error("Completed carts cannot be changed");
+  const validated = await validateCartItemInput(context, input);
+  await sudo.query.CartItem.createOne({
+    data: {
+      cart: { connect: { id: cartId } },
+      menuItem: { connect: { id: validated.menuItem.id } },
+      quantity: validated.quantity,
+      modifiers: validated.modifiers.length ? { connect: validated.modifiers.map((modifier) => ({ id: modifier.id })) } : void 0,
+      specialInstructions: validated.specialInstructions
+    },
+    query: "id"
+  });
+  return sudo.db.Cart.findOne({ where: { id: cartId } });
+}
+
+// features/keystone/mutations/updateActiveCart.ts
+var ALLOWED_TIP_PERCENTS = /* @__PURE__ */ new Set(["0", "15", "18", "20", "25"]);
+var ALLOWED_ORDER_TYPES2 = /* @__PURE__ */ new Set(["pickup", "delivery"]);
+function boundedText(value, field, maximum) {
+  if (value == null) return void 0;
+  if (typeof value !== "string") throw new Error(`${field} must be text`);
+  const normalized = value.trim();
+  if (normalized.length > maximum) throw new Error(`${field} cannot exceed ${maximum} characters`);
+  return normalized;
+}
+async function updateActiveCart(_root, { cartId, data }, context) {
+  await assertCanAccessCart(context, cartId, "write");
+  const sudo = context.sudo();
+  const cart = await sudo.query.Cart.findOne({
     where: { id: cartId },
     query: `
       id
       orderType
       deliveryAddress
+      deliveryAddress2
       deliveryCity
+      deliveryState
       deliveryCountryCode
       deliveryZip
+      user { id }
+      order { id }
     `
   });
+  if (!cart) throw new Error("Cart not found");
+  if (cart.order?.id) throw new Error("Completed carts cannot be changed");
+  const deliveryInput = Object.fromEntries(
+    Object.entries({
+      deliveryAddress: data.deliveryAddress,
+      deliveryAddress2: data.deliveryAddress2,
+      deliveryCity: data.deliveryCity,
+      deliveryState: data.deliveryState,
+      deliveryZip: data.deliveryZip,
+      deliveryCountryCode: data.deliveryCountryCode
+    }).filter(([, value]) => value !== void 0)
+  );
+  const normalizedDelivery = normalizeDeliveryFields(deliveryInput);
+  const nextOrderType = data.orderType ?? cart.orderType ?? "pickup";
+  if (!ALLOWED_ORDER_TYPES2.has(nextOrderType)) throw new Error("Invalid order type");
+  if (data.tipPercent != null && !ALLOWED_TIP_PERCENTS.has(data.tipPercent)) {
+    throw new Error("Invalid tip percentage");
+  }
   const storeSettings = await getStoreDeliverySettings(context);
-  const nextOrderType = normalizedData.orderType ?? cart?.orderType;
-  assertDeliveryModeAllowed({
-    orderType: nextOrderType,
-    storeSettings
-  });
-  const isUpdatingDeliveryAddress = "deliveryAddress" in normalizedData || "deliveryAddress2" in normalizedData || "deliveryCity" in normalizedData || "deliveryState" in normalizedData || "deliveryZip" in normalizedData || "deliveryCountryCode" in normalizedData;
+  assertDeliveryModeAllowed({ orderType: nextOrderType, storeSettings });
+  const isUpdatingDeliveryAddress = Object.values(normalizedDelivery).some(
+    (value) => value !== void 0
+  );
   if (isUpdatingDeliveryAddress) {
-    assertDeliveryAddressComplete({
+    const delivery = {
       orderType: nextOrderType,
-      deliveryAddress: normalizedData.deliveryAddress ?? cart?.deliveryAddress,
-      deliveryCity: normalizedData.deliveryCity ?? cart?.deliveryCity,
-      deliveryCountryCode: normalizedData.deliveryCountryCode ?? cart?.deliveryCountryCode,
-      deliveryZip: normalizedData.deliveryZip ?? cart?.deliveryZip
-    });
+      deliveryAddress: normalizedDelivery.deliveryAddress ?? cart.deliveryAddress,
+      deliveryCity: normalizedDelivery.deliveryCity ?? cart.deliveryCity,
+      deliveryCountryCode: normalizedDelivery.deliveryCountryCode ?? cart.deliveryCountryCode,
+      deliveryZip: normalizedDelivery.deliveryZip ?? cart.deliveryZip
+    };
+    assertDeliveryAddressComplete(delivery);
     assertDeliveryAddressEligible({
-      orderType: nextOrderType,
-      storeSettings,
-      deliveryCountryCode: normalizedData.deliveryCountryCode ?? cart?.deliveryCountryCode,
-      deliveryZip: normalizedData.deliveryZip ?? cart?.deliveryZip
+      ...delivery,
+      storeSettings
     });
   }
-  return await sudoContext.db.Cart.updateOne({
+  let userId;
+  if (data.userId) {
+    const canAssignAnotherUser = permissions.canManageOrders({ session: context.session });
+    if (!canAssignAnotherUser && data.userId !== context.session?.itemId) {
+      throw new Error("Cart owner must match the authenticated customer");
+    }
+    const user = await sudo.query.User.findOne({ where: { id: data.userId }, query: "id" });
+    if (!user) throw new Error("Customer not found");
+    userId = user.id;
+  }
+  const updateData = {
+    orderType: nextOrderType,
+    email: boundedText(data.email, "Email", 320),
+    customerName: boundedText(data.customerName, "Customer name", 160),
+    customerPhone: boundedText(data.customerPhone, "Phone", 64),
+    ...normalizedDelivery,
+    tipPercent: data.tipPercent ?? void 0,
+    user: userId ? { connect: { id: userId } } : void 0
+  };
+  return sudo.db.Cart.updateOne({
     where: { id: cartId },
-    data: normalizedData
+    data: updateData
   });
 }
 
@@ -6063,9 +7751,14 @@ async function updateActiveCart(root, { cartId, data }, context) {
 async function updateCartItemQuantity(root, { cartItemId, quantity }, context) {
   const sudoContext = context.sudo();
   const cartItem = await assertCanAccessCartItem(context, cartItemId, "write");
+  const cart = await sudoContext.query.Cart.findOne({
+    where: { id: cartItem.cart.id },
+    query: "id order { id }"
+  });
+  if (cart?.order?.id) throw new Error("Completed carts cannot be changed");
   await sudoContext.db.CartItem.updateOne({
     where: { id: cartItemId },
-    data: { quantity }
+    data: { quantity: normalizeCartQuantity(quantity) }
   });
   return await sudoContext.db.Cart.findOne({
     where: { id: cartItem.cart.id }
@@ -6077,6 +7770,11 @@ async function removeCartItem(root, { cartItemId }, context) {
   const sudoContext = context.sudo();
   const cartItem = await assertCanAccessCartItem(context, cartItemId, "write");
   const cartId = cartItem.cart.id;
+  const cart = await sudoContext.query.Cart.findOne({
+    where: { id: cartId },
+    query: "id order { id }"
+  });
+  if (cart?.order?.id) throw new Error("Completed carts cannot be changed");
   await sudoContext.db.CartItem.deleteOne({
     where: { id: cartItemId }
   });
@@ -6122,6 +7820,9 @@ async function getCustomerOrder(root, { orderId, secretKey }, context) {
       orderItems {
         id
         thumbnail
+        itemNameSnapshot
+        itemThumbnailSnapshot
+        modifiersSnapshot
         quantity
         unitPrice
         totalPrice
@@ -6177,8 +7878,8 @@ async function getCustomerOrders(root, { limit = 10, offset = 0 }, context) {
       customer: { id: { equals: sessionUserId } }
     },
     orderBy: { createdAt: "desc" },
-    take: limit,
-    skip: offset,
+    take: Math.min(50, Math.max(1, Number(limit) || 10)),
+    skip: Math.max(0, Number(offset) || 0),
     query: `
       id
       orderNumber
@@ -6191,6 +7892,9 @@ async function getCustomerOrders(root, { limit = 10, offset = 0 }, context) {
         id
         quantity
         price
+        itemNameSnapshot
+        itemThumbnailSnapshot
+        modifiersSnapshot
         menuItem {
           id
           name
@@ -6214,7 +7918,9 @@ async function activeCartPaymentProviders(root, _args, context) {
       isInstalled
     `
   });
-  return providers;
+  return providers.filter(
+    (provider) => isPaymentProviderConfigured(provider.code || "")
+  );
 }
 
 // features/keystone/mutations/tableManagement.ts
@@ -6301,18 +8007,27 @@ async function fireCourse(root, args, context) {
     });
     const course = await sudo.query.OrderCourse.findOne({
       where: { id: courseId },
-      query: "orderItems { id }"
+      query: "order { id } orderItems { id }"
     });
     if (course?.orderItems?.length) {
       await Promise.all(
         course.orderItems.map(
           (item) => sudo.db.OrderItem.updateOne({
             where: { id: item.id },
-            data: { sentToKitchen: (/* @__PURE__ */ new Date()).toISOString() }
+            data: {
+              sentToKitchen: (/* @__PURE__ */ new Date()).toISOString(),
+              firedAt: (/* @__PURE__ */ new Date()).toISOString(),
+              kitchenStatus: "new"
+            }
           })
         )
       );
     }
+    await appendKitchenTicketEvent(context, {
+      eventType: "dispatch",
+      orderId: course?.order?.id,
+      payload: { courseId, action: "fire", orderItemIds: (course?.orderItems || []).map((item) => item.id) }
+    });
     return { success: true, error: null };
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : "Unknown error" };
@@ -6332,6 +8047,22 @@ async function recallCourse(root, args, context) {
         fireTime: null
       }
     });
+    const course = await sudo.query.OrderCourse.findOne({
+      where: { id: courseId },
+      query: "order { id } orderItems { id }"
+    });
+    const recalledAt = (/* @__PURE__ */ new Date()).toISOString();
+    await Promise.all((course?.orderItems || []).map(
+      (item) => sudo.db.OrderItem.updateOne({
+        where: { id: item.id },
+        data: { kitchenStatus: "recalled", recalledAt }
+      })
+    ));
+    await appendKitchenTicketEvent(context, {
+      eventType: "recall",
+      orderId: course?.order?.id,
+      payload: { courseId, action: "recall", orderItemIds: (course?.orderItems || []).map((item) => item.id) }
+    });
     return { success: true, error: null };
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : "Unknown error" };
@@ -6339,110 +8070,140 @@ async function recallCourse(root, args, context) {
 }
 
 // features/keystone/mutations/kdsTickets.ts
-async function syncKitchenTickets(root, args, context) {
+async function syncKitchenTickets(_root, _args, context) {
   if (!permissions.canManageKitchen({ session: context.session })) {
     return { success: false, error: "Not authorized", created: 0, updated: 0 };
   }
   try {
-    const result = await syncKitchenTicketsForActiveOrders(context);
-    return { success: true, error: null, created: result.created, updated: result.updated };
-  } catch (err) {
-    return {
-      success: false,
-      error: err instanceof Error ? err.message : "Unknown error",
-      created: 0,
-      updated: 0
-    };
+    const result2 = await syncKitchenTicketsForActiveOrders(context);
+    return { success: true, error: null, created: result2.created, updated: result2.updated };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : "Unknown error", created: 0, updated: 0 };
   }
 }
-async function updateKitchenTicketStatus(root, args, context) {
+async function updateKitchenTicketStatus(_root, args, context) {
   if (!permissions.canManageKitchen({ session: context.session })) {
     return { success: false, error: "Not authorized" };
   }
   try {
-    const now = (/* @__PURE__ */ new Date()).toISOString();
-    const sudo = context.sudo();
-    const ticket = await sudo.query.KitchenTicket.findOne({
-      where: { id: args.ticketId },
-      query: "id order { id } station { name }"
-    });
-    if (!ticket) {
-      return { success: false, error: "Ticket not found" };
-    }
-    if (args.status === "served" && isExpediterStation(ticket.station?.name) && ticket.order?.id) {
-      const siblingTickets = await sudo.query.KitchenTicket.findMany({
-        where: {
-          order: { id: { equals: ticket.order.id } },
-          status: { in: ["new", "in_progress"] }
-        },
-        query: "id status station { name }"
+    const prisma = context.prisma;
+    const actorId = context.session?.itemId;
+    const result2 = await prisma.$transaction(async (tx) => {
+      const ticket = await tx.kitchenTicket.findUnique({
+        where: { id: args.ticketId },
+        include: {
+          order: { select: { id: true } },
+          station: { select: { name: true } },
+          orderItems: { select: { id: true } }
+        }
       });
-      const blockingPrep = siblingTickets.filter((t) => t.id !== ticket.id && !isExpediterStation(t.station?.name));
-      if (blockingPrep.length > 0) {
-        const stations = blockingPrep.map((t) => t.station?.name).filter(Boolean).join(", ");
-        return {
-          success: false,
-          error: stations ? `Prep stations still working: ${stations}` : "Prep tickets must be completed before expediter can bump served"
-        };
+      if (!ticket) throw new Error("Ticket not found");
+      if (ticket.status === args.status) return { orderId: ticket.orderId, replay: true };
+      if (args.status === "served" && isExpediterStation(ticket.station?.name) && ticket.orderId) {
+        const siblings = await tx.kitchenTicket.findMany({
+          where: { orderId: ticket.orderId, status: { in: ["new", "in_progress"] }, id: { not: ticket.id } },
+          include: { station: { select: { name: true } } }
+        });
+        const blockingPrep = siblings.filter((candidate) => !isExpediterStation(candidate.station?.name));
+        if (blockingPrep.length) {
+          const stations = blockingPrep.map((candidate) => candidate.station?.name).filter(Boolean).join(", ");
+          throw new Error(stations ? `Prep stations still working: ${stations}` : "Prep tickets must be completed before expediter can bump served");
+        }
       }
-    }
-    await sudo.db.KitchenTicket.updateOne({
-      where: { id: args.ticketId },
-      data: {
-        status: args.status,
-        completedAt: args.status === "ready" ? now : args.status === "in_progress" ? null : void 0,
-        servedAt: args.status === "served" ? now : void 0
-      }
-    });
-    if (ticket.order?.id) {
-      await reconcileRestaurantOrderStatus(ticket.order.id, context);
-    }
+      const now = /* @__PURE__ */ new Date();
+      const nowIso = now.toISOString();
+      const terminalItems = (ticket.items || []).map(
+        (item) => args.status === "served" ? { ...item, status: "fulfilled", fulfilledAt: item.fulfilledAt || nowIso } : args.status === "cancelled" ? { ...item, status: "cancelled" } : item
+      );
+      await tx.kitchenTicket.update({
+        where: { id: ticket.id },
+        data: {
+          status: args.status,
+          items: ["served", "cancelled"].includes(args.status) ? terminalItems : void 0,
+          completedAt: args.status === "ready" ? now : args.status === "in_progress" ? null : void 0,
+          servedAt: args.status === "served" ? now : void 0,
+          recalledAt: args.status === "in_progress" && ticket.status === "ready" ? now : void 0
+        }
+      });
+      const itemState = args.status === "served" ? "fulfilled" : args.status === "ready" ? "ready" : args.status === "cancelled" ? "voided" : args.status;
+      await tx.orderItem.updateMany({
+        where: { id: { in: ticket.orderItems.map((item) => item.id) } },
+        data: {
+          kitchenStatus: itemState,
+          kitchenStartedAt: args.status === "in_progress" ? now : void 0,
+          kitchenReadyAt: args.status === "ready" ? now : void 0,
+          fulfilledAt: args.status === "served" ? now : void 0,
+          recalledAt: args.status === "in_progress" && ticket.status === "ready" ? now : void 0
+        }
+      });
+      await appendKitchenTicketEventWithClient(tx, actorId, {
+        eventType: args.status === "cancelled" ? "cancel" : args.status === "in_progress" && ticket.status === "ready" ? "recall" : "status",
+        ticketId: ticket.id,
+        orderId: ticket.orderId,
+        payload: { from: ticket.status, to: args.status, orderItemIds: ticket.orderItems.map((item) => item.id) }
+      });
+      return { orderId: ticket.orderId, replay: false };
+    }, { isolationLevel: "Serializable" });
+    if (!result2.replay && result2.orderId) await reconcileRestaurantOrderStatus(result2.orderId, context);
     return { success: true, error: null };
-  } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : "Unknown error" };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : "Unknown error" };
   }
 }
-async function fulfillKitchenTicketItem(root, args, context) {
+async function fulfillKitchenTicketItem(_root, args, context) {
   if (!permissions.canManageKitchen({ session: context.session })) {
     return { success: false, error: "Not authorized" };
   }
   try {
-    const sudo = context.sudo();
-    const now = (/* @__PURE__ */ new Date()).toISOString();
-    const ticket = await sudo.query.KitchenTicket.findOne({
-      where: { id: args.ticketId },
-      query: "id items order { id }"
-    });
-    if (!ticket) {
-      return { success: false, error: "Ticket not found" };
-    }
-    const items = (ticket.items || []).map((item) => {
-      if (item.id !== args.itemId) return item;
-      return {
-        ...item,
-        status: args.fulfilled ? "fulfilled" : "in_progress",
-        fulfilledAt: args.fulfilled ? now : null
-      };
-    });
-    const allFulfilled = items.length > 0 && items.every((i) => i.status === "fulfilled");
-    await sudo.db.KitchenTicket.updateOne({
-      where: { id: args.ticketId },
-      data: {
-        items,
-        status: allFulfilled ? "ready" : "in_progress",
-        completedAt: allFulfilled ? now : null
+    const prisma = context.prisma;
+    const actorId = context.session?.itemId;
+    const result2 = await prisma.$transaction(async (tx) => {
+      const ticket = await tx.kitchenTicket.findUnique({
+        where: { id: args.ticketId },
+        include: { orderItems: { select: { id: true } } }
+      });
+      if (!ticket) throw new Error("Ticket not found");
+      const currentItems = ticket.items || [];
+      if (!currentItems.some((item) => item.id === args.itemId)) throw new Error("Ticket item not found");
+      const now = /* @__PURE__ */ new Date();
+      const nowIso = now.toISOString();
+      const items = currentItems.map(
+        (item) => item.id === args.itemId ? { ...item, status: args.fulfilled ? "fulfilled" : "in_progress", fulfilledAt: args.fulfilled ? nowIso : null } : item
+      );
+      const allFulfilled = items.length > 0 && items.every((item) => item.status === "fulfilled");
+      await tx.kitchenTicket.update({
+        where: { id: ticket.id },
+        data: { items, status: allFulfilled ? "ready" : "in_progress", completedAt: allFulfilled ? now : null }
+      });
+      const normalizedItem = ticket.orderItems.find((item) => item.id === args.itemId);
+      if (normalizedItem) {
+        await tx.orderItem.update({
+          where: { id: normalizedItem.id },
+          data: {
+            kitchenStatus: args.fulfilled ? "fulfilled" : "in_progress",
+            fulfilledAt: args.fulfilled ? now : null,
+            kitchenStartedAt: args.fulfilled ? void 0 : now
+          }
+        });
       }
-    });
-    if (ticket.order?.id) {
-      await reconcileRestaurantOrderStatus(ticket.order.id, context);
-    }
+      await appendKitchenTicketEventWithClient(tx, actorId, {
+        eventType: "item_status",
+        ticketId: ticket.id,
+        orderId: ticket.orderId,
+        orderItemId: args.itemId,
+        payload: { fulfilled: args.fulfilled, at: nowIso }
+      });
+      return { orderId: ticket.orderId };
+    }, { isolationLevel: "Serializable" });
+    if (result2.orderId) await reconcileRestaurantOrderStatus(result2.orderId, context);
     return { success: true, error: null };
-  } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : "Unknown error" };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : "Unknown error" };
   }
 }
 
 // features/keystone/mutations/handlePaymentProviderWebhook.ts
+var import_crypto6 = __toESM(require("crypto"));
 function normalizeHeaders(headers) {
   const normalized = {};
   for (const [key, value] of Object.entries(headers || {})) {
@@ -6470,110 +8231,135 @@ async function findPaymentByProviderIds(providerPaymentIds, context) {
   for (const providerPaymentId of providerPaymentIds) {
     const payments = await sudo.query.Payment.findMany({
       where: { providerPaymentId: { equals: providerPaymentId } },
-      query: "id status data order { id status }",
+      query: "id status data order { id status orderSource }",
       take: 1
     });
-    if (payments.length > 0) {
-      return { payment: payments[0], providerPaymentId };
-    }
+    if (payments[0]) return payments[0];
   }
   return null;
 }
-async function handlePaymentProviderWebhook(root, { providerCode, event, headers }, context) {
-  const sudoContext = context.sudo();
-  if (!providerCode || !/^[a-z0-9_\-]+$/i.test(providerCode)) {
-    throw new Error("Invalid provider code");
-  }
-  if (!event || typeof event !== "object") {
-    throw new Error("Webhook event payload is required");
-  }
+async function handlePaymentProviderWebhook(_root, {
+  providerCode,
+  event,
+  headers,
+  rawBody
+}, context) {
+  if (!providerCode || !/^[a-z0-9_-]+$/i.test(providerCode)) throw new Error("Invalid provider code");
+  if (!event || typeof event !== "object") throw new Error("Webhook event payload is required");
   const normalizedHeaders = normalizeHeaders(headers);
-  const providers = await sudoContext.query.PaymentProvider.findMany({
+  const providers = await context.sudo().query.PaymentProvider.findMany({
     where: { code: { equals: providerCode } },
-    query: `
-      id
-      code
-      isInstalled
-      createPaymentFunction
-      capturePaymentFunction
-      refundPaymentFunction
-      getPaymentStatusFunction
-      generatePaymentLinkFunction
-      handleWebhookFunction
-      credentials
-      metadata
-    `,
+    query: "id code isInstalled createPaymentFunction capturePaymentFunction refundPaymentFunction getPaymentStatusFunction generatePaymentLinkFunction handleWebhookFunction credentials metadata",
     take: 1
   });
   const provider = providers[0];
-  if (!provider || !provider.isInstalled) {
-    throw new Error(`Payment provider ${providerCode} not found or not installed`);
-  }
+  if (!provider?.isInstalled) throw new Error(`Payment provider ${providerCode} not found or not installed`);
   if (!provider.handleWebhookFunction || provider.handleWebhookFunction === "manual") {
     throw new Error(`Provider ${providerCode} does not support authenticated webhook handling`);
   }
-  const parsed = await handleWebhook({ provider, event, headers: normalizedHeaders });
-  if (!parsed?.isValid || !parsed?.type) {
-    throw new Error("Webhook verification failed");
-  }
+  const parsed = await handleWebhook({
+    provider,
+    event,
+    headers: normalizedHeaders,
+    rawBody: rawBody || void 0
+  });
+  if (!parsed?.isValid || !parsed?.type) throw new Error("Webhook verification failed");
   const type = String(parsed.type);
   const resource = parsed.resource || {};
-  const candidateIds = getCandidateProviderPaymentIds(type, resource);
-  const matched = candidateIds.length > 0 ? await findPaymentByProviderIds(candidateIds, context) : null;
-  if (!matched) {
+  const providerEventId = String(parsed.event?.id || event?.id || "");
+  const eventKey = `${providerCode}:${providerEventId || import_crypto6.default.createHash("sha256").update(rawBody || JSON.stringify(event)).digest("hex")}`;
+  const existing = await context.sudo().query.PaymentWebhookEvent.findMany({
+    where: { eventKey: { equals: eventKey } },
+    query: "id status",
+    take: 1
+  });
+  if (existing[0]?.status === "processed" || existing[0]?.status === "ignored") {
     return { success: true, error: null };
   }
-  const { payment } = matched;
-  if (["payment_intent.succeeded", "charge.succeeded", "CHECKOUT.ORDER.APPROVED", "PAYMENT.CAPTURE.COMPLETED"].includes(type)) {
-    await sudoContext.db.Payment.updateOne({
-      where: { id: payment.id },
+  let inbox = existing[0];
+  if (!inbox) {
+    inbox = await context.sudo().query.PaymentWebhookEvent.createOne({
       data: {
-        status: "succeeded",
-        processedAt: (/* @__PURE__ */ new Date()).toISOString(),
-        errorMessage: null,
-        data: {
-          ...payment.data || {},
-          webhookType: type,
-          webhookResourceId: resource.id || null,
-          chargeId: resource.latest_charge || resource.id || null
-        }
-      }
-    });
-    if (payment.order?.id && !["completed", "cancelled"].includes(payment.order.status || "")) {
-      await sudoContext.db.RestaurantOrder.updateOne({
-        where: { id: payment.order.id },
-        data: {
-          status: "sent_to_kitchen"
-        }
-      });
-    }
-  } else if (["payment_intent.payment_failed", "PAYMENT.CAPTURE.DENIED", "PAYMENT.CAPTURE.DECLINED"].includes(type)) {
-    await sudoContext.db.Payment.updateOne({
-      where: { id: payment.id },
-      data: {
-        status: "failed",
-        errorMessage: resource.last_payment_error?.message || resource.status_details?.reason || "Payment failed",
-        data: {
-          ...payment.data || {},
-          webhookType: type,
-          webhookResourceId: resource.id || null
-        }
-      }
-    });
-  } else if (["payment_intent.canceled", "PAYMENT.CAPTURE.REVERSED", "CHECKOUT.ORDER.VOIDED"].includes(type)) {
-    await sudoContext.db.Payment.updateOne({
-      where: { id: payment.id },
-      data: {
-        status: "cancelled",
-        data: {
-          ...payment.data || {},
-          webhookType: type,
-          webhookResourceId: resource.id || null
-        }
-      }
+        eventKey,
+        providerCode,
+        providerEventId,
+        eventType: type,
+        status: "received",
+        payload: event,
+        rawBody: rawBody || JSON.stringify(event),
+        attempts: 0
+      },
+      query: "id status"
     });
   }
-  return { success: true, error: null };
+  const candidateIds = getCandidateProviderPaymentIds(type, resource);
+  const payment = candidateIds.length ? await findPaymentByProviderIds(candidateIds, context) : null;
+  if (!payment) {
+    await context.sudo().db.PaymentWebhookEvent.updateOne({
+      where: { id: inbox.id },
+      data: { status: "ignored", processedAt: (/* @__PURE__ */ new Date()).toISOString(), attempts: 1 }
+    });
+    return { success: true, error: null };
+  }
+  try {
+    const prisma = context.prisma;
+    await prisma.$transaction(async (tx) => {
+      const currentInbox = await tx.paymentWebhookEvent.findUnique({ where: { eventKey } });
+      if (["processed", "ignored"].includes(currentInbox?.status || "")) return;
+      let status = null;
+      if (["payment_intent.succeeded", "charge.succeeded", "CHECKOUT.ORDER.APPROVED", "PAYMENT.CAPTURE.COMPLETED"].includes(type)) {
+        status = "succeeded";
+      } else if (["payment_intent.payment_failed", "PAYMENT.CAPTURE.DENIED", "PAYMENT.CAPTURE.DECLINED"].includes(type)) {
+        status = "failed";
+      } else if (["payment_intent.canceled", "PAYMENT.CAPTURE.REVERSED", "CHECKOUT.ORDER.VOIDED"].includes(type)) {
+        status = "cancelled";
+      }
+      if (status) {
+        await tx.payment.update({
+          where: { id: payment.id },
+          data: {
+            status,
+            processedAt: status === "succeeded" ? /* @__PURE__ */ new Date() : null,
+            errorMessage: status === "failed" ? resource.last_payment_error?.message || resource.status_details?.reason || "Payment failed" : "",
+            data: {
+              ...payment.data || {},
+              webhookType: type,
+              webhookEventId: providerEventId,
+              webhookResourceId: resource.id || null,
+              captureId: resource.supplementary_data?.related_ids?.capture_id || resource.latest_charge || null
+            }
+          }
+        });
+        if (status === "succeeded" && payment.order?.id && payment.order.orderSource === "online" && payment.order.status === "open") {
+          await tx.restaurantOrder.update({ where: { id: payment.order.id }, data: { status: "sent_to_kitchen" } });
+        }
+      }
+      await tx.paymentWebhookEvent.update({
+        where: { id: inbox.id },
+        data: {
+          paymentId: payment.id,
+          status: status ? "processed" : "ignored",
+          attempts: Number(currentInbox?.attempts || 0) + 1,
+          processedAt: /* @__PURE__ */ new Date(),
+          error: ""
+        }
+      });
+    }, { isolationLevel: "Serializable" });
+    if (["payment_intent.succeeded", "charge.succeeded", "CHECKOUT.ORDER.APPROVED", "PAYMENT.CAPTURE.COMPLETED"].includes(type) && payment.order?.id && payment.order.orderSource === "pos") {
+      await finalizePaidOrder(payment.order.id, context);
+    }
+    return { success: true, error: null };
+  } catch (error) {
+    await context.sudo().db.PaymentWebhookEvent.updateOne({
+      where: { id: inbox.id },
+      data: {
+        status: "failed",
+        attempts: 1,
+        error: error instanceof Error ? error.message : "Unknown webhook processing error"
+      }
+    });
+    throw error;
+  }
 }
 
 // features/keystone/mutations/createPOSOrder.ts
@@ -6587,47 +8373,38 @@ function getCourseType(courseNumber) {
   if (courseNumber === 3) return "desserts";
   return "mains";
 }
-async function createPOSOrder(root, args, context) {
+async function createPOSOrder(_root, args, context) {
   if (!permissions.canManageOrders({ session: context.session })) {
     throw new Error("Not authorized to create POS orders");
   }
   const orderType = args.orderType || "dine_in";
-  const items = (args.items || []).filter((item) => item?.menuItemId && (item.quantity || 0) > 0);
-  const tableIds = args.tableIds || [];
-  if (items.length === 0) {
-    throw new Error("Order must include at least one item");
-  }
-  if (orderType === "dine_in" && tableIds.length === 0) {
+  const items = (args.items || []).filter((item) => item?.menuItemId && Number(item.quantity) > 0);
+  const tableIds = Array.from(new Set(args.tableIds || []));
+  if (!items.length) throw new Error("Order must include at least one item");
+  if (orderType === "dine_in" && !tableIds.length) {
     throw new Error("Dine-in orders require at least one table");
   }
   const sudo = context.sudo();
-  const [storeSettings, menuItems] = await Promise.all([
-    sudo.query.StoreSettings.findOne({
-      where: { id: "1" },
-      query: "currencyCode taxRate"
-    }),
-    sudo.query.MenuItem.findMany({
-      where: { id: { in: items.map((item) => item.menuItemId) } },
-      query: "id price available"
-    })
+  const [storeSettings, validatedItems, tables] = await Promise.all([
+    sudo.query.StoreSettings.findOne({ where: { id: "1" }, query: "currencyCode taxRate" }),
+    Promise.all(
+      items.map(async (item) => ({
+        ...await validateCartItemInput(context, {
+          menuItemId: item.menuItemId,
+          quantity: item.quantity,
+          modifierIds: item.modifierIds || [],
+          specialInstructions: item.specialInstructions
+        }),
+        courseNumber: Math.max(1, Math.floor(Number(item.courseNumber || 1)))
+      }))
+    ),
+    tableIds.length ? sudo.query.Table.findMany({ where: { id: { in: tableIds } }, query: "id status" }) : Promise.resolve([])
   ]);
-  const menuItemMap = new Map(menuItems.map((item) => [item.id, item]));
-  const normalizedItems = items.map((item) => {
-    const menuItem = menuItemMap.get(item.menuItemId);
-    if (!menuItem) {
-      throw new Error(`Menu item not found: ${item.menuItemId}`);
-    }
-    if (!menuItem.available) {
-      throw new Error("One or more selected menu items are unavailable");
-    }
-    return {
-      menuItemId: item.menuItemId,
-      quantity: Math.max(1, item.quantity),
-      courseNumber: item.courseNumber || 1,
-      price: Number(menuItem.price || 0)
-    };
-  });
-  const subtotal = normalizedItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  if (tables.length !== tableIds.length) throw new Error("One or more tables were not found");
+  const subtotal = validatedItems.reduce(
+    (sum, item) => sum + item.unitPrice * item.quantity,
+    0
+  );
   const currencyCode = storeSettings?.currencyCode || "USD";
   const { tax, total } = calculateRestaurantTotals({
     subtotal,
@@ -6640,7 +8417,7 @@ async function createPOSOrder(root, args, context) {
       orderNumber: generateOrderNumber(),
       orderType,
       orderSource: "pos",
-      status: "open",
+      status: "sent_to_kitchen",
       guestCount: Math.max(1, args.guestCount || 1),
       subtotal,
       tax,
@@ -6654,7 +8431,7 @@ async function createPOSOrder(root, args, context) {
     }
   });
   const courseMap = /* @__PURE__ */ new Map();
-  for (const item of normalizedItems) {
+  for (const item of validatedItems) {
     if (!courseMap.has(item.courseNumber)) {
       const course = await sudo.db.OrderCourse.createOne({
         data: {
@@ -6670,9 +8447,16 @@ async function createPOSOrder(root, args, context) {
       data: {
         order: { connect: { id: order.id } },
         course: { connect: { id: courseMap.get(item.courseNumber) } },
-        menuItem: { connect: { id: item.menuItemId } },
+        menuItem: { connect: { id: item.menuItem.id } },
+        appliedModifiers: item.modifiers.length ? { connect: item.modifiers.map((modifier) => ({ id: modifier.id })) } : void 0,
         quantity: item.quantity,
-        price: item.price,
+        price: item.unitPrice,
+        itemNameSnapshot: item.menuItem.name,
+        itemThumbnailSnapshot: item.menuItem.thumbnail || "",
+        kitchenStationSnapshot: item.menuItem.kitchenStation || "expo",
+        menuItemIdSnapshot: item.menuItem.id,
+        modifiersSnapshot: item.modifiers,
+        specialInstructions: item.specialInstructions,
         courseNumber: item.courseNumber
       }
     });
@@ -6693,7 +8477,7 @@ function getCourseType2(courseNumber) {
   if (courseNumber === 3) return "desserts";
   return "mains";
 }
-async function recalculateOrderTotals2(orderId, context) {
+async function recalculateOrderTotals(orderId, context) {
   const sudo = context.sudo();
   const [settings, order] = await Promise.all([
     getStoreDeliverySettings(context),
@@ -6743,20 +8527,20 @@ async function addServiceFloorItem(root, args, context) {
   const sudo = context.sudo();
   if (!args.tableId) throw new Error("Table is required");
   if (!args.menuItemId) throw new Error("Menu item is required");
-  const [settings, table, menuItem] = await Promise.all([
+  const [settings, table, validatedItem] = await Promise.all([
     getStoreDeliverySettings(context),
     sudo.query.Table.findOne({
       where: { id: args.tableId },
       query: "id tableNumber status"
     }),
-    sudo.query.MenuItem.findOne({
-      where: { id: args.menuItemId },
-      query: "id name price available"
+    validateCartItemInput(context, {
+      menuItemId: args.menuItemId,
+      quantity,
+      modifierIds: args.modifierIds || [],
+      specialInstructions: args.specialInstructions
     })
   ]);
   if (!table) throw new Error("Table not found");
-  if (!menuItem) throw new Error("Menu item not found");
-  if (!menuItem.available) throw new Error(`${menuItem.name || "Selected item"} is unavailable`);
   let orderId = args.orderId || null;
   let order = null;
   if (orderId) {
@@ -6803,15 +8587,21 @@ async function addServiceFloorItem(root, args, context) {
     data: {
       order: { connect: { id: orderId } },
       course: { connect: { id: course.id } },
-      menuItem: { connect: { id: args.menuItemId } },
-      quantity,
-      price: Number(menuItem.price || 0),
+      menuItem: { connect: { id: validatedItem.menuItem.id } },
+      appliedModifiers: validatedItem.modifiers.length ? { connect: validatedItem.modifiers.map((modifier) => ({ id: modifier.id })) } : void 0,
+      quantity: validatedItem.quantity,
+      price: validatedItem.unitPrice,
+      itemNameSnapshot: validatedItem.menuItem.name,
+      itemThumbnailSnapshot: validatedItem.menuItem.thumbnail || "",
+      kitchenStationSnapshot: validatedItem.menuItem.kitchenStation || "expo",
+      menuItemIdSnapshot: validatedItem.menuItem.id,
+      modifiersSnapshot: validatedItem.modifiers,
       courseNumber,
       seatNumber: args.seatNumber ?? void 0,
-      specialInstructions: args.specialInstructions || ""
+      specialInstructions: validatedItem.specialInstructions
     }
   });
-  await recalculateOrderTotals2(orderId, context);
+  await recalculateOrderTotals(orderId, context);
   const refreshed = await sudo.query.RestaurantOrder.findOne({
     where: { id: orderId },
     query: "id orderNumber status subtotal tax total"
@@ -6826,7 +8616,7 @@ function getCourseType3(courseNumber) {
   if (courseNumber === 3) return "desserts";
   return "mains";
 }
-async function recalculateOrderTotals3(orderId, context, voidReason) {
+async function recalculateOrderTotals2(orderId, context, voidReason) {
   const sudo = context.sudo();
   const [settings, order] = await Promise.all([
     getStoreDeliverySettings(context),
@@ -6839,15 +8629,12 @@ async function recalculateOrderTotals3(orderId, context, voidReason) {
         tip
         discount
         specialInstructions
-        orderItems { id quantity price }
+        orderItems { id quantity price adjustmentTotal isVoided }
       `
     })
   ]);
   if (!order) throw new Error("Order not found while recalculating totals");
-  const subtotal = (order.orderItems || []).reduce(
-    (sum, item) => sum + Number(item.price || 0) * Number(item.quantity || 0),
-    0
-  );
+  const subtotal = getOrderItemsSubtotal(order.orderItems || []);
   const { tax } = calculateRestaurantTotals({
     subtotal,
     orderType: order.orderType || "dine_in",
@@ -6904,7 +8691,13 @@ async function updateServiceFloorItem(root, args, context) {
   const orderId = item.order.id;
   const voidReason = args.voidReason?.trim() || null;
   if (voidReason) {
-    await sudo.db.OrderItem.deleteOne({ where: { id: args.orderItemId } });
+    const result2 = await voidOrderItem(null, {
+      orderItemId: args.orderItemId,
+      reason: voidReason,
+      managerApprovalId: args.managerApprovalId,
+      idempotencyKey: `service-floor-void:${args.orderItemId}:${voidReason}:${args.managerApprovalId || "missing-approval"}`
+    }, context);
+    if (!result2.success) throw new Error(result2.error || "Unable to void item");
   } else {
     const quantity = Math.max(1, Math.floor(Number(args.quantity ?? item.quantity ?? 1)));
     const courseNumber = Math.max(1, Math.floor(Number(args.courseNumber ?? item.courseNumber ?? 1)));
@@ -6920,7 +8713,7 @@ async function updateServiceFloorItem(root, args, context) {
       }
     });
   }
-  await recalculateOrderTotals3(orderId, context, voidReason);
+  if (!voidReason) await recalculateOrderTotals2(orderId, context);
   const refreshed = await sudo.query.RestaurantOrder.findOne({
     where: { id: orderId },
     query: "id orderNumber status subtotal tax total"
@@ -6996,7 +8789,7 @@ async function updateServiceFloorCheckStatus(root, args, context) {
       }
       nextStatus = "completed";
     } else if (args.action === "cancel_check") {
-      nextStatus = "cancelled";
+      return { success: false, error: "Use the approved order void workflow with a reason to cancel this check" };
     } else {
       return { success: false, error: "Invalid check action" };
     }
@@ -7004,6 +8797,14 @@ async function updateServiceFloorCheckStatus(root, args, context) {
       where: { id: args.orderId },
       data: { status: nextStatus }
     });
+    await appendAuditEvent(context, {
+      eventType: "service_floor.check_status_changed",
+      entityType: "RestaurantOrder",
+      entityId: args.orderId,
+      before: { status: order.status },
+      after: { status: nextStatus },
+      metadata: { action: args.action }
+    }).catch((error) => console.error("Check status audit event failed:", error));
     if (["completed", "cancelled"].includes(nextStatus)) {
       for (const table of order.tables || []) {
         const activeOrders = await getActiveOrdersForTable(table.id, context);
@@ -7408,13 +9209,90 @@ async function updateShiftStatus(root, args, context) {
   }
 }
 
-// features/keystone/mutations/tipManagement.ts
-var ROLE_PERCENTAGES = {
+// features/lib/tip-allocation.ts
+var TIP_ROLE_WEIGHTS = {
   server: 60,
   bartender: 20,
   busser: 10,
   host: 10
 };
+var TIP_INELIGIBLE_ROLES = /* @__PURE__ */ new Set(["manager", "admin", "owner", "supervisor"]);
+function isTipEligibleRole(role) {
+  return Boolean(role && !TIP_INELIGIBLE_ROLES.has(role.toLowerCase()));
+}
+function allocateCents(total, entries, getWeight, getStableKey) {
+  const totalWeight = entries.reduce((sum, entry) => sum + Math.max(0, getWeight(entry)), 0);
+  if (totalWeight <= 0 || total <= 0) return entries.map((entry) => ({ entry, amount: 0 }));
+  const allocations = entries.map((entry) => {
+    const exact = Math.max(0, getWeight(entry)) / totalWeight * total;
+    const floor = Math.floor(exact);
+    return { entry, amount: floor, remainder: exact - floor, key: getStableKey(entry) };
+  });
+  let centsRemaining = total - allocations.reduce((sum, allocation) => sum + allocation.amount, 0);
+  allocations.sort((a, b) => b.remainder - a.remainder || a.key.localeCompare(b.key)).forEach((allocation) => {
+    if (centsRemaining > 0) {
+      allocation.amount += 1;
+      centsRemaining -= 1;
+    }
+  });
+  return allocations.sort((a, b) => a.key.localeCompare(b.key)).map(({ entry, amount }) => ({ entry, amount }));
+}
+function aggregateEntries(entries) {
+  const byStaff = /* @__PURE__ */ new Map();
+  for (const entry of entries) {
+    const role = (entry.role || "").toLowerCase();
+    if (!entry.staffId || !isTipEligibleRole(role) || entry.hoursWorked <= 0) continue;
+    const key = `${entry.staffId}:${role}`;
+    const existing = byStaff.get(key);
+    byStaff.set(key, {
+      staffId: entry.staffId,
+      staffName: entry.staffName,
+      role,
+      hoursWorked: (existing?.hoursWorked || 0) + entry.hoursWorked
+    });
+  }
+  return Array.from(byStaff.values());
+}
+function calculateTipDistributions(type, totalTipsCents, rawEntries) {
+  const total = Math.max(0, Math.round(totalTipsCents));
+  const entries = aggregateEntries(rawEntries);
+  if (!entries.length || !total) return [];
+  if (type === "house_pool") {
+    return allocateCents(total, entries, (entry) => entry.hoursWorked, (entry) => entry.staffId).map(({ entry, amount }) => ({ ...entry, amount }));
+  }
+  const groups = Array.from(
+    entries.reduce((map, entry) => {
+      map.set(entry.role, [...map.get(entry.role) || [], entry]);
+      return map;
+    }, /* @__PURE__ */ new Map())
+  ).map(([role, roleEntries]) => ({
+    role,
+    entries: roleEntries,
+    weight: TIP_ROLE_WEIGHTS[role] || 0
+  })).filter((group) => group.weight > 0);
+  const groupAllocations = allocateCents(
+    total,
+    groups,
+    (group) => group.weight,
+    (group) => group.role
+  );
+  return groupAllocations.flatMap(
+    ({ entry: group, amount: groupAmount }) => allocateCents(
+      groupAmount,
+      group.entries,
+      (entry) => entry.hoursWorked,
+      (entry) => entry.staffId
+    ).map(({ entry, amount }) => ({ ...entry, amount }))
+  );
+}
+function assertTipConservation(totalTipsCents, distributions) {
+  const distributed = distributions.reduce((sum, distribution) => sum + distribution.amount, 0);
+  if (distributed !== Math.round(totalTipsCents)) {
+    throw new Error(`Tip allocation must conserve every cent (${distributed} of ${totalTipsCents})`);
+  }
+}
+
+// features/keystone/mutations/tipManagement.ts
 function dollarsToCents(value) {
   const parsed = Number(value || 0);
   if (!Number.isFinite(parsed)) return 0;
@@ -7450,45 +9328,17 @@ async function calculateDistributions({
     },
     query: "id role hoursWorked clockIn clockOut staff { id name }"
   });
-  const distributions = [];
-  if (tipPoolType === "house_pool") {
-    const eligible = entries.map((entry) => ({ ...entry, hours: calculateHours(entry) })).filter((entry) => entry.staff?.id && entry.hours > 0);
-    const totalHours = eligible.reduce((sum, entry) => sum + entry.hours, 0);
-    for (const entry of eligible) {
-      const shareCents = totalHours > 0 ? Math.round(entry.hours / totalHours * totalTipsCents) : 0;
-      distributions.push({
-        staffId: entry.staff.id,
-        staffName: entry.staff.name,
-        role: entry.role,
-        hoursWorked: entry.hours,
-        amount: shareCents
-      });
-    }
-  } else if (tipPoolType === "pool_by_role") {
-    const roleGroups = {};
-    for (const entry of entries) {
-      const hours = calculateHours(entry);
-      if (!entry.staff?.id || hours <= 0) continue;
-      const role = entry.role || "server";
-      if (!roleGroups[role]) roleGroups[role] = [];
-      roleGroups[role].push({ ...entry, hours });
-    }
-    for (const [role, roleEntries] of Object.entries(roleGroups)) {
-      const rolePercent = ROLE_PERCENTAGES[role] || 10;
-      const roleTipsCents = Math.round(rolePercent / 100 * totalTipsCents);
-      const totalRoleHours = roleEntries.reduce((sum, entry) => sum + entry.hours, 0);
-      for (const entry of roleEntries) {
-        const shareCents = totalRoleHours > 0 ? Math.round(entry.hours / totalRoleHours * roleTipsCents) : 0;
-        distributions.push({
-          staffId: entry.staff.id,
-          staffName: entry.staff.name,
-          role,
-          hoursWorked: entry.hours,
-          amount: shareCents
-        });
-      }
-    }
-  }
+  const distributions = calculateTipDistributions(
+    tipPoolType,
+    totalTipsCents,
+    entries.map((entry) => ({
+      staffId: entry.staff?.id || "",
+      staffName: entry.staff?.name || "",
+      role: entry.role || "",
+      hoursWorked: calculateHours(entry)
+    }))
+  );
+  assertTipConservation(totalTipsCents, distributions);
   return distributions;
 }
 async function createTipPoolLedger(root, args, context) {
@@ -7526,7 +9376,7 @@ async function createTipPoolLedger(root, args, context) {
     if (args.tipPoolType !== "individual" && distributions.length === 0) {
       return { success: false, error: "No completed shifts found for this tip pool" };
     }
-    await context.sudo().db.TipPool.createOne({
+    const tipPool = await context.sudo().db.TipPool.createOne({
       data: {
         date: start.toISOString(),
         tipPoolType: args.tipPoolType,
@@ -7537,6 +9387,12 @@ async function createTipPoolLedger(root, args, context) {
         status: "calculated",
         createdBy: context.session?.itemId ? { connect: { id: context.session.itemId } } : void 0
       }
+    });
+    await appendAuditEvent(context, {
+      eventType: "tip_pool.calculated",
+      entityType: "TipPool",
+      entityId: tipPool.id,
+      after: { totalTips, distributions }
     });
     return { success: true, error: null };
   } catch (err) {
@@ -7556,9 +9412,23 @@ async function updateTipPoolStatus(root, args, context) {
     if (args.action === "distribute") {
       if (tipPool.status !== "calculated") return { success: false, error: "Only calculated tip pools can be distributed" };
       await context.sudo().db.TipPool.updateOne({ where: { id: args.tipPoolId }, data: { status: "distributed" } });
+      await appendAuditEvent(context, {
+        eventType: "tip_pool.marked_distributed",
+        entityType: "TipPool",
+        entityId: args.tipPoolId,
+        before: { status: tipPool.status },
+        after: { status: "distributed" }
+      });
     } else if (args.action === "reopen") {
       if (tipPool.status !== "distributed") return { success: false, error: "Only distributed tip pools can be reopened" };
       await context.sudo().db.TipPool.updateOne({ where: { id: args.tipPoolId }, data: { status: "calculated" } });
+      await appendAuditEvent(context, {
+        eventType: "tip_pool.reopened",
+        entityType: "TipPool",
+        entityId: args.tipPoolId,
+        before: { status: tipPool.status },
+        after: { status: "calculated" }
+      });
     } else {
       return { success: false, error: "Invalid tip pool action" };
     }
@@ -7568,18 +9438,384 @@ async function updateTipPoolStatus(root, args, context) {
   }
 }
 
+// features/keystone/mutations/wasteManagement.ts
+function normalizeQuantity(value) {
+  const quantity = Number(value);
+  if (!Number.isFinite(quantity) || quantity <= 0) {
+    throw new Error("Waste quantity must be greater than zero");
+  }
+  return Math.round(quantity * 100) / 100;
+}
+async function recordWaste(_root, args, context) {
+  if (!permissions.canManageInventory({ session: context.session })) {
+    return { success: false, wasteLogId: null, error: "Not authorized to record inventory waste" };
+  }
+  try {
+    const quantity = normalizeQuantity(args.quantity);
+    if (!args.reason?.trim()) throw new Error("Waste reason is required");
+    if (!args.idempotencyKey?.trim()) throw new Error("Idempotency key is required");
+    const prisma = context.prisma;
+    const priorWaste = await prisma.wasteLog.findUnique({ where: { eventKey: args.idempotencyKey } });
+    if (priorWaste && (priorWaste.ingredientId !== args.ingredientId || Number(priorWaste.quantity) !== quantity || priorWaste.reason !== args.reason.trim() || (priorWaste.notes || "") !== (args.notes || "").trim())) {
+      throw new Error("Idempotency key was already used with a different waste request");
+    }
+    const { attempt } = await getOrCreateIdempotencyAttempt(prisma, {
+      key: `record-waste:${args.idempotencyKey.trim()}`,
+      requestPath: "recordWaste",
+      requestParams: {
+        ingredientId: args.ingredientId,
+        quantity,
+        reason: args.reason.trim(),
+        notes: (args.notes || "").trim()
+      }
+    });
+    const result2 = await prisma.$transaction(async (tx) => {
+      const existing = await tx.wasteLog.findUnique({ where: { eventKey: args.idempotencyKey } });
+      if (existing) {
+        if (existing.ingredientId !== args.ingredientId || Number(existing.quantity) !== quantity || existing.reason !== args.reason.trim() || (existing.notes || "") !== (args.notes || "").trim()) {
+          throw new Error("Idempotency key was already used with a different waste request");
+        }
+        return { wasteLog: existing, replay: true };
+      }
+      const ingredient = await tx.ingredient.findUnique({ where: { id: args.ingredientId } });
+      if (!ingredient) throw new Error("Ingredient not found");
+      const nextStock = Number(ingredient.currentStock || 0) - quantity;
+      const wasteLog = await tx.wasteLog.create({
+        data: {
+          eventKey: args.idempotencyKey,
+          ingredientId: args.ingredientId,
+          quantity: quantity.toFixed(2),
+          reason: args.reason.trim(),
+          notes: (args.notes || "").trim(),
+          loggedById: context.session?.itemId || null
+        }
+      });
+      await tx.stockMovement.create({
+        data: {
+          eventKey: `waste:${wasteLog.id}`,
+          referenceType: "WasteLog",
+          referenceId: wasteLog.id,
+          ingredientId: args.ingredientId,
+          type: "waste",
+          quantity: (-quantity).toFixed(2),
+          reason: args.reason.trim(),
+          createdById: context.session?.itemId || null
+        }
+      });
+      await tx.ingredient.update({
+        where: { id: args.ingredientId },
+        data: { currentStock: nextStock.toFixed(2) }
+      });
+      return { wasteLog, replay: false };
+    }, { isolationLevel: "Serializable" });
+    if (!result2.replay) {
+      await appendAuditEvent(context, {
+        eventType: "inventory.waste_recorded",
+        entityType: "WasteLog",
+        entityId: result2.wasteLog.id,
+        reason: args.reason,
+        after: { ingredientId: args.ingredientId, quantity },
+        metadata: { idempotencyKey: args.idempotencyKey }
+      }).catch((error) => console.error("Waste audit event failed:", error));
+    }
+    await updateIdempotencyAttempt(prisma, attempt.id, "completed", {
+      wasteLogId: result2.wasteLog.id
+    }, 200);
+    return { success: true, wasteLogId: result2.wasteLog.id, error: null };
+  } catch (error) {
+    return { success: false, wasteLogId: null, error: error instanceof Error ? error.message : "Unknown error" };
+  }
+}
+async function adjustInventory(_root, args, context) {
+  if (!permissions.canManageInventory({ session: context.session })) {
+    return { success: false, wasteLogId: null, error: "Not authorized to adjust inventory" };
+  }
+  try {
+    const quantity = Number(args.quantity);
+    if (!Number.isFinite(quantity) || quantity === 0) throw new Error("Adjustment quantity must be non-zero");
+    if (!args.reason?.trim()) throw new Error("Adjustment reason is required");
+    if (!args.idempotencyKey?.trim()) throw new Error("Idempotency key is required");
+    const prisma = context.prisma;
+    const priorMovement = await prisma.stockMovement.findUnique({ where: { eventKey: args.idempotencyKey } });
+    if (priorMovement && (priorMovement.ingredientId !== args.ingredientId || Number(priorMovement.quantity) !== quantity || priorMovement.reason !== args.reason.trim() || priorMovement.referenceType !== "ManualAdjustment")) {
+      throw new Error("Idempotency key was already used with a different inventory adjustment");
+    }
+    const { attempt } = await getOrCreateIdempotencyAttempt(prisma, {
+      key: `adjust-inventory:${args.idempotencyKey.trim()}`,
+      requestPath: "adjustInventory",
+      requestParams: {
+        ingredientId: args.ingredientId,
+        quantity,
+        reason: args.reason.trim()
+      }
+    });
+    const result2 = await prisma.$transaction(async (tx) => {
+      const existing = await tx.stockMovement.findUnique({ where: { eventKey: args.idempotencyKey } });
+      if (existing) {
+        if (existing.ingredientId !== args.ingredientId || Number(existing.quantity) !== quantity || existing.reason !== args.reason.trim() || existing.referenceType !== "ManualAdjustment") {
+          throw new Error("Idempotency key was already used with a different inventory adjustment");
+        }
+        return { movement: existing, replay: true };
+      }
+      const ingredient = await tx.ingredient.findUnique({ where: { id: args.ingredientId } });
+      if (!ingredient) throw new Error("Ingredient not found");
+      const movement = await tx.stockMovement.create({
+        data: {
+          eventKey: args.idempotencyKey,
+          referenceType: "ManualAdjustment",
+          referenceId: args.ingredientId,
+          ingredientId: args.ingredientId,
+          type: "adjustment",
+          quantity: quantity.toFixed(2),
+          reason: args.reason.trim(),
+          createdById: context.session?.itemId || null
+        }
+      });
+      await tx.ingredient.update({
+        where: { id: args.ingredientId },
+        data: { currentStock: (Number(ingredient.currentStock || 0) + quantity).toFixed(2) }
+      });
+      return { movement, replay: false };
+    }, { isolationLevel: "Serializable" });
+    if (!result2.replay) {
+      await appendAuditEvent(context, {
+        eventType: "inventory.adjusted",
+        entityType: "StockMovement",
+        entityId: result2.movement.id,
+        reason: args.reason,
+        after: { ingredientId: args.ingredientId, quantity },
+        metadata: { idempotencyKey: args.idempotencyKey }
+      }).catch((error) => console.error("Inventory adjustment audit event failed:", error));
+    }
+    await updateIdempotencyAttempt(prisma, attempt.id, "completed", {
+      stockMovementId: result2.movement.id,
+      ingredientId: args.ingredientId
+    }, 200);
+    return { success: true, wasteLogId: null, error: null };
+  } catch (error) {
+    return { success: false, wasteLogId: null, error: error instanceof Error ? error.message : "Unknown error" };
+  }
+}
+async function reverseWaste(_root, args, context) {
+  if (!permissions.canManageInventory({ session: context.session })) {
+    return { success: false, wasteLogId: null, error: "Not authorized to reverse inventory waste" };
+  }
+  try {
+    if (!args.reason?.trim()) throw new Error("Reversal reason is required");
+    if (!args.idempotencyKey?.trim()) throw new Error("Idempotency key is required");
+    const prisma = context.prisma;
+    const priorMovement = await prisma.stockMovement.findUnique({ where: { eventKey: args.idempotencyKey } });
+    if (priorMovement && (priorMovement.referenceId !== args.wasteLogId || priorMovement.referenceType !== "WasteLogReversal" || priorMovement.reason !== args.reason.trim())) {
+      throw new Error("Idempotency key was already used with a different waste reversal");
+    }
+    const { attempt } = await getOrCreateIdempotencyAttempt(prisma, {
+      key: `reverse-waste:${args.idempotencyKey.trim()}`,
+      requestPath: "reverseWaste",
+      requestParams: { wasteLogId: args.wasteLogId, reason: args.reason.trim() }
+    });
+    const result2 = await prisma.$transaction(async (tx) => {
+      const waste = await tx.wasteLog.findUnique({ where: { id: args.wasteLogId } });
+      if (!waste) throw new Error("Waste log not found");
+      if (waste.reversedAt) return { waste, replay: true };
+      const ingredient = await tx.ingredient.findUnique({ where: { id: waste.ingredientId } });
+      if (!ingredient) throw new Error("Ingredient not found");
+      const quantity = Number(waste.quantity || 0);
+      await tx.stockMovement.create({
+        data: {
+          eventKey: args.idempotencyKey,
+          referenceType: "WasteLogReversal",
+          referenceId: waste.id,
+          ingredientId: waste.ingredientId,
+          type: "adjustment",
+          quantity: quantity.toFixed(2),
+          reason: args.reason.trim(),
+          createdById: context.session?.itemId || null
+        }
+      });
+      await tx.ingredient.update({
+        where: { id: waste.ingredientId },
+        data: { currentStock: (Number(ingredient.currentStock || 0) + quantity).toFixed(2) }
+      });
+      const updated = await tx.wasteLog.update({
+        where: { id: waste.id },
+        data: {
+          reversedAt: /* @__PURE__ */ new Date(),
+          reversedById: context.session?.itemId || null,
+          reversalReason: args.reason.trim()
+        }
+      });
+      return { waste: updated, replay: false };
+    }, { isolationLevel: "Serializable" });
+    if (!result2.replay) {
+      await appendAuditEvent(context, {
+        eventType: "inventory.waste_reversed",
+        entityType: "WasteLog",
+        entityId: result2.waste.id,
+        reason: args.reason,
+        metadata: { idempotencyKey: args.idempotencyKey }
+      }).catch((error) => console.error("Waste reversal audit event failed:", error));
+    }
+    await updateIdempotencyAttempt(prisma, attempt.id, "completed", {
+      wasteLogId: result2.waste.id
+    }, 200);
+    return { success: true, wasteLogId: result2.waste.id, error: null };
+  } catch (error) {
+    return { success: false, wasteLogId: null, error: error instanceof Error ? error.message : "Unknown error" };
+  }
+}
+
+// features/keystone/mutations/reconcileOrderInventory.ts
+async function reconcileOrderInventory(_root, { orderId }, context) {
+  if (!permissions.canManageInventory({ session: context.session })) {
+    return { success: false, created: 0, error: "Not authorized to reconcile inventory" };
+  }
+  try {
+    const result2 = await depleteInventoryForCompletedOrder(orderId, context);
+    await appendAuditEvent(context, {
+      eventType: "inventory.order_reconciled",
+      entityType: "RestaurantOrder",
+      entityId: orderId,
+      after: result2
+    }).catch((error) => console.error("Inventory reconciliation audit event failed:", error));
+    return { success: true, created: result2.created, error: null };
+  } catch (error) {
+    return { success: false, created: 0, error: error instanceof Error ? error.message : "Unknown error" };
+  }
+}
+
+// features/keystone/mutations/transitionRestaurantOrder.ts
+var TRANSITIONS = {
+  open: ["sent_to_kitchen", "cancelled"],
+  sent_to_kitchen: ["in_progress", "cancelled"],
+  in_progress: ["ready", "cancelled"],
+  ready: ["served", "cancelled"],
+  served: ["completed"],
+  completed: [],
+  cancelled: []
+};
+async function transitionRestaurantOrder(_root, { orderId, status, reason }, context) {
+  if (!permissions.canManageOrders({ session: context.session })) throw new Error("Not authorized to transition orders");
+  const order = await context.sudo().query.RestaurantOrder.findOne({
+    where: { id: orderId },
+    query: "id status"
+  });
+  if (!order) throw new Error("Order not found");
+  if (!(TRANSITIONS[order.status || ""] || []).includes(status)) {
+    throw new Error(`Order cannot transition from ${order.status} to ${status}`);
+  }
+  if (status === "cancelled") {
+    throw new Error("Use the approved void/cancellation workflow to cancel an order");
+  }
+  const updated = await context.sudo().query.RestaurantOrder.updateOne({
+    where: { id: orderId },
+    data: { status },
+    query: "id status"
+  });
+  await appendAuditEvent(context, {
+    eventType: "order.status_transitioned",
+    entityType: "RestaurantOrder",
+    entityId: orderId,
+    reason: reason || "",
+    before: { status: order.status },
+    after: { status }
+  }).catch((error) => console.error("Order transition audit event failed:", error));
+  await syncKitchenTicketsForOrder(orderId, context);
+  return updated;
+}
+
+// features/keystone/mutations/setGiftCardStatus.ts
+async function setGiftCardStatus(_root, { giftCardId, isDisabled, reason }, context) {
+  if (!permissions.canManageGiftCards({ session: context.session })) throw new Error("Not authorized to manage gift cards");
+  const card = await context.sudo().query.GiftCard.findOne({ where: { id: giftCardId }, query: "id isDisabled" });
+  if (!card) throw new Error("Gift card not found");
+  const updated = await context.sudo().query.GiftCard.updateOne({
+    where: { id: giftCardId },
+    data: { isDisabled },
+    query: "id isDisabled"
+  });
+  await appendAuditEvent(context, {
+    eventType: "gift_card.status_changed",
+    entityType: "GiftCard",
+    entityId: giftCardId,
+    reason: reason || "",
+    before: { isDisabled: card.isDisabled },
+    after: { isDisabled }
+  }).catch((error) => console.error("Gift card status audit event failed:", error));
+  return updated;
+}
+
+// features/keystone/mutations/managerApprovals.ts
+var ACTIONS = /* @__PURE__ */ new Set([
+  "void_item",
+  "comp_item",
+  "void_order",
+  "refund_payment"
+]);
+function result(approval) {
+  return {
+    id: approval.id,
+    status: approval.status,
+    actionType: approval.actionType,
+    targetId: approval.targetId,
+    expiresAt: approval.expiresAt instanceof Date ? approval.expiresAt.toISOString() : String(approval.expiresAt),
+    error: null
+  };
+}
+async function requestManagerApproval2(_root, args, context) {
+  try {
+    if (!ACTIONS.has(args.actionType)) {
+      throw new Error("Unsupported manager approval action");
+    }
+    return result(await requestManagerApproval(_root, {
+      ...args,
+      actionType: args.actionType
+    }, context));
+  } catch (error) {
+    return { id: null, status: null, actionType: args.actionType, targetId: args.targetId, expiresAt: null, error: error instanceof Error ? error.message : "Unknown error" };
+  }
+}
+async function approveManagerApproval2(_root, args, context) {
+  try {
+    return result(await approveManagerApproval(_root, args, context));
+  } catch (error) {
+    return { id: args.approvalId, status: null, actionType: null, targetId: null, expiresAt: null, error: error instanceof Error ? error.message : "Unknown error" };
+  }
+}
+
 // features/keystone/mutations/index.ts
-var graphql15 = String.raw;
+var graphql16 = String.raw;
 function extendGraphqlSchema(baseSchema) {
   return (0, import_schema.mergeSchemas)({
     schemas: [baseSchema],
-    typeDefs: graphql15`
+    typeDefs: graphql16`
       input UserUpdateProfileInput {
         email: String
         name: String
         phone: String
         password: String
         onboardingStatus: String
+      }
+
+      input ActiveCartUpdateInput {
+        orderType: String
+        email: String
+        customerName: String
+        customerPhone: String
+        deliveryAddress: String
+        deliveryAddress2: String
+        deliveryCity: String
+        deliveryState: String
+        deliveryZip: String
+        deliveryCountryCode: String
+        tipPercent: String
+        userId: ID
+      }
+
+      input ActiveCartItemInput {
+        menuItemId: ID!
+        quantity: Int!
+        modifierIds: [ID!]
+        specialInstructions: String
       }
 
       type Query {
@@ -7589,24 +9825,48 @@ function extendGraphqlSchema(baseSchema) {
         activeCartPaymentProviders: [PaymentProvider!]
         getCustomerOrder(orderId: ID!, secretKey: String): JSON
         getCustomerOrders(limit: Int, offset: Int): JSON
+        lookupGiftCard(code: String!): JSON
       }
 
       type Mutation {
         updateActiveUser(data: UserUpdateProfileInput!): User
-        updateActiveCart(cartId: ID!, data: CartUpdateInput!): Cart
+        createActiveCart(orderType: String): Cart
+        addActiveCartItem(cartId: ID!, input: ActiveCartItemInput!): Cart
+        updateActiveCart(cartId: ID!, data: ActiveCartUpdateInput!): Cart
         updateCartItemQuantity(cartItemId: ID!, quantity: Int!): Cart
         removeCartItem(cartItemId: ID!): Cart
 
         processPayment(
           orderId: String!
-          amount: Int!
+          amount: Int
           paymentMethod: String!
           tipAmount: Int
+          idempotencyKey: String!
         ): ProcessPaymentResult
+
+        setGiftCardStatus(giftCardId: ID!, isDisabled: Boolean!, reason: String): GiftCard
+
+        redeemGiftCard(
+          orderId: String!
+          code: String!
+          tipAmount: Int
+          idempotencyKey: String!
+        ): GiftCardRedemptionResult
+
+        refundPayment(
+          paymentId: ID!
+          amount: Int
+          reason: String!
+          idempotencyKey: String!
+          managerApproval: Boolean @deprecated(reason: "Caller assertions do not constitute approval")
+          managerApprovalId: ID
+        ): RefundPaymentResult
 
         capturePayment(
           paymentIntentId: String!
         ): CapturePaymentResult
+
+        reconcilePayment(paymentId: ID!): CapturePaymentResult
 
         splitCheckByItem(
           orderId: String!
@@ -7621,24 +9881,39 @@ function extendGraphqlSchema(baseSchema) {
         voidOrderItem(
           orderItemId: String!
           reason: String!
-          managerApproval: Boolean
-          managerId: String
+          managerApproval: Boolean @deprecated(reason: "Caller assertions do not constitute approval")
+          managerId: String @deprecated(reason: "Use managerApprovalId")
+          managerApprovalId: ID
+          idempotencyKey: String
         ): VoidCompResult
 
         compOrderItem(
           orderItemId: String!
           reason: String!
           compAmount: Int
-          managerApproval: Boolean
-          managerId: String
+          managerApproval: Boolean @deprecated(reason: "Caller assertions do not constitute approval")
+          managerId: String @deprecated(reason: "Use managerApprovalId")
+          managerApprovalId: ID
+          idempotencyKey: String
         ): VoidCompResult
 
         voidOrder(
           orderId: String!
           reason: String!
-          managerApproval: Boolean
-          managerId: String
+          managerApproval: Boolean @deprecated(reason: "Caller assertions do not constitute approval")
+          managerId: String @deprecated(reason: "Use managerApprovalId")
+          managerApprovalId: ID
+          idempotencyKey: String
         ): VoidCompResult
+
+        requestManagerApproval(
+          actionType: String!
+          targetId: ID!
+          reason: String!
+          amount: Int
+        ): ManagerApprovalResult
+
+        approveManagerApproval(approvalId: ID!): ManagerApprovalResult
 
         initiatePaymentSession(
           cartId: ID!
@@ -7648,6 +9923,12 @@ function extendGraphqlSchema(baseSchema) {
         completeActiveCart(
           cartId: ID!
           paymentSessionId: ID
+        ): RestaurantOrder
+
+        transitionRestaurantOrder(
+          orderId: ID!
+          status: String!
+          reason: String
         ): RestaurantOrder
 
         createPOSOrder(
@@ -7667,6 +9948,7 @@ function extendGraphqlSchema(baseSchema) {
           courseNumber: Int
           seatNumber: Int
           specialInstructions: String
+          modifierIds: [ID!]
         ): RestaurantOrder
 
         updateServiceFloorItem(
@@ -7676,6 +9958,7 @@ function extendGraphqlSchema(baseSchema) {
           seatNumber: Int
           specialInstructions: String
           voidReason: String
+          managerApprovalId: ID
         ): RestaurantOrder
 
         updateServiceFloorTableStatus(
@@ -7747,6 +10030,29 @@ function extendGraphqlSchema(baseSchema) {
           action: String!
         ): TipPoolMutationResult
 
+        adjustInventory(
+          ingredientId: ID!
+          quantity: String!
+          reason: String!
+          idempotencyKey: String!
+        ): WasteMutationResult
+
+        recordWaste(
+          ingredientId: ID!
+          quantity: String!
+          reason: String!
+          notes: String
+          idempotencyKey: String!
+        ): WasteMutationResult
+
+        reverseWaste(
+          wasteLogId: ID!
+          reason: String!
+          idempotencyKey: String!
+        ): WasteMutationResult
+
+        reconcileOrderInventory(orderId: ID!): InventoryReconciliationResult
+
         transferTable(
           orderId: String!
           fromTableId: String!
@@ -7783,6 +10089,7 @@ function extendGraphqlSchema(baseSchema) {
           providerCode: String!
           event: JSON!
           headers: JSON!
+          rawBody: String
         ): HandleWebhookResult
       }
 
@@ -7790,6 +10097,23 @@ function extendGraphqlSchema(baseSchema) {
         success: Boolean!
         paymentId: String
         clientSecret: String
+        amount: Int
+        remainingBalance: Int
+        error: String
+      }
+
+      type GiftCardRedemptionResult {
+        success: Boolean!
+        paymentId: String
+        amount: Int!
+        remainingBalance: Int!
+        error: String
+      }
+
+      type RefundPaymentResult {
+        success: Boolean!
+        refundId: ID
+        status: String
         error: String
       }
 
@@ -7818,10 +10142,21 @@ function extendGraphqlSchema(baseSchema) {
         error: String
       }
 
+      type ManagerApprovalResult {
+        id: ID
+        status: String
+        actionType: String
+        targetId: ID
+        expiresAt: String
+        error: String
+      }
+
       input POSOrderItemInput {
         menuItemId: ID!
         quantity: Int!
         courseNumber: Int
+        modifierIds: [ID!]
+        specialInstructions: String
       }
 
       type InitiatePaymentSessionResult {
@@ -7860,6 +10195,18 @@ function extendGraphqlSchema(baseSchema) {
         error: String
       }
 
+      type WasteMutationResult {
+        success: Boolean!
+        wasteLogId: ID
+        error: String
+      }
+
+      type InventoryReconciliationResult {
+        success: Boolean!
+        created: Int!
+        error: String
+      }
+
       type CourseManagementResult {
         success: Boolean!
         error: String
@@ -7889,15 +10236,24 @@ function extendGraphqlSchema(baseSchema) {
         activeCart,
         activeCartPaymentProviders,
         getCustomerOrder,
-        getCustomerOrders
+        getCustomerOrders,
+        lookupGiftCard
       },
       Mutation: {
         updateActiveUser: updateActiveUser_default,
+        createActiveCart,
+        addActiveCartItem,
         updateActiveCart,
         updateCartItemQuantity,
         removeCartItem,
         processPayment,
+        setGiftCardStatus,
+        redeemGiftCard,
+        refundPayment: refundPayment2,
+        requestManagerApproval: requestManagerApproval2,
+        approveManagerApproval: approveManagerApproval2,
         capturePayment: capturePaymentMutation,
+        reconcilePayment: reconcilePaymentMutation,
         splitCheckByItem,
         splitCheckByGuest,
         voidOrderItem,
@@ -7905,6 +10261,7 @@ function extendGraphqlSchema(baseSchema) {
         voidOrder,
         initiatePaymentSession,
         completeActiveCart,
+        transitionRestaurantOrder,
         createPOSOrder,
         addServiceFloorItem,
         updateServiceFloorItem,
@@ -7918,6 +10275,10 @@ function extendGraphqlSchema(baseSchema) {
         updateShiftStatus,
         createTipPoolLedger,
         updateTipPoolStatus,
+        adjustInventory,
+        recordWaste,
+        reverseWaste,
+        reconcileOrderInventory,
         transferTable,
         combineTables,
         fireCourse,
@@ -8000,19 +10361,53 @@ async function sendPasswordResetEmail(resetToken, to, baseUrl) {
 // features/keystone/index.ts
 var import_iron = __toESM(require("@hapi/iron"));
 var cookie2 = __toESM(require("cookie"));
-var databaseURL = process.env.DATABASE_URL || "file:./keystone.db";
+
+// features/keystone/runtimeConfig.ts
+var DEVELOPMENT_SESSION_SECRET = "openfront-restaurant-development-session-secret-change-me";
+var DEVELOPMENT_DATABASE_URL = "postgresql://postgres:postgres@localhost:5432/openfront_restaurant";
+function requiredProductionEnv(name, value) {
+  if (process.env.NODE_ENV === "production" && !value?.trim()) {
+    throw new Error(`${name} is required in production`);
+  }
+  return value?.trim();
+}
+function getRuntimeConfig() {
+  const production = process.env.NODE_ENV === "production";
+  const databaseURL2 = requiredProductionEnv("DATABASE_URL", process.env.DATABASE_URL) || DEVELOPMENT_DATABASE_URL;
+  const sessionSecret2 = requiredProductionEnv("SESSION_SECRET", process.env.SESSION_SECRET) || DEVELOPMENT_SESSION_SECRET;
+  if (sessionSecret2.length < 32) {
+    throw new Error("SESSION_SECRET must be at least 32 characters long");
+  }
+  if (!databaseURL2.startsWith("postgresql://") && !databaseURL2.startsWith("postgres://")) {
+    throw new Error("DATABASE_URL must use PostgreSQL for this deployment");
+  }
+  const storage = {
+    bucketName: requiredProductionEnv("S3_BUCKET_NAME", process.env.S3_BUCKET_NAME) || "keystone-test",
+    region: requiredProductionEnv("S3_REGION", process.env.S3_REGION) || "ap-southeast-2",
+    accessKeyId: requiredProductionEnv("S3_ACCESS_KEY_ID", process.env.S3_ACCESS_KEY_ID) || "keystone",
+    secretAccessKey: requiredProductionEnv("S3_SECRET_ACCESS_KEY", process.env.S3_SECRET_ACCESS_KEY) || "keystone",
+    endpoint: requiredProductionEnv("S3_ENDPOINT", process.env.S3_ENDPOINT) || "https://sfo3.digitaloceanspaces.com"
+  };
+  if (production && sessionSecret2 === DEVELOPMENT_SESSION_SECRET) {
+    throw new Error("A development session secret cannot be used in production");
+  }
+  return { databaseURL: databaseURL2, sessionSecret: sessionSecret2, storage };
+}
+
+// features/keystone/index.ts
+var runtimeConfig = getRuntimeConfig();
+var { databaseURL, sessionSecret } = runtimeConfig;
+var {
+  bucketName,
+  region,
+  accessKeyId,
+  secretAccessKey,
+  endpoint
+} = runtimeConfig.storage;
 var sessionConfig = {
   maxAge: 60 * 60 * 24 * 360,
-  // How long they stay signed in?
-  secret: process.env.SESSION_SECRET || "this secret should only be used in testing"
+  secret: sessionSecret
 };
-var {
-  S3_BUCKET_NAME: bucketName = "keystone-test",
-  S3_REGION: region = "ap-southeast-2",
-  S3_ACCESS_KEY_ID: accessKeyId = "keystone",
-  S3_SECRET_ACCESS_KEY: secretAccessKey = "keystone",
-  S3_ENDPOINT: endpoint = "https://sfo3.digitaloceanspaces.com"
-} = process.env;
 function statelessSessions({
   secret,
   maxAge = 60 * 60 * 24 * 360,
@@ -8179,7 +10574,7 @@ var { withAuth } = (0, import_auth.createAuth)({
   `
 });
 var keystone_default = withAuth(
-  (0, import_core42.config)({
+  (0, import_core50.config)({
     db: {
       provider: "postgresql",
       url: databaseURL

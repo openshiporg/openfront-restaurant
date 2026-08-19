@@ -1,6 +1,8 @@
-import Link from "next/link"
-import { getStoreSettings } from "@/features/storefront/lib/data/menu"
 import type { DayHours } from "@/features/storefront/lib/store-data"
+import {
+  StoreBrand,
+  type StorefrontLayoutSettings,
+} from "@/features/storefront/modules/layout/components/store-logo"
 import { StorefrontSectionLink } from "@/features/storefront/components/StorefrontSectionLink"
 
 function parseHours(value: string | DayHours | undefined): DayHours | null {
@@ -82,8 +84,11 @@ const quickLinks = [
   { href: "/checkout?step=contact", label: "Checkout" },
 ]
 
-export default async function Footer() {
-  const storeSettings = await getStoreSettings()
+interface FooterProps {
+  storeSettings: StorefrontLayoutSettings | null
+}
+
+export default function Footer({ storeSettings }: FooterProps) {
   const storeName = storeSettings?.name || "Restaurant"
   const tagline = storeSettings?.heroSubheadline || storeSettings?.tagline || ""
   const address = storeSettings?.address || ""
@@ -93,7 +98,7 @@ export default async function Footer() {
   const timezone = storeSettings?.timezone || "America/New_York"
 
   const footerHours = dayOrder.map((day) => {
-    const parsed = parseHours((hours as any)?.[day])
+    const parsed = parseHours((hours as Record<string, string | DayHours | undefined>)?.[day])
     const label = day.charAt(0).toUpperCase() + day.slice(1, 3)
 
     if (!parsed || parsed.enabled === false || !parsed.ranges?.length) {
@@ -116,9 +121,11 @@ export default async function Footer() {
       <div className="storefront-shell py-12 sm:py-14 lg:py-16">
         <div className="grid gap-10 lg:grid-cols-[1.2fr_0.8fr_1fr] lg:gap-12">
           <div>
-            <div>
-              <span className="block font-serif text-[1.55rem] font-bold leading-none tracking-tight text-primary">{storeName}</span>
-            </div>
+            <StoreBrand
+              name={storeName}
+              logoIcon={storeSettings?.logoIcon}
+              logoColor={storeSettings?.logoColor}
+            />
             {tagline ? <p className="mt-4 max-w-xl text-pretty text-base leading-7 text-muted-foreground">{tagline}</p> : null}
 
             <div className="mt-6 space-y-2 text-sm text-muted-foreground">

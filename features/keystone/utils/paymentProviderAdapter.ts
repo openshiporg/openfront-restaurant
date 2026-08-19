@@ -32,11 +32,11 @@ export async function executeAdapterFunction({ provider, functionName, args }: {
   }
 }
 
-export async function createPayment({ provider, cart, order, amount, currency }: { provider: any; cart?: any; order?: any; amount: number; currency: string }) {
+export async function createPayment({ provider, cart, order, amount, currency, idempotencyKey }: { provider: any; cart?: any; order?: any; amount: number; currency: string; idempotencyKey?: string }) {
   return executeAdapterFunction({
     provider,
     functionName: "createPaymentFunction",
-    args: { cart, order, amount, currency },
+    args: { cart, order, amount, currency, idempotencyKey },
   });
 }
 
@@ -48,11 +48,11 @@ export async function capturePayment({ provider, paymentId, amount }: { provider
   });
 }
 
-export async function refundPayment({ provider, paymentId, amount, currency }: { provider: any; paymentId: string; amount: number; currency: string }) {
+export async function refundPayment({ provider, paymentId, amount, currency, idempotencyKey }: { provider: any; paymentId: string; amount: number; currency: string; idempotencyKey?: string }) {
   return executeAdapterFunction({
     provider,
     functionName: "refundPaymentFunction",
-    args: { paymentId, amount, currency },
+    args: { paymentId, amount, currency, idempotencyKey },
   });
 }
 
@@ -72,10 +72,10 @@ export async function generatePaymentLink({ provider, paymentId }: { provider: a
   });
 }
 
-export async function handleWebhook({ provider, event, headers }: { provider: any; event: any; headers: any }) {
+export async function handleWebhook({ provider, event, headers, rawBody }: { provider: any; event: any; headers: any; rawBody?: string }) {
   return executeAdapterFunction({
     provider,
     functionName: "handleWebhookFunction",
-    args: { event, headers },
+    args: { event, headers, rawBody },
   });
 }

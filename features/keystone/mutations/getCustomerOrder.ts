@@ -41,6 +41,9 @@ export default async function getCustomerOrder(
       orderItems {
         id
         thumbnail
+        itemNameSnapshot
+        itemThumbnailSnapshot
+        modifiersSnapshot
         quantity
         unitPrice
         totalPrice

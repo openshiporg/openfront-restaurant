@@ -10,8 +10,12 @@ export default async function removeCartItem(
 
   const cartItem = await assertCanAccessCartItem(context, cartItemId, "write");
   const cartId = cartItem.cart.id;
+  const cart = await sudoContext.query.Cart.findOne({
+    where: { id: cartId },
+    query: "id order { id }",
+  });
+  if (cart?.order?.id) throw new Error("Completed carts cannot be changed");
 
-  // Delete cart item
   await sudoContext.db.CartItem.deleteOne({
     where: { id: cartItemId }
   });

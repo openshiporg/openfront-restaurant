@@ -1,7 +1,10 @@
+import crypto from "crypto";
 import type { Context } from ".keystone/types";
 import { createPayment } from "../utils/paymentProviderAdapter";
 import { calculateRestaurantTotals } from "../../lib/restaurant-order-pricing";
 import { assertCanAccessCart } from "../utils/cartAccess";
+import { validateCartItemInput } from "../utils/cartItemValidation";
+import { isPaymentProviderConfigured } from "../utils/paymentProviderConfig";
 import {
   assertDeliveryAddressComplete,
   assertDeliveryAddressEligible,
@@ -13,70 +16,68 @@ interface InitiatePaymentSessionArgs {
   paymentProviderId: string;
 }
 
+function sessionKey(input: unknown) {
+  return crypto.createHash("sha256").update(JSON.stringify(input)).digest("hex");
+}
+
+const SESSION_QUERY = `
+  id
+  data
+  amount
+  isInitiated
+  isSelected
+  paymentProvider { id code }
+`;
+
 export default async function initiatePaymentSession(
-  root: any,
+  _root: unknown,
   { cartId, paymentProviderId }: InitiatePaymentSessionArgs,
   context: Context
 ) {
-  const sudoContext = context.sudo();
-
   await assertCanAccessCart(context, cartId, "write");
-
-  const cart = await sudoContext.query.Cart.findOne({
+  const sudo = context.sudo();
+  const cart = await sudo.query.Cart.findOne({
     where: { id: cartId },
     query: `
-      id
-      orderType
-      subtotal
-      deliveryAddress
-      deliveryCity
-      deliveryCountryCode
-      deliveryZip
-      tipPercent
+      id updatedAt orderType deliveryAddress deliveryCity deliveryCountryCode deliveryZip tipPercent
+      order { id }
       paymentCollection {
-        id
-        amount
-        paymentSessions {
-          id
-          isSelected
-          isInitiated
-          amount
-          paymentProvider {
-            id
-            code
-          }
-          data
-        }
+        id amount
+        paymentSessions { id idempotencyKey isSelected isInitiated amount data paymentProvider { id code } }
+      }
+      items {
+        id quantity specialInstructions
+        menuItem { id }
+        modifiers { id }
       }
     `,
   });
+  if (!cart) throw new Error("Cart not found");
+  if (cart.order?.id) throw new Error("Completed carts cannot start another payment");
+  if (!cart.items?.length) throw new Error("Cart is empty");
 
-  if (!cart) {
-    throw new Error("Cart not found");
-  }
-
-  const provider = await sudoContext.query.PaymentProvider.findOne({
+  const provider = await sudo.query.PaymentProvider.findOne({
     where: { code: paymentProviderId },
     query: `
-      id
-      code
-      isInstalled
-      createPaymentFunction
-      capturePaymentFunction
-      refundPaymentFunction
-      getPaymentStatusFunction
-      generatePaymentLinkFunction
-      credentials
+      id code isInstalled createPaymentFunction capturePaymentFunction refundPaymentFunction
+      getPaymentStatusFunction generatePaymentLinkFunction credentials
     `,
   });
-
-  if (!provider || !provider.isInstalled) {
-    throw new Error(`Payment provider ${paymentProviderId} not found or not installed`);
+  if (!provider?.isInstalled || !isPaymentProviderConfigured(provider.code)) {
+    throw new Error(`Payment provider ${paymentProviderId} is not installed and configured`);
   }
 
+  const validatedItems = await Promise.all(
+    cart.items.map((item: any) => validateCartItemInput(context, {
+      menuItemId: item.menuItem?.id,
+      quantity: item.quantity,
+      modifierIds: (item.modifiers || []).map((modifier: any) => modifier.id),
+      specialInstructions: item.specialInstructions,
+    }))
+  );
+  const subtotal = validatedItems.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
   const settings = await getStoreDeliverySettings(context);
   const currency = settings?.currencyCode || "USD";
-
   assertDeliveryAddressComplete({
     orderType: cart.orderType,
     deliveryAddress: cart.deliveryAddress,
@@ -84,7 +85,6 @@ export default async function initiatePaymentSession(
     deliveryCountryCode: cart.deliveryCountryCode,
     deliveryZip: cart.deliveryZip,
   });
-
   assertDeliveryAddressEligible({
     orderType: cart.orderType,
     storeSettings: settings,
@@ -93,7 +93,7 @@ export default async function initiatePaymentSession(
   });
 
   const pricing = calculateRestaurantTotals({
-    subtotal: cart.subtotal || 0,
+    subtotal,
     orderType: cart.orderType,
     tipPercent: cart.tipPercent,
     deliveryFee: settings?.deliveryFee,
@@ -102,117 +102,104 @@ export default async function initiatePaymentSession(
     taxRate: settings?.taxRate,
     currencyCode: currency,
   });
-
   if (pricing.deliveryMinimumNotMet) {
     throw new Error(`Delivery orders require a minimum subtotal of ${settings?.deliveryMinimum || "0.00"}.`);
   }
-
   const amount = pricing.total;
-
-  if (!cart.paymentCollection) {
-    cart.paymentCollection = await sudoContext.query.PaymentCollection.createOne({
-      data: {
-        cart: { connect: { id: cart.id } },
-        amount,
-        description: "default",
-      },
-      query: "id",
-    });
-  } else if ((cart.paymentCollection.amount || 0) !== amount) {
-    await sudoContext.query.PaymentCollection.updateOne({
-      where: { id: cart.paymentCollection.id },
-      data: { amount },
-    });
-  }
-
-  const existingSession = cart.paymentCollection?.paymentSessions?.find(
-    (s: any) => s.paymentProvider.code === provider.code && s.amount === amount
-  );
-
-  if (existingSession) {
-    const otherSessions = cart.paymentCollection.paymentSessions.filter(
-      (s: any) => s.id !== existingSession.id && s.isSelected
-    );
-
-    for (const session of otherSessions) {
-      await sudoContext.query.PaymentSession.updateOne({
-        where: { id: session.id },
-        data: { isSelected: false },
-      });
-    }
-
-    await sudoContext.query.PaymentSession.updateOne({
-      where: { id: existingSession.id },
-      data: { isSelected: true },
-    });
-
-    return await sudoContext.query.PaymentSession.findOne({
-      where: { id: existingSession.id },
-      query: `
-        id
-        data
-        amount
-        isInitiated
-        isSelected
-        paymentProvider {
-          id
-          code
-        }
-      `,
-    });
-  }
-
-  const normalizedCurrency = currency.toLowerCase();
-
-  const isManualProvider = provider.code === "pp_system_default";
-
-  let sessionData: Record<string, any> = { providerCode: provider.code };
-
-  if (!isManualProvider) {
-    const createdSessionData = await createPayment({
-      provider,
-      cart,
-      amount,
-      currency: normalizedCurrency,
-    });
-    sessionData = {
-      ...createdSessionData,
-      providerCode: provider.code,
-    };
-  }
-
-  const existingSelectedSessions = cart.paymentCollection.paymentSessions?.filter(
-    (s: any) => s.isSelected
-  ) || [];
-
-  for (const session of existingSelectedSessions) {
-    await sudoContext.query.PaymentSession.updateOne({
-      where: { id: session.id },
-      data: { isSelected: false },
-    });
-  }
-
-  const newSession = await sudoContext.query.PaymentSession.createOne({
-    data: {
-      paymentCollection: { connect: { id: cart.paymentCollection.id } },
-      paymentProvider: { connect: { id: provider.id } },
-      amount,
-      isSelected: true,
-      isInitiated: true,
-      data: sessionData,
-    },
-    query: `
-      id
-      data
-      amount
-      isInitiated
-      isSelected
-      paymentProvider {
-        id
-        code
-      }
-    `,
+  const idempotencyKey = sessionKey({
+    cartId,
+    cartUpdatedAt: cart.updatedAt,
+    provider: provider.code,
+    amount,
+    items: validatedItems.map((item) => ({
+      menuItemId: item.menuItem.id,
+      quantity: item.quantity,
+      modifierIds: item.modifiers.map((modifier: any) => modifier.id).sort(),
+      specialInstructions: item.specialInstructions,
+    })),
   });
 
-  return newSession;
+  let collection = cart.paymentCollection;
+  if (!collection) {
+    collection = await sudo.query.PaymentCollection.createOne({
+      data: { cart: { connect: { id: cart.id } }, amount, description: "default" },
+      query: "id amount paymentSessions { id idempotencyKey isSelected isInitiated amount data paymentProvider { id code } }",
+    });
+  } else if (Number(collection.amount || 0) !== amount) {
+    await sudo.query.PaymentCollection.updateOne({ where: { id: collection.id }, data: { amount } });
+  }
+
+  let paymentSession = collection.paymentSessions?.find(
+    (candidate: any) => candidate.idempotencyKey === idempotencyKey
+  );
+  if (!paymentSession) {
+    try {
+      paymentSession = await sudo.query.PaymentSession.createOne({
+        data: {
+          paymentCollection: { connect: { id: collection.id } },
+          paymentProvider: { connect: { id: provider.id } },
+          amount,
+          idempotencyKey,
+          isSelected: true,
+          isInitiated: false,
+          data: { providerCode: provider.code, state: "initializing" },
+        },
+        query: SESSION_QUERY,
+      });
+    } catch (error) {
+      const matches = await sudo.query.PaymentSession.findMany({
+        where: { idempotencyKey: { equals: idempotencyKey } },
+        query: SESSION_QUERY,
+        take: 1,
+      });
+      paymentSession = matches[0];
+      if (!paymentSession) throw error;
+    }
+  }
+
+  for (const candidate of collection.paymentSessions || []) {
+    if (candidate.id !== paymentSession.id && candidate.isSelected) {
+      await sudo.query.PaymentSession.updateOne({ where: { id: candidate.id }, data: { isSelected: false } });
+    }
+  }
+  if (paymentSession.isInitiated) {
+    if (!paymentSession.isSelected) {
+      await sudo.query.PaymentSession.updateOne({ where: { id: paymentSession.id }, data: { isSelected: true } });
+    }
+    return sudo.query.PaymentSession.findOne({ where: { id: paymentSession.id }, query: SESSION_QUERY });
+  }
+
+  const isManual = provider.code === "pp_system_default" || provider.code.startsWith("pp_manual");
+  try {
+    const providerData = isManual
+      ? { providerCode: provider.code, status: "pending" }
+      : await createPayment({
+          provider,
+          cart: { ...cart, subtotal },
+          amount,
+          currency: currency.toLowerCase(),
+          idempotencyKey,
+        });
+    return sudo.query.PaymentSession.updateOne({
+      where: { id: paymentSession.id },
+      data: {
+        isSelected: true,
+        isInitiated: true,
+        data: { ...providerData, providerCode: provider.code, state: "ready" },
+      },
+      query: SESSION_QUERY,
+    });
+  } catch (error) {
+    await sudo.query.PaymentSession.updateOne({
+      where: { id: paymentSession.id },
+      data: {
+        data: {
+          providerCode: provider.code,
+          state: "failed",
+          error: error instanceof Error ? error.message : "Provider initiation failed",
+        },
+      },
+    });
+    throw error;
+  }
 }

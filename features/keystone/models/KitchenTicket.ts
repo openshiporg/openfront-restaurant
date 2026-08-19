@@ -14,9 +14,9 @@ export const KitchenTicket = list({
   access: {
     operation: {
       query: permissions.canReadKitchen,
-      create: permissions.canManageKitchen,
-      update: permissions.canManageKitchen,
-      delete: permissions.canManageKitchen,
+      create: () => false,
+      update: () => false,
+      delete: () => false,
     },
   },
   ui: {

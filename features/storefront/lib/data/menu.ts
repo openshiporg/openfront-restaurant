@@ -11,6 +11,8 @@ export const getStoreSettings = cache(async function () {
         id
         name
         tagline
+        logoIcon
+        logoColor
         address
         phone
         email

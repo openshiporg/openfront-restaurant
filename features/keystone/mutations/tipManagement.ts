@@ -1,5 +1,10 @@
 import type { Context } from ".keystone/types";
 import { permissions } from "../access";
+import {
+  assertTipConservation,
+  calculateTipDistributions,
+} from "../../lib/tip-allocation";
+import { appendAuditEvent } from "../utils/audit";
 
 interface CreateTipPoolArgs {
   date: string;
@@ -17,13 +22,6 @@ interface TipPoolMutationResult {
   success: boolean;
   error: string | null;
 }
-
-const ROLE_PERCENTAGES: Record<string, number> = {
-  server: 60,
-  bartender: 20,
-  busser: 10,
-  host: 10,
-};
 
 function dollarsToCents(value: unknown) {
   const parsed = Number(value || 0);
@@ -71,52 +69,17 @@ async function calculateDistributions({
     query: "id role hoursWorked clockIn clockOut staff { id name }",
   });
 
-  const distributions: Array<{ staffId: string; staffName: string; role: string; hoursWorked: number; amount: number }> = [];
-
-  if (tipPoolType === "house_pool") {
-    const eligible = entries
-      .map((entry: any) => ({ ...entry, hours: calculateHours(entry) }))
-      .filter((entry: any) => entry.staff?.id && entry.hours > 0);
-    const totalHours = eligible.reduce((sum: number, entry: any) => sum + entry.hours, 0);
-
-    for (const entry of eligible) {
-      const shareCents = totalHours > 0 ? Math.round((entry.hours / totalHours) * totalTipsCents) : 0;
-      distributions.push({
-        staffId: entry.staff.id,
-        staffName: entry.staff.name,
-        role: entry.role,
-        hoursWorked: entry.hours,
-        amount: shareCents,
-      });
-    }
-  } else if (tipPoolType === "pool_by_role") {
-    const roleGroups: Record<string, any[]> = {};
-    for (const entry of entries) {
-      const hours = calculateHours(entry);
-      if (!entry.staff?.id || hours <= 0) continue;
-      const role = entry.role || "server";
-      if (!roleGroups[role]) roleGroups[role] = [];
-      roleGroups[role].push({ ...entry, hours });
-    }
-
-    for (const [role, roleEntries] of Object.entries(roleGroups)) {
-      const rolePercent = ROLE_PERCENTAGES[role] || 10;
-      const roleTipsCents = Math.round((rolePercent / 100) * totalTipsCents);
-      const totalRoleHours = roleEntries.reduce((sum, entry) => sum + entry.hours, 0);
-
-      for (const entry of roleEntries) {
-        const shareCents = totalRoleHours > 0 ? Math.round((entry.hours / totalRoleHours) * roleTipsCents) : 0;
-        distributions.push({
-          staffId: entry.staff.id,
-          staffName: entry.staff.name,
-          role,
-          hoursWorked: entry.hours,
-          amount: shareCents,
-        });
-      }
-    }
-  }
-
+  const distributions = calculateTipDistributions(
+    tipPoolType as "house_pool" | "pool_by_role",
+    totalTipsCents,
+    entries.map((entry: any) => ({
+      staffId: entry.staff?.id || "",
+      staffName: entry.staff?.name || "",
+      role: entry.role || "",
+      hoursWorked: calculateHours(entry),
+    }))
+  );
+  assertTipConservation(totalTipsCents, distributions);
   return distributions;
 }
 
@@ -167,7 +130,7 @@ export async function createTipPoolLedger(
       return { success: false, error: "No completed shifts found for this tip pool" };
     }
 
-    await context.sudo().db.TipPool.createOne({
+    const tipPool = await context.sudo().db.TipPool.createOne({
       data: {
         date: start.toISOString(),
         tipPoolType: args.tipPoolType,
@@ -178,6 +141,12 @@ export async function createTipPoolLedger(
         status: "calculated",
         createdBy: context.session?.itemId ? { connect: { id: context.session.itemId } } : undefined,
       },
+    });
+    await appendAuditEvent(context, {
+      eventType: "tip_pool.calculated",
+      entityType: "TipPool",
+      entityId: tipPool.id,
+      after: { totalTips, distributions },
     });
 
     return { success: true, error: null };
@@ -205,9 +174,23 @@ export async function updateTipPoolStatus(
     if (args.action === "distribute") {
       if (tipPool.status !== "calculated") return { success: false, error: "Only calculated tip pools can be distributed" };
       await context.sudo().db.TipPool.updateOne({ where: { id: args.tipPoolId }, data: { status: "distributed" } });
+      await appendAuditEvent(context, {
+        eventType: "tip_pool.marked_distributed",
+        entityType: "TipPool",
+        entityId: args.tipPoolId,
+        before: { status: tipPool.status },
+        after: { status: "distributed" },
+      });
     } else if (args.action === "reopen") {
       if (tipPool.status !== "distributed") return { success: false, error: "Only distributed tip pools can be reopened" };
       await context.sudo().db.TipPool.updateOne({ where: { id: args.tipPoolId }, data: { status: "calculated" } });
+      await appendAuditEvent(context, {
+        eventType: "tip_pool.reopened",
+        entityType: "TipPool",
+        entityId: args.tipPoolId,
+        before: { status: tipPool.status },
+        after: { status: "calculated" },
+      });
     } else {
       return { success: false, error: "Invalid tip pool action" };
     }

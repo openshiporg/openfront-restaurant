@@ -5,6 +5,7 @@ import { Minus, Plus, ShoppingBag } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
+import { useRouter } from "next/navigation"
 import { formatCurrency } from "@/features/storefront/lib/currency"
 import { addToCart } from "@/features/storefront/lib/data/cart"
 import type {
@@ -30,6 +31,7 @@ export function MenuItemPurchaseForm({
   onAdded,
   className,
 }: MenuItemPurchaseFormProps) {
+  const router = useRouter()
   const [quantity, setQuantity] = useState(1)
   const [selectedModifiers, setSelectedModifiers] = useState<SelectedModifier[]>([])
   const [specialInstructions, setSpecialInstructions] = useState("")
@@ -157,6 +159,7 @@ export function MenuItemPurchaseForm({
         orderType,
       })
 
+      router.refresh()
       onAdded?.()
     } catch (error) {
       console.error("Error adding to cart:", error)

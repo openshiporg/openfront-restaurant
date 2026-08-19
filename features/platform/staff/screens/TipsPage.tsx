@@ -32,7 +32,8 @@ import { DollarSign, Plus, Users, RefreshCw, Calculator, Wallet, ArrowRight, Che
 import { gql, request } from 'graphql-request'
 import { PageBreadcrumbs } from "@/features/dashboard/components/PageBreadcrumbs"
 import { cn } from '@/lib/utils'
-import { formatCurrency } from '@/features/storefront/lib/currency'
+import { formatCurrency, toMinorUnits } from '@/features/storefront/lib/currency'
+import { calculateTipDistributions } from '@/features/lib/tip-allocation'
 
 interface TipPool {
   id: string
@@ -113,13 +114,6 @@ const TIP_POOL_TYPES = [
   { value: 'house_pool', label: 'House Pool (Pro-rated by Hours)' },
 ]
 
-const ROLE_PERCENTAGES: Record<string, number> = {
-  server: 60,
-  bartender: 20,
-  busser: 10,
-  host: 10,
-}
-
 export function TipsPage() {
   const [tipPools, setTipPools] = useState<TipPool[]>([])
   const [loading, setLoading] = useState(true)
@@ -158,7 +152,7 @@ export function TipsPage() {
 
   const calculateDistributions = async () => {
     const totalTips = parseFloat(form.cashTips || '0') + parseFloat(form.creditTips || '0')
-    if (totalTips <= 0) {
+    if (totalTips <= 0 || form.tipPoolType === 'individual') {
       setCalculatedDistributions([])
       return
     }
@@ -173,49 +167,17 @@ export function TipsPage() {
         startDate: startDate.toISOString(),
         endDate: endDate.toISOString(),
       })
-
-      const entries = (data as any).shifts || []
-      const distributions: Distribution[] = []
-
-      if (form.tipPoolType === 'house_pool') {
-        const totalHours = entries.reduce((s: number, e: CompletedShift) => s + (e.hoursWorked || 0), 0)
-        for (const entry of entries) {
-          if (!entry.staff || !entry.hoursWorked) continue
-          const share = totalHours > 0 ? (entry.hoursWorked / totalHours) * totalTips : 0
-          distributions.push({
-            staffId: entry.staff.id,
-            staffName: entry.staff.name,
-            role: entry.role,
-            hoursWorked: entry.hoursWorked,
-            amount: Math.round(share * 100) / 100,
-          })
-        }
-      } else if (form.tipPoolType === 'pool_by_role') {
-        const roleGroups: Record<string, CompletedShift[]> = {}
-        for (const entry of entries) {
-          if (!roleGroups[entry.role]) roleGroups[entry.role] = []
-          roleGroups[entry.role].push(entry)
-        }
-
-        for (const [role, roleEntries] of Object.entries(roleGroups)) {
-          const rolePercent = ROLE_PERCENTAGES[role] || 10
-          const roleTips = (rolePercent / 100) * totalTips
-          const totalRoleHours = roleEntries.reduce((s, e) => s + (e.hoursWorked || 0), 0)
-
-          for (const entry of roleEntries) {
-            if (!entry.staff || !entry.hoursWorked) continue
-            const share = totalRoleHours > 0 ? (entry.hoursWorked / totalRoleHours) * roleTips : 0
-            distributions.push({
-              staffId: entry.staff.id,
-              staffName: entry.staff.name,
-              role: entry.role,
-              hoursWorked: entry.hoursWorked,
-              amount: Math.round(share * 100) / 100,
-            })
-          }
-        }
-      }
-
+      const entries = ((data as any).shifts || []) as CompletedShift[]
+      const distributions = calculateTipDistributions(
+        form.tipPoolType as 'house_pool' | 'pool_by_role',
+        toMinorUnits(totalTips, currencyConfig.currencyCode),
+        entries.map((entry) => ({
+          staffId: entry.staff?.id || '',
+          staffName: entry.staff?.name || '',
+          role: entry.role || '',
+          hoursWorked: Number(entry.hoursWorked || 0),
+        }))
+      )
       setCalculatedDistributions(distributions)
     } catch (err) {
       console.error('Error calculating distributions:', err)
@@ -301,7 +263,7 @@ export function TipsPage() {
               <Landmark className="size-8 text-emerald-600 dark:text-emerald-400" />
               Tip Hub
             </h1>
-            <p className="text-muted-foreground font-medium">Daily tip pooling, distributions and payroll settlement</p>
+            <p className="text-muted-foreground font-medium">Daily tip pooling and recorded distribution status</p>
           </div>
           <Button onClick={() => setDialogOpen(true)} size="lg" className="h-12 px-8 rounded-2xl bg-emerald-600 hover:bg-emerald-700 shadow-xl shadow-emerald-500/20 font-black uppercase tracking-widest text-xs transition-all active:scale-95">
             <Plus className="h-5 w-5 mr-2" />
@@ -328,7 +290,7 @@ export function TipsPage() {
                 <History className="h-7 w-7 text-blue-600 dark:text-blue-400" />
               </div>
               <div>
-                <div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Settled Batches</div>
+                <div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Recorded Batches</div>
                 <div className="text-3xl font-black mt-1">{tipPools.length}</div>
               </div>
             </CardContent>
@@ -414,7 +376,7 @@ export function TipsPage() {
                           
                           {pool.status === 'calculated' && (
                              <Button size="sm" onClick={() => markDistributed(pool.id)} className="w-full rounded-xl bg-emerald-600 hover:bg-emerald-700 font-bold text-[10px] uppercase tracking-widest h-9">
-                                Settle Pool
+                                Mark Distributed
                              </Button>
                           )}
                        </div>
@@ -530,7 +492,7 @@ export function TipsPage() {
 
           <div className="pt-6 border-t mt-auto">
              <Button onClick={handleCreate} className="w-full h-14 rounded-2xl text-base font-black uppercase tracking-widest bg-emerald-600 hover:bg-emerald-700 shadow-xl shadow-emerald-500/20">
-               Confirm & Settle Ledger
+               Confirm Distribution Record
              </Button>
           </div>
         </DialogContent>

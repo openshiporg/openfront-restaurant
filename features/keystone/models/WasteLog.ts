@@ -4,7 +4,8 @@ import {
   relationship,
   select,
   decimal,
-  virtual
+  virtual,
+  timestamp
 } from "@keystone-6/core/fields";
 
 import { isSignedIn, permissions } from "../access";
@@ -13,10 +14,10 @@ import { trackingFields } from "./trackingFields";
 export const WasteLog = list({
   access: {
     operation: {
-      query: permissions.canReadKitchen,
-      create: permissions.canManageKitchen,
-      update: permissions.canManageKitchen,
-      delete: permissions.canManageKitchen,
+      query: permissions.canReadInventory,
+      create: () => false,
+      update: () => false,
+      delete: () => false,
     },
   },
   ui: {
@@ -25,6 +26,11 @@ export const WasteLog = list({
     },
   },
   fields: {
+    eventKey: text({ validation: { isRequired: true }, isIndexed: "unique" }),
+    reversedAt: timestamp(),
+    reversedBy: relationship({ ref: "User" }),
+    reversalReason: text({ ui: { displayMode: "textarea" } }),
+
     quantity: decimal({
       precision: 10,
       scale: 2,
