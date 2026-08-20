@@ -1,8 +1,8 @@
 import { cn } from "@/lib/utils";
-import { Space_Grotesk } from "next/font/google";
+import { Syne } from "next/font/google";
 import { LogoIcon } from "./LogoIcon";
 
-const spaceGrotesk = Space_Grotesk({
+const syne = Syne({
   subsets: ["latin"],
   display: "swap",
   adjustFontFallback: false,
@@ -20,22 +20,26 @@ export const Logo = ({
   iconClassName,
 }: LogoProps) => {
   return (
-    <div className={cn(spaceGrotesk.className, className)}>
-      <div className="flex items-center gap-2 text-zinc-700 dark:text-white">
-        <LogoIcon className={cn("size-5 text-amber-500", iconClassName)} suffix="-full" />
-        <div className="flex flex-col">
-          <h1
-            className={cn(
-              textClassName,
-              "text-xl font-semibold tracking-tight"
-            )}
-          >
-            open<span className="font-normal">front</span>
-          </h1>
-          <span className="-mt-1 text-[9px] font-bold text-amber-500/70 uppercase tracking-wider">
-            RESTAURANT
-          </span>
-        </div>
+    <div className={cn(className, "flex items-center gap-3 text-left")}>
+      <LogoIcon className={cn("size-8 shrink-0", iconClassName)} color="#f59e0b" suffix="-full" />
+      <div className="flex flex-col justify-center -mt-1">
+        <span
+          className={cn(
+            syne.className,
+            textClassName,
+            "text-xl font-semibold tracking-tight text-foreground",
+          )}
+        >
+          open<span className="font-normal">front</span>
+        </span>
+        <span
+          className={cn(
+            syne.className,
+            "text-[10px] font-bold uppercase tracking-wider text-muted-foreground",
+          )}
+        >
+          Restaurant
+        </span>
       </div>
     </div>
   );
