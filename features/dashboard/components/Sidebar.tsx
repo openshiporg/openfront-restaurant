@@ -129,7 +129,7 @@ export function Sidebar({ adminMeta, user, onOpenDialog }: SidebarProps) {
     return (
       <SidebarComponent collapsible="icon">
         <SidebarHeader>
-           <div className="p-2 opacity-0"><Logo /></div>
+           <div className="p-1.5 opacity-0"><Logo variant="sidebar" /></div>
         </SidebarHeader>
         <SidebarContent />
         <SidebarFooter />
@@ -141,13 +141,13 @@ export function Sidebar({ adminMeta, user, onOpenDialog }: SidebarProps) {
     <SidebarComponent collapsible="icon">
       <SidebarHeader>
         <SidebarMenuButton asChild>
-          <div className="group-has-[[data-collapsible=icon]]/sidebar-wrapper:hidden p-2">
-            <Logo />
+          <div className="group-has-[[data-collapsible=icon]]/sidebar-wrapper:hidden p-1.5">
+            <Logo variant="sidebar" />
           </div>
         </SidebarMenuButton>
         <SidebarMenuButton asChild>
           <div className="hidden group-has-[[data-collapsible=icon]]/sidebar-wrapper:block">
-            <LogoIcon className="size-5 text-amber-500" suffix="-full-header" />
+            <LogoIcon className="size-5 text-amber-500" color="#f59e0b" suffix="-full-header" />
           </div>
         </SidebarMenuButton>
       </SidebarHeader>

@@ -8,26 +8,43 @@ const syne = Syne({
   adjustFontFallback: false,
 });
 
+const LOGO_COLOR = "#f59e0b";
+
 interface LogoProps {
   className?: string;
   textClassName?: string;
   iconClassName?: string;
+  variant?: "default" | "sidebar";
 }
 
 export const Logo = ({
   className,
   textClassName,
   iconClassName,
+  variant = "default",
 }: LogoProps) => {
+  const isSidebar = variant === "sidebar";
+
   return (
-    <div className={cn(className, "flex items-center gap-3 text-left")}>
-      <LogoIcon className={cn("size-8 shrink-0", iconClassName)} color="#f59e0b" suffix="-full" />
-      <div className="flex flex-col justify-center -mt-1">
+    <div
+      className={cn(
+        className,
+        "flex items-center text-left",
+        isSidebar ? "gap-1.5" : "gap-3",
+      )}
+    >
+      <LogoIcon
+        className={cn("shrink-0", isSidebar ? "size-5" : "size-8", iconClassName)}
+        color={LOGO_COLOR}
+        suffix="-full"
+      />
+      <div className={cn("flex flex-col justify-center", isSidebar ? "-mt-0.5" : "-mt-1")}>
         <span
           className={cn(
             syne.className,
             textClassName,
-            "text-xl font-semibold tracking-tight text-foreground",
+            "font-semibold tracking-tight text-foreground",
+            isSidebar ? "text-[15px] leading-none" : "text-xl",
           )}
         >
           open<span className="font-normal">front</span>
@@ -35,7 +52,10 @@ export const Logo = ({
         <span
           className={cn(
             syne.className,
-            "text-[10px] font-bold uppercase tracking-wider text-muted-foreground",
+            "font-bold uppercase text-muted-foreground",
+            isSidebar
+              ? "mt-0.5 text-[8px] leading-none tracking-[0.14em]"
+              : "text-[10px] tracking-wider",
           )}
         >
           Restaurant
