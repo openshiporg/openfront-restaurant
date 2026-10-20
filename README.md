@@ -81,7 +81,7 @@ openfront-restaurant/
 
 1. **Clone and install dependencies:**
    ```bash
-   git clone https://github.com/openship-org/openfront-restaurant.git
+   git clone https://github.com/openshiporg/openfront-restaurant.git
    cd openfront-restaurant
    npm install
    ```
