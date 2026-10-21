@@ -1,5 +1,6 @@
 "use client"
 
+import { isDeliveryConfigured } from "@/features/lib/delivery-zones"
 import Image from "next/image"
 import Link from "next/link"
 import { ArrowRight, Clock3, MapPin, Star, Truck } from "lucide-react"
@@ -92,7 +93,7 @@ export function HeroBanner({ menuHref, storeInfo, heroItems }: HeroBannerProps) 
                 </div>
               ) : null}
 
-              {storeInfo.deliveryEnabled ? (
+              {isDeliveryConfigured(storeInfo) ? (
                 <div className="storefront-surface-soft px-4 py-3">
                   <div className="flex items-center gap-2 text-primary">
                     <Truck className="size-4" />

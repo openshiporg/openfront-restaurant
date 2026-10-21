@@ -1,3 +1,4 @@
+import { assertOrderingAvailable } from "../../lib/restaurant-hours";
 import type { Context } from ".keystone/types";
 
 export type ValidatedCartItem = {
@@ -103,6 +104,8 @@ export async function validateCartItemInput(
       name
       price
       available
+      mealPeriods
+      category { mealPeriods }
       thumbnail
       kitchenStation
       modifiers {
@@ -120,6 +123,8 @@ export async function validateCartItemInput(
 
   if (!menuItem) throw new Error("Menu item not found");
   if (!menuItem.available) throw new Error(`${menuItem.name || "Selected item"} is unavailable`);
+  const settings = await context.sudo().query.StoreSettings.findOne({ where: { id: "1" }, query: "timezone hours" });
+  assertOrderingAvailable(settings, menuItem);
 
   const quantity = normalizeCartQuantity(input.quantity);
   const specialInstructions = normalizeSpecialInstructions(input.specialInstructions);

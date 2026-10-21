@@ -730,7 +730,7 @@ const Delivery = ({
                   <p className="text-sm text-muted-foreground">{storeInfo.address}</p>
                   {storeInfo.estimatedPickup ? (
                     <p className="mt-1 text-[13px] font-medium text-foreground">
-                      Ready in {storeInfo.estimatedPickup}
+                      Estimated ready in {storeInfo.estimatedPickup}
                     </p>
                   ) : null}
                 </div>
@@ -794,7 +794,7 @@ const Delivery = ({
               <p className="text-sm text-foreground">{storeInfo.address}</p>
               {storeInfo.estimatedPickup ? (
                 <p className="text-sm font-medium text-foreground">
-                  Ready in {storeInfo.estimatedPickup}
+                  Estimated ready in {storeInfo.estimatedPickup}
                 </p>
               ) : null}
             </>

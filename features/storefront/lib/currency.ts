@@ -1,26 +1,5 @@
 import type { StoreInfo } from "./store-data"
-
-const NO_DIVISION_CURRENCIES = [
-  "krw",
-  "jpy",
-  "vnd",
-  "clp",
-  "pyg",
-  "xaf",
-  "xof",
-  "bif",
-  "djf",
-  "gnf",
-  "kmf",
-  "mga",
-  "rwf",
-  "xpf",
-  "htg",
-  "vuv",
-  "xag",
-  "xdr",
-  "xau",
-]
+import { majorToMinorUnits, minorToMajorUnits } from "../../lib/currency-units"
 
 export interface CurrencyConfig {
   currencyCode?: string
@@ -37,15 +16,6 @@ export function getCurrencyConfig(storeInfo?: Partial<StoreInfo> | null): Requir
     currencyCode: storeInfo?.currencyCode || DEFAULT_CONFIG.currencyCode,
     locale: storeInfo?.locale || DEFAULT_CONFIG.locale,
   }
-}
-
-function shouldDivideBy100(currencyCode: string): boolean {
-  return !NO_DIVISION_CURRENCIES.includes(currencyCode.toLowerCase())
-}
-
-function normalizeToMajorUnits(value: number, currencyCode: string, inputIsCents: boolean): number {
-  if (!inputIsCents) return value
-  return shouldDivideBy100(currencyCode) ? value / 100 : value
 }
 
 /**
@@ -68,7 +38,7 @@ export function formatCurrency(
   const locale = config?.locale || DEFAULT_CONFIG.locale
   const inputIsCents = options?.inputIsCents ?? true
 
-  const value = normalizeToMajorUnits(parsed, currencyCode, inputIsCents)
+  const value = inputIsCents ? minorToMajorUnits(parsed, currencyCode) : parsed
 
   return new Intl.NumberFormat(locale, {
     style: "currency",
@@ -80,16 +50,12 @@ export function formatCurrency(
  * Converts major unit value to minor units (e.g. 12.99 => 1299 for USD).
  */
 export function toMinorUnits(value: number | string, currencyCode = DEFAULT_CONFIG.currencyCode): number {
-  const parsed = typeof value === "string" ? Number.parseFloat(value) : value
-  if (Number.isNaN(parsed)) return 0
-  return shouldDivideBy100(currencyCode) ? Math.round(parsed * 100) : Math.round(parsed)
+  return majorToMinorUnits(value, currencyCode)
 }
 
 /**
  * Converts minor units to major units.
  */
 export function fromMinorUnits(value: number | string, currencyCode = DEFAULT_CONFIG.currencyCode): number {
-  const parsed = typeof value === "string" ? Number.parseFloat(value) : value
-  if (Number.isNaN(parsed)) return 0
-  return shouldDivideBy100(currencyCode) ? parsed / 100 : parsed
+  return minorToMajorUnits(value, currencyCode)
 }

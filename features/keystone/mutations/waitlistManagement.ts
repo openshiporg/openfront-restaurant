@@ -1,5 +1,8 @@
+import { appendAuditEventWithClient } from "../utils/audit";
 import type { Context } from ".keystone/types";
 import { permissions } from "../access";
+import { serviceTransaction } from "../utils/serviceOrderState";
+import { assertSeatAvailable, releaseTableIfUnused } from "../utils/serviceSeating";
 
 interface CreateWaitlistEntryArgs {
   customerName: string;
@@ -11,8 +14,9 @@ interface CreateWaitlistEntryArgs {
 
 interface UpdateWaitlistStatusArgs {
   entryId: string;
-  action: "notify" | "seat" | "cancel" | "no_show";
+  action: "notify" | "seat" | "complete" | "cancel" | "no_show";
   tableId?: string | null;
+  contactConfirmed?: boolean | null;
 }
 
 interface WaitlistMutationResult {
@@ -73,66 +77,30 @@ export async function updateWaitlistStatus(
   if (!args.entryId) return { success: false, error: "Waitlist entry is required" };
 
   try {
-    const sudo = context.sudo();
-    const entry = await sudo.query.WaitlistEntry.findOne({
-      where: { id: args.entryId },
-      query: "id status partySize customerName",
+    await serviceTransaction(context.prisma, async tx => {
+      const entry = await tx.waitlistEntry.findUnique({ where: { id: args.entryId } });
+      if (!entry) throw new Error("Waitlist entry not found");
+      const next: Record<string, string> = { notify: "notified", seat: "seated", complete: "completed", cancel: "cancelled", no_show: "no_show" };
+      const status = next[args.action];
+      if (!status) throw new Error("Invalid waitlist action");
+      if (entry.status === status) return;
+      if (["cancelled", "no_show", "completed"].includes(entry.status) || (entry.status === "seated" && status !== "completed") || (status === "completed" && entry.status !== "seated")) throw new Error("Invalid waitlist lifecycle transition");
+      const now = new Date();
+      if (status === "notified") {
+        if (!args.contactConfirmed) throw new Error("Contact the guest first, then confirm manual contact");
+        await appendAuditEventWithClient(tx, context.session?.itemId, { eventKey: `waitlist-contact:${entry.id}`, eventType: "waitlist.manual_contact", entityType: "WaitlistEntry", entityId: entry.id, after: { channel: "manual_phone", contactedAt: now.toISOString() } });
+      }
+      if (status === "seated") {
+        if (!args.tableId) throw new Error("Select a table before seating");
+        await assertSeatAvailable(tx, args.tableId, entry.partySize);
+        await tx.table.update({ where: { id: args.tableId }, data: { status: "occupied" } });
+      }
+      await tx.waitlistEntry.update({ where: { id: entry.id }, data: {
+        status, notifiedAt: status === "notified" ? now : undefined,
+        seatedAt: status === "seated" ? now : undefined, tableId: status === "seated" ? args.tableId : undefined,
+      } });
+      if (status === "completed" && entry.tableId) await releaseTableIfUnused(tx, entry.tableId);
     });
-
-    if (!entry) return { success: false, error: "Waitlist entry not found" };
-    if (["seated", "cancelled", "no_show"].includes(entry.status || "")) {
-      return { success: false, error: "This waitlist entry is already closed" };
-    }
-
-    const now = new Date().toISOString();
-
-    if (args.action === "notify") {
-      await sudo.db.WaitlistEntry.updateOne({
-        where: { id: args.entryId },
-        data: { status: "notified", notifiedAt: now },
-      });
-    } else if (args.action === "seat") {
-      if (!args.tableId) return { success: false, error: "Select a table before seating the guest" };
-
-      const table = await sudo.query.Table.findOne({
-        where: { id: args.tableId },
-        query: "id tableNumber capacity status",
-      });
-
-      if (!table) return { success: false, error: "Table not found" };
-      if (table.status !== "available") {
-        return { success: false, error: `Table ${table.tableNumber || ""} is not available` };
-      }
-      if (Number(table.capacity || 0) < Number(entry.partySize || 1)) {
-        return { success: false, error: "Selected table is too small for this party" };
-      }
-
-      await sudo.db.WaitlistEntry.updateOne({
-        where: { id: args.entryId },
-        data: {
-          status: "seated",
-          seatedAt: now,
-          table: { connect: { id: args.tableId } },
-        },
-      });
-
-      await sudo.db.Table.updateOne({
-        where: { id: args.tableId },
-        data: { status: "occupied" },
-      });
-    } else if (args.action === "cancel") {
-      await sudo.db.WaitlistEntry.updateOne({
-        where: { id: args.entryId },
-        data: { status: "cancelled" },
-      });
-    } else if (args.action === "no_show") {
-      await sudo.db.WaitlistEntry.updateOne({
-        where: { id: args.entryId },
-        data: { status: "no_show" },
-      });
-    } else {
-      return { success: false, error: "Invalid waitlist action" };
-    }
 
     return { success: true, error: null };
   } catch (err) {

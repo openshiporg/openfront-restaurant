@@ -1,14 +1,16 @@
+import { isSignedIn } from "../access";
+
 async function updateActiveUser(root: any, { data }: { data: any }, context: any) {
-  const sudoContext = context.sudo();
+  const profileContext = context;
 
   // Check if user is authenticated
   const session = context.session;
-  if (!session?.itemId) {
+  if (!isSignedIn({ session })) {
     throw new Error("Not authenticated");
   }
 
   // Get current user
-  const existingUser = await sudoContext.query.User.findOne({
+  const existingUser = await profileContext.query.User.findOne({
     where: { id: session.itemId }
   });
 
@@ -16,8 +18,10 @@ async function updateActiveUser(root: any, { data }: { data: any }, context: any
     throw new Error("User not found");
   }
 
-  // Update user
-  return await sudoContext.db.User.updateOne({
+  const allowed = new Set(["email", "name", "phone", "password", "onboardingStatus"]);
+  if (Object.keys(data || {}).some(key => !allowed.has(key))) throw new Error("Unsupported profile field");
+  // Update through normal access and hooks.
+  return await profileContext.db.User.updateOne({
     where: { id: session.itemId },
     data,
   });

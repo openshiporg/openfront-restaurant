@@ -47,6 +47,9 @@ export const platformNavItems: PlatformNavItem[] = [
   { title: 'Reservations',  href: '/platform/reservations',    color: 'purple', description: 'Manage table reservations and booking schedule.',                         icon: CalendarDays, group: 'standalone' },
   { title: 'Store Settings',href: '/platform/store-settings',  color: 'slate',  description: 'Configure restaurant settings, hours, and branding.',                     icon: Store,        group: 'standalone' },
 
+  { title: 'Receipts', href: '/platform/receipts', color: 'emerald', description: 'Inspect immutable payment receipts and print or export evidence.', icon: CreditCard, group: 'standalone' },
+  { title: 'Cash & Close', href: '/platform/reconciliation', color: 'emerald', description: 'Reconcile cash, refunds and processor statements.', icon: CreditCard, group: 'standalone' },
+
   // Menu — single entry
   { title: 'Menu Architect', href: '/platform/menu',           color: 'green',  description: 'Unified visual workspace for menu items, categories, and modifiers.',     icon: BookOpen,     group: 'standalone' },
 
@@ -58,11 +61,14 @@ export const platformNavItems: PlatformNavItem[] = [
   // Operations
   { title: 'Operations',        href: '/platform/operations',   color: 'orange', description: 'Daily operations dashboard and performance signals.',        icon: ClipboardList, group: 'operations' },
   { title: 'Tables & Sections', href: '/platform/tables',       color: 'cyan',   description: 'Manage dining room layout, tables, and sections.',           icon: MapPin,        group: 'operations' },
+  { title: 'Time Clock', href: '/platform/time-clock', color: 'purple', description: 'Clock work and breaks, review corrections and export approved time.', icon: Users, group: 'operations' },
   { title: 'Staff',             href: '/platform/users',        color: 'purple', description: 'Manage staff accounts, roles, and permissions.',             icon: Users,         group: 'operations' },
 
   // Marketing
   { title: 'Discounts',   href: '/platform/discounts',       color: 'pink', description: 'Manage discount codes and promotional campaigns.',   icon: Tag,  group: 'marketing' },
   { title: 'Gift Cards',  href: '/platform/gift-cards',      color: 'rose', description: 'Manage gift card creation and redemption.',          icon: Gift, group: 'marketing' },
+
+  { title: 'Customer Privacy', href: '/platform/privacy', color: 'slate', description: 'Review data requests and record retention decisions.', icon: Users, group: 'operations' },
 
   // Integrations
   { title: 'Payment Providers', href: '/platform/payment-providers', color: 'slate',  description: 'Configure payment gateways and provider settings.', icon: CreditCard, group: 'integrations' },

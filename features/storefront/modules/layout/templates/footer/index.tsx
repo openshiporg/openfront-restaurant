@@ -1,82 +1,9 @@
-import type { DayHours } from "@/features/storefront/lib/store-data"
 import {
   StoreBrand,
   type StorefrontLayoutSettings,
 } from "@/features/storefront/modules/layout/components/store-logo"
 import { StorefrontSectionLink } from "@/features/storefront/components/StorefrontSectionLink"
-
-function parseHours(value: string | DayHours | undefined): DayHours | null {
-  if (!value) return null
-
-  if (typeof value === "object") {
-    if (value.ranges?.length) return { ...value, enabled: value.enabled ?? true }
-    if (value.open && value.close) {
-      return {
-        enabled: value.enabled ?? true,
-        ranges: [{ open: value.open, close: value.close }],
-      }
-    }
-    return value.enabled === false ? { enabled: false, ranges: [] } : null
-  }
-
-  if (typeof value === "string") {
-    const normalized = value.trim().toLowerCase()
-    if (!normalized || normalized === "closed") {
-      return { enabled: false, ranges: [] }
-    }
-    const [open, close] = normalized.split("-").map((segment: string) => segment.trim())
-    if (!open || !close) return null
-    return { enabled: true, ranges: [{ open, close }] }
-  }
-
-  return null
-}
-
-function formatTime(time: string, locale: string, timezone: string): string {
-  const normalized = time.trim().toLowerCase()
-  const meridianMatch = normalized.match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)$/)
-
-  let hours = 0
-  let minutes = 0
-
-  if (meridianMatch) {
-    hours = Number.parseInt(meridianMatch[1], 10)
-    minutes = Number.parseInt(meridianMatch[2] || "0", 10)
-    const meridian = meridianMatch[3]
-    if (meridian === "pm" && hours < 12) hours += 12
-    if (meridian === "am" && hours === 12) hours = 0
-  } else {
-    const hhmm = normalized.includes(":") ? normalized : `${normalized}:00`
-    const [hRaw, mRaw] = hhmm.split(":")
-    hours = Number.parseInt(hRaw, 10)
-    minutes = Number.parseInt(mRaw || "0", 10)
-  }
-
-  if (Number.isNaN(hours) || Number.isNaN(minutes)) return time
-
-  const date = new Date()
-  date.setHours(hours, minutes, 0, 0)
-
-  try {
-    return new Intl.DateTimeFormat(locale || "en-US", {
-      hour: "numeric",
-      minute: "2-digit",
-      timeZone: timezone || "UTC",
-    }).format(date)
-  } catch {
-    return time
-  }
-}
-
-const dayOrder = [
-  "monday",
-  "tuesday",
-  "wednesday",
-  "thursday",
-  "friday",
-  "saturday",
-  "sunday",
-] as const
+import { getWeeklyHoursDisplay } from "@/features/storefront/lib/store-hours-display"
 
 const quickLinks = [
   { href: "/#menu", label: "Menu" },
@@ -95,22 +22,7 @@ export default function Footer({ storeSettings }: FooterProps) {
   const phone = storeSettings?.phone || ""
   const hours = storeSettings?.hours || {}
   const locale = storeSettings?.locale || "en-US"
-  const timezone = storeSettings?.timezone || "America/New_York"
-
-  const footerHours = dayOrder.map((day) => {
-    const parsed = parseHours((hours as Record<string, string | DayHours | undefined>)?.[day])
-    const label = day.charAt(0).toUpperCase() + day.slice(1, 3)
-
-    if (!parsed || parsed.enabled === false || !parsed.ranges?.length) {
-      return { day: label, value: "Closed" }
-    }
-
-    const first = parsed.ranges[0]
-    return {
-      day: label,
-      value: `${formatTime(first.open, locale, timezone)} – ${formatTime(first.close, locale, timezone)}`,
-    }
-  })
+  const footerHours = getWeeklyHoursDisplay(hours, locale)
 
   return (
     <footer

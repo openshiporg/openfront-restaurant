@@ -1,13 +1,14 @@
 import type { Context } from ".keystone/types";
+import { writeSaleEvidence } from "../utils/paymentEvidence";
 import { permissions } from "../access";
+import { providerRefundObservation, recordVerifiedProviderRefund } from "../utils/providerRefunds";
+import { nextPaymentStatus, reservedTenderValue, firstSettlementTime, allocateTenderTip } from "../utils/paymentState";
 import {
   capturePayment as captureProviderPayment,
   createPayment as createProviderPayment,
   getPaymentStatus as getProviderPaymentStatus,
 } from "../utils/paymentProviderAdapter";
 import { isPaymentProviderConfigured } from "../utils/paymentProviderConfig";
-import { appendAuditEventWithClient } from "../utils/audit";
-import { issueReceiptWithClient } from "../utils/receipt";
 import { finalizePaidOrderWithClient, reconcileCompletedOrderOperations } from "../utils/orderCompletion";
 import { getOrCreateIdempotencyAttempt, updateIdempotencyAttempt } from "../utils/idempotency";
 
@@ -52,39 +53,6 @@ async function getProvider(context: Context, code: string | null) {
   return providers[0] || null;
 }
 
-async function writeSaleEvidence(
-  prisma: any,
-  actorId: string | null | undefined,
-  input: { payment: any; order: any; remainingBalance: number }
-) {
-  await appendAuditEventWithClient(prisma, actorId, {
-    eventKey: `payment-succeeded:${input.payment.id}`,
-    eventType: "payment.succeeded",
-    entityType: "Payment",
-    entityId: input.payment.id,
-    after: {
-      amount: input.payment.amount,
-      method: input.payment.paymentMethod,
-      remainingBalance: input.remainingBalance,
-    },
-    metadata: { idempotencyKey: input.payment.idempotencyKey },
-  });
-  await issueReceiptWithClient(prisma, actorId, {
-    kind: "sale",
-    entityId: input.payment.id,
-    orderId: input.order.id,
-    paymentId: input.payment.id,
-    amount: cents(input.payment.amount),
-    currencyCode: input.order.currencyCode || "USD",
-    snapshot: {
-      orderId: input.order.id,
-      orderNumber: input.order.orderNumber,
-      tender: input.payment.paymentMethod,
-      amount: cents(input.payment.amount),
-      remainingBalance: input.remainingBalance,
-    },
-  });
-}
 
 export default async function processPayment(
   _root: unknown,
@@ -143,10 +111,10 @@ export default async function processPayment(
         const payments = await tx.payment.findMany({
           where: {
             orderId: existing.orderId,
-            status: { in: ["processing", "authorized", "succeeded", "unknown"] },
+            status: { in: ["processing", "authorized", "succeeded", "partially_refunded", "refunded", "unknown"] },
           },
         });
-        const reserved = payments.reduce((sum: number, payment: any) => sum + cents(payment.amount), 0);
+        const reserved = payments.reduce((sum: number, payment: any) => sum + reservedTenderValue(payment), 0);
         return {
           payment: existing,
           order,
@@ -173,10 +141,10 @@ export default async function processPayment(
         const reservedRows = await tx.payment.findMany({
           where: {
             orderId: order.id,
-            status: { in: ["processing", "authorized", "succeeded", "unknown"] },
+            status: { in: ["processing", "authorized", "succeeded", "partially_refunded", "refunded", "unknown"] },
           },
         });
-        const reservedTotal = reservedRows.reduce((sum: number, payment: any) => sum + cents(payment.amount), 0);
+        const reservedTotal = reservedRows.reduce((sum: number, payment: any) => sum + reservedTenderValue(payment), 0);
         return {
           payment: recoverable,
           order,
@@ -190,10 +158,10 @@ export default async function processPayment(
       const reservedPayments = await tx.payment.findMany({
         where: {
           orderId: order.id,
-          status: { in: ["processing", "authorized", "succeeded", "unknown"] },
+          status: { in: ["processing", "authorized", "succeeded", "partially_refunded", "refunded", "unknown"] },
         },
       });
-      const reserved = reservedPayments.reduce((sum: number, payment: any) => sum + cents(payment.amount), 0);
+      const reserved = reservedPayments.reduce((sum: number, payment: any) => sum + reservedTenderValue(payment), 0);
       const remainingBalance = total - reserved;
       if (remainingBalance <= 0) throw new Error("Order has no unreserved balance");
 
@@ -209,7 +177,7 @@ export default async function processPayment(
           status: immediate ? "succeeded" : "processing",
           paymentMethod: args.paymentMethod,
           currencyCode: order.currencyCode || "USD",
-          tipAmount: desiredTip,
+          tipAmount: allocateTenderTip(desiredTip, total, amount, remainingBalance - amount, reservedPayments),
           paymentProviderId: provider?.id || null,
           processedAt: immediate ? new Date() : null,
           orderId: order.id,
@@ -246,6 +214,7 @@ export default async function processPayment(
       !reservation.payment.providerPaymentId &&
       !existingData.clientSecret;
     if (reservation.replay && !needsProviderRecovery) {
+      if (reservation.payment.status === "succeeded" && reservation.order?.id) await reconcileCompletedOrderOperations(reservation.order.id, context);
       await updateIdempotencyAttempt(prisma, attempt.id, "completed", {
         paymentId: reservation.payment.id,
         orderId: reservation.order?.id || args.orderId,
@@ -294,13 +263,15 @@ export default async function processPayment(
           : "processing";
       const data = { ...providerResult, providerCode };
       await prisma.$transaction(async (tx: any) => {
+        const current = await tx.payment.findUnique({ where: { id: reservation.payment.id } });
+        const effectiveStatus = nextPaymentStatus(current.status, status);
         const updated = await tx.payment.update({
           where: { id: reservation.payment.id },
           data: {
             providerPaymentId: providerPaymentId || "",
-            data,
-            status,
-            processedAt: status === "succeeded" ? new Date() : undefined,
+            data: { ...(current.data || {}), ...data },
+            status: effectiveStatus,
+            processedAt: firstSettlementTime(current.processedAt, status),
           },
         });
         if (status === "succeeded") {
@@ -328,11 +299,11 @@ export default async function processPayment(
         error: null,
       };
     } catch (error) {
-      await context.sudo().db.Payment.updateOne({
-        where: { id: reservation.payment.id },
-        data: { status: "failed", errorMessage: error instanceof Error ? error.message : "Provider initiation failed" },
+      await prisma.payment.updateMany({
+        where: { id: reservation.payment.id, status: { in: ["processing", "authorized", "unknown"] } },
+        data: { status: "unknown", errorMessage: "Provider outcome uncertain; reconcile this existing attempt before another tender" },
       });
-      await updateIdempotencyAttempt(prisma, attempt.id, "failed", {
+      await updateIdempotencyAttempt(prisma, attempt.id, "provider_pending", {
         paymentId: reservation.payment.id,
         error: error instanceof Error ? error.message : "Provider initiation failed",
       }, 502);
@@ -360,37 +331,44 @@ export async function capturePaymentMutation(
     });
     const payment = payments[0];
     if (!payment) throw new Error("Payment not found");
-    if (payment.status === "succeeded") return { success: true, status: "succeeded", error: null };
+    if (["succeeded", "partially_refunded", "refunded"].includes(payment.status)) {
+      if (payment.order?.id) await reconcileCompletedOrderOperations(payment.order.id, context);
+      return { success: true, status: payment.status, error: null };
+    }
     if (!payment.paymentProvider) throw new Error("Payment provider is missing");
 
     const captured = await captureProviderPayment({
       provider: payment.paymentProvider,
       paymentId: payment.providerPaymentId || args.paymentIntentId,
       amount: cents(payment.amount),
+      idempotencyKey: `capture:${payment.idempotencyKey || payment.id}`,
     });
     const didSucceed = ["succeeded", "captured"].includes(captured.status);
+    if (didSucceed && Number(captured.amount) !== cents(payment.amount)) throw new Error("Provider captured amount differs from the reserved tender; reconcile before further collection");
     const nextStatus = didSucceed ? "succeeded" : captured.status === "failed" ? "failed" : "unknown";
     const prisma = context.prisma as any;
-    await prisma.$transaction(async (tx: any) => {
+    const persistedStatus = await prisma.$transaction(async (tx: any) => {
+      const current = await tx.payment.findUnique({ where: { id: payment.id } });
       const updated = await tx.payment.update({
         where: { id: payment.id },
         data: {
-          status: nextStatus,
-          processedAt: didSucceed ? new Date() : undefined,
-          data: { ...(payment.data || {}), capture: captured.data || captured },
+          status: nextPaymentStatus(current.status, nextStatus),
+          processedAt: firstSettlementTime(current.processedAt, nextStatus),
+          data: { ...(current.data || {}), capture: captured.data || captured, captureId: captured.data?.purchase_units?.[0]?.payments?.captures?.[0]?.id || current.data?.captureId || null, chargeId: captured.data?.latest_charge || current.data?.chargeId || null },
         },
       });
       if (didSucceed && payment.order?.id) {
         const order = await tx.restaurantOrder.findUnique({ where: { id: payment.order.id } });
-        const succeeded = await tx.payment.findMany({ where: { orderId: order.id, status: "succeeded" } });
-        const paid = succeeded.reduce((sum: number, row: any) => sum + cents(row.amount), 0);
+        const succeeded = await tx.payment.findMany({ where: { orderId: order.id, status: { in: ["succeeded", "partially_refunded", "refunded"] } } });
+        const paid = succeeded.reduce((sum: number, row: any) => sum + reservedTenderValue(row), 0);
         const remainingBalance = Math.max(0, cents(order.total) - paid);
         await writeSaleEvidence(tx, context.session?.itemId, { payment: updated, order, remainingBalance });
         if (remainingBalance === 0) await finalizePaidOrderWithClient(tx, order.id, context.session?.itemId);
       }
+      return updated.status;
     }, { isolationLevel: "Serializable" });
     if (didSucceed && payment.order?.id) await reconcileCompletedOrderOperations(payment.order.id, context);
-    return { success: didSucceed, status: nextStatus, error: didSucceed ? null : "Capture outcome is not final" };
+    return { success: didSucceed, status: persistedStatus, error: didSucceed ? null : "Capture outcome is not final" };
   } catch (error) {
     return { success: false, status: null, error: error instanceof Error ? error.message : "Unknown error" };
   }
@@ -410,39 +388,47 @@ export async function reconcilePaymentMutation(
       query: "id idempotencyKey amount status paymentMethod currencyCode providerPaymentId data order { id orderNumber total currencyCode status } paymentProvider { id code isInstalled createPaymentFunction capturePaymentFunction refundPaymentFunction getPaymentStatusFunction generatePaymentLinkFunction handleWebhookFunction credentials metadata }",
     });
     if (!payment) throw new Error("Payment not found");
-    if (payment.status === "succeeded") return { success: true, status: "succeeded", error: null };
+    if (["cash", "gift_card"].includes(payment.paymentMethod || "") && ["succeeded", "partially_refunded", "refunded"].includes(payment.status)) {
+      if (payment.order?.id) await reconcileCompletedOrderOperations(payment.order.id, context);
+      return { success: true, status: payment.status, error: null };
+    }
     if (!payment.paymentProvider || !payment.providerPaymentId) throw new Error("Provider payment reference is missing");
     const providerStatus = await getProviderPaymentStatus({
       provider: payment.paymentProvider,
       paymentId: payment.providerPaymentId,
     });
+    if (providerStatus.refundsComplete === false) throw new Error("Provider refund list is incomplete; preserve the existing ledger and reconcile the remaining pages");
     const succeeded = providerStatus.status === "succeeded";
+    if (succeeded && Number(providerStatus.amount) !== cents(payment.amount)) throw new Error("Provider captured amount differs from the reserved tender; reconciliation required");
     const status = succeeded
       ? "succeeded"
       : ["failed", "canceled", "cancelled"].includes(providerStatus.status)
         ? providerStatus.status === "failed" ? "failed" : "cancelled"
-        : "processing";
+        : providerStatus.status === "requires_capture" ? "authorized" : "unknown";
     const prisma = context.prisma as any;
-    await prisma.$transaction(async (tx: any) => {
+    const persistedStatus = await prisma.$transaction(async (tx: any) => {
+      for (const resource of providerStatus.refunds || []) await recordVerifiedProviderRefund(tx, { paymentId: payment.id, providerId: payment.paymentProvider.id, providerCode: payment.paymentProvider.code, refund: providerRefundObservation(resource), actorId: context.session?.itemId });
+      const current = await tx.payment.findUnique({ where: { id: payment.id } });
       const updated = await tx.payment.update({
         where: { id: payment.id },
         data: {
-          status,
-          processedAt: succeeded ? new Date() : undefined,
-          data: { ...(payment.data || {}), reconciliation: providerStatus.data || providerStatus },
+          status: nextPaymentStatus(current.status, status),
+          processedAt: firstSettlementTime(current.processedAt, status),
+          data: { ...(current.data || {}), reconciliation: providerStatus.data || providerStatus },
         },
       });
       if (succeeded && payment.order?.id) {
         const order = await tx.restaurantOrder.findUnique({ where: { id: payment.order.id } });
-        const paidRows = await tx.payment.findMany({ where: { orderId: order.id, status: "succeeded" } });
-        const paid = paidRows.reduce((sum: number, row: any) => sum + cents(row.amount), 0);
+        const paidRows = await tx.payment.findMany({ where: { orderId: order.id, status: { in: ["succeeded", "partially_refunded", "refunded"] } } });
+        const paid = paidRows.reduce((sum: number, row: any) => sum + reservedTenderValue(row), 0);
         const remainingBalance = Math.max(0, cents(order.total) - paid);
         await writeSaleEvidence(tx, context.session?.itemId, { payment: updated, order, remainingBalance });
         if (remainingBalance === 0) await finalizePaidOrderWithClient(tx, order.id, context.session?.itemId);
       }
+      return updated.status;
     }, { isolationLevel: "Serializable" });
     if (succeeded && payment.order?.id) await reconcileCompletedOrderOperations(payment.order.id, context);
-    return { success: succeeded, status, error: succeeded ? null : "Provider payment is not yet successful" };
+    return { success: succeeded, status: persistedStatus, error: succeeded ? null : "Provider payment is not yet successful" };
   } catch (error) {
     return { success: false, status: null, error: error instanceof Error ? error.message : "Unknown error" };
   }

@@ -1,202 +1,100 @@
-import type { Context } from ".keystone/types";
 import { permissions } from "../access";
-import {
-  assertTipConservation,
-  calculateTipDistributions,
-} from "../../lib/tip-allocation";
-import { appendAuditEvent } from "../utils/audit";
+import { assertTipConservation, calculateTipDistributions, isTipEligibleRole } from "../../lib/tip-allocation";
+import { toMinorUnits } from "../../storefront/lib/currency";
+import { appendAuditEventWithClient } from "../utils/audit";
+import { attendanceDateRange, paidHours, readAttendanceState } from "../utils/attendance";
+import { idempotencyFingerprint } from "../utils/idempotency";
 
-interface CreateTipPoolArgs {
-  date: string;
-  tipPoolType: "individual" | "pool_by_role" | "house_pool";
-  cashTips: string;
-  creditTips: string;
+type TipArgs = { date: string; tipPoolType: "individual" | "pool_by_role" | "house_pool"; cashTips: string; creditTips: string; sourceNote?: string; individualStaffId?: string | null };
+function dayKey(value: string) {
+  const day = value?.slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day || "") || new Date(`${day}T00:00:00Z`).toISOString().slice(0, 10) !== day) throw new Error("Business date is invalid");
+  return day;
 }
-
-interface UpdateTipPoolStatusArgs {
-  tipPoolId: string;
-  action: "distribute" | "reopen";
-}
-
-interface TipPoolMutationResult {
-  success: boolean;
-  error: string | null;
-}
-
-function dollarsToCents(value: unknown) {
-  const parsed = Number(value || 0);
-  if (!Number.isFinite(parsed)) return 0;
-  return Math.max(0, Math.round(parsed * 100));
-}
-
-function getBusinessDayWindow(date: string) {
-  const start = new Date(date);
-  if (Number.isNaN(start.getTime())) throw new Error("Business date is invalid");
-  start.setHours(0, 0, 0, 0);
-  const end = new Date(start);
-  end.setHours(23, 59, 59, 999);
-  return { start, end };
-}
-
-function calculateHours(entry: any) {
-  if (typeof entry.hoursWorked === "number") return entry.hoursWorked;
-  if (!entry.clockIn || !entry.clockOut) return 0;
-  const start = new Date(entry.clockIn);
-  const end = new Date(entry.clockOut);
-  return Math.max(0, Math.round(((end.getTime() - start.getTime()) / 3_600_000) * 100) / 100);
-}
-
-async function calculateDistributions({
-  tipPoolType,
-  totalTipsCents,
-  startDate,
-  endDate,
-  context,
-}: {
-  tipPoolType: string;
-  totalTipsCents: number;
-  startDate: string;
-  endDate: string;
-  context: Context;
-}) {
-  if (tipPoolType === "individual") return [];
-
-  const entries = await context.sudo().query.Shift.findMany({
-    where: {
-      status: { equals: "completed" },
-      clockIn: { gte: startDate, lte: endDate },
-    },
-    query: "id role hoursWorked clockIn clockOut staff { id name }",
-  });
-
-  const distributions = calculateTipDistributions(
-    tipPoolType as "house_pool" | "pool_by_role",
-    totalTipsCents,
-    entries.map((entry: any) => ({
-      staffId: entry.staff?.id || "",
-      staffName: entry.staff?.name || "",
-      role: entry.role || "",
-      hoursWorked: calculateHours(entry),
-    }))
-  );
-  assertTipConservation(totalTipsCents, distributions);
-  return distributions;
-}
-
-export async function createTipPoolLedger(
-  root: any,
-  args: CreateTipPoolArgs,
-  context: Context
-): Promise<TipPoolMutationResult> {
-  if (!permissions.canManageStaff({ session: context.session })) {
-    return { success: false, error: "Not authorized to manage tip pools" };
+export async function calculateRestaurantTipPool(tx: any, args: TipArgs) {
+  if (!["individual", "pool_by_role", "house_pool"].includes(args.tipPoolType)) throw new Error("Invalid tip pool type");
+  const day = dayKey(args.date);
+  const settings = await tx.storeSettings.findUnique({ where: { id: 1 } });
+  const businessDays = await tx.auditEvent.findMany({ where: { entityType: "BusinessDay", entityId: { lte: day }, eventType: "business_day.opened" }, orderBy: { entityId: "desc" }, take: 1 });
+  const timezone = businessDays[0]?.after?.timezone || settings?.timezone || "America/New_York";
+  const cutoff = businessDays[0]?.after?.cutoffMinutes || 0;
+  const convert = (value: string) => {
+    if (!Number.isFinite(Number(value)) || Number(value) < 0) throw new Error("Tip amounts must be nonnegative numbers");
+    const result = toMinorUnits(value, settings?.currencyCode || "USD");
+    if (!Number.isSafeInteger(result)) throw new Error("Tip amount is too large");
+    return result;
+  };
+  const cashTips = convert(args.cashTips); const creditTips = convert(args.creditTips); const totalTips = cashTips + creditTips;
+  if (!Number.isSafeInteger(totalTips) || totalTips <= 0) throw new Error("Tip pool must contain a positive amount");
+  const midnight = new Date(`${day}T00:00:00Z`).getTime();
+  const entries = await tx.timeEntry.findMany({ where: { clockIn: { gte: new Date(midnight - 2 * 86400000), lt: new Date(midnight + 3 * 86400000) } }, include: { staff: { select: { id: true, name: true } } }, take: 10001 });
+  if (entries.length > 10000) throw new Error("Too many time entries; narrow the reconciliation scope");
+  const window = await attendanceDateRange(tx, day, day);
+  const eligible = [];
+  for (const entry of entries) {
+    if ((new Date(entry.clockIn) < window!.gte || new Date(entry.clockIn) >= window!.lt) || !isTipEligibleRole(entry.role) || !entry.staffId) continue;
+    const state = await readAttendanceState(tx, entry.id);
+    if (!entry.clockOut || !state.attested || !state.approved) throw new Error("All eligible time entries for this business day must be closed, employee-attested and manager-approved");
+    eligible.push({ staffId: entry.staffId, staffName: entry.staff?.name || "", role: entry.role, hoursWorked: paidHours(entry), entryId: entry.id, revision: state.revision });
   }
-
-  if (!["individual", "pool_by_role", "house_pool"].includes(args.tipPoolType)) {
-    return { success: false, error: "Invalid tip pool type" };
-  }
-
+  let distributions;
+  if (args.tipPoolType === "individual") {
+    if (!args.individualStaffId) throw new Error("Select the employee receiving individual tips");
+    const recipient = eligible.filter(row => row.staffId === args.individualStaffId);
+    if (!recipient.length) throw new Error("Individual recipient has no approved time for this business day");
+    distributions = [{ ...recipient[0], hoursWorked: recipient.reduce((n, row) => n + row.hoursWorked, 0), amount: totalTips }];
+  } else distributions = calculateTipDistributions(args.tipPoolType, totalTips, eligible);
+  assertTipConservation(totalTips, distributions);
+  return { day, timezone, cutoff, currencyCode: settings?.currencyCode || "USD", cashTips, creditTips, totalTips, distributions, timeEvidence: eligible.map(row => ({ entryId: row.entryId, revision: row.revision, hoursWorked: row.hoursWorked })) };
+}
+export async function previewRestaurantTipPool(_root: unknown, args: TipArgs, context: any) {
+  if (!permissions.canManageStaff({ session: context.session })) throw new Error("Staff management permission required");
+  return calculateRestaurantTipPool(context.prisma, args);
+}
+export async function createTipPoolLedger(_root: unknown, args: TipArgs, context: any) {
+  if (!permissions.canManageStaff({ session: context.session })) return { success: false, error: "Not authorized to manage tip pools" };
   try {
-    const { start, end } = getBusinessDayWindow(args.date);
-    const cashTips = dollarsToCents(args.cashTips);
-    const creditTips = dollarsToCents(args.creditTips);
-    const totalTips = cashTips + creditTips;
-
-    if (totalTips <= 0) return { success: false, error: "Tip pool must include cash or credit tips" };
-
-    const existing = await context.sudo().query.TipPool.findMany({
-      where: {
-        date: { gte: start.toISOString(), lte: end.toISOString() },
-        tipPoolType: { equals: args.tipPoolType },
-        status: { in: ["open", "calculated"] },
-      },
-      query: "id status tipPoolType",
-      take: 1,
-    });
-
-    if (existing.length > 0) {
-      return { success: false, error: "An open or calculated tip pool already exists for this date and type" };
+    const sourceNote = args.sourceNote?.trim();
+    if (!sourceNote || sourceNote.length > 1000) throw new Error("Record the source or reconciliation reference for the declared tips");
+    for (let attempt = 0; attempt < 4; attempt++) {
+      try {
+        return await context.prisma.$transaction(async (tx: any) => {
+          const result = await calculateRestaurantTipPool(tx, args);
+          const fingerprint = idempotencyFingerprint({ ...args, date: result.day });
+          const date = new Date(`${result.day}T12:00:00Z`);
+          const existing = await tx.tipPool.findMany({ where: { date: { gte: new Date(`${result.day}T00:00:00Z`), lt: new Date(new Date(`${result.day}T00:00:00Z`).getTime() + 86400000) } }, take: 2 });
+          if (existing.length) {
+            let evidence: any = {}; try { evidence = JSON.parse(existing[0].notes || "{}"); } catch {}
+            if (existing.length === 1 && evidence.fingerprint === fingerprint) return { success: true, error: null };
+            throw new Error("A tip pool already accounts for this business day; reconcile it before creating another allocation");
+          }
+          const { day, timezone, cutoff, timeEvidence, currencyCode } = result;
+          const notes = JSON.stringify({ source: "manual_reconciled_declaration", sourceNote: sourceNote, day, timezone, cutoff, currencyCode, timeEvidence, fingerprint });
+          const pool = await tx.tipPool.create({ data: { date, tipPoolType: args.tipPoolType, cashTips: result.cashTips, creditTips: result.creditTips, totalTips: result.totalTips, distributions: result.distributions, notes, status: "calculated", createdById: context.session.itemId } });
+          await appendAuditEventWithClient(tx, context.session.itemId, { eventKey: `tip-pool:calculated:${pool.id}`, eventType: "tip_pool.calculated", entityType: "TipPool", entityId: pool.id, reason: sourceNote, after: { totalTips: result.totalTips, distributions: result.distributions }, metadata: { day, timezone, cutoff, timeEvidence, fingerprint } });
+          return { success: true, error: null };
+        }, { isolationLevel: "Serializable" });
+      } catch (error: any) { if (attempt < 3 && ["P2034", "P2002"].includes(error.code)) continue; throw error; }
     }
-
-    const distributions = await calculateDistributions({
-      tipPoolType: args.tipPoolType,
-      totalTipsCents: totalTips,
-      startDate: start.toISOString(),
-      endDate: end.toISOString(),
-      context,
-    });
-
-    if (args.tipPoolType !== "individual" && distributions.length === 0) {
-      return { success: false, error: "No completed shifts found for this tip pool" };
-    }
-
-    const tipPool = await context.sudo().db.TipPool.createOne({
-      data: {
-        date: start.toISOString(),
-        tipPoolType: args.tipPoolType,
-        totalTips,
-        cashTips,
-        creditTips,
-        distributions,
-        status: "calculated",
-        createdBy: context.session?.itemId ? { connect: { id: context.session.itemId } } : undefined,
-      },
-    });
-    await appendAuditEvent(context, {
-      eventType: "tip_pool.calculated",
-      entityType: "TipPool",
-      entityId: tipPool.id,
-      after: { totalTips, distributions },
-    });
-
-    return { success: true, error: null };
-  } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : "Unknown error" };
-  }
+  } catch (error: any) { return { success: false, error: error.message }; }
 }
-
-export async function updateTipPoolStatus(
-  root: any,
-  args: UpdateTipPoolStatusArgs,
-  context: Context
-): Promise<TipPoolMutationResult> {
-  if (!permissions.canManageStaff({ session: context.session })) {
-    return { success: false, error: "Not authorized to manage tip pools" };
-  }
-
+export async function updateTipPoolStatus(_root: unknown, args: { tipPoolId: string; action: string; payoutReference?: string }, context: any) {
+  if (!permissions.canManageStaff({ session: context.session })) return { success: false, error: "Not authorized to manage tip pools" };
   try {
-    const tipPool = await context.sudo().query.TipPool.findOne({
-      where: { id: args.tipPoolId },
-      query: "id status",
-    });
-    if (!tipPool) return { success: false, error: "Tip pool not found" };
-
-    if (args.action === "distribute") {
-      if (tipPool.status !== "calculated") return { success: false, error: "Only calculated tip pools can be distributed" };
-      await context.sudo().db.TipPool.updateOne({ where: { id: args.tipPoolId }, data: { status: "distributed" } });
-      await appendAuditEvent(context, {
-        eventType: "tip_pool.marked_distributed",
-        entityType: "TipPool",
-        entityId: args.tipPoolId,
-        before: { status: tipPool.status },
-        after: { status: "distributed" },
-      });
-    } else if (args.action === "reopen") {
-      if (tipPool.status !== "distributed") return { success: false, error: "Only distributed tip pools can be reopened" };
-      await context.sudo().db.TipPool.updateOne({ where: { id: args.tipPoolId }, data: { status: "calculated" } });
-      await appendAuditEvent(context, {
-        eventType: "tip_pool.reopened",
-        entityType: "TipPool",
-        entityId: args.tipPoolId,
-        before: { status: tipPool.status },
-        after: { status: "calculated" },
-      });
-    } else {
-      return { success: false, error: "Invalid tip pool action" };
-    }
-
-    return { success: true, error: null };
-  } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : "Unknown error" };
-  }
+    const payoutReference = args.payoutReference?.trim();
+    if (!payoutReference || payoutReference.length > 500) throw new Error("A payout or payout-reversal reference is required");
+    return await context.prisma.$transaction(async (tx: any) => {
+      const pool = await tx.tipPool.findUnique({ where: { id: args.tipPoolId } });
+      if (!pool) throw new Error("Tip pool not found");
+      const distributed = args.action === "distribute";
+      if (!distributed && args.action !== "reopen") throw new Error("Invalid tip pool action");
+      const eventKey = `tip-pool:${args.action}:${pool.id}:${idempotencyFingerprint({ reference: args.payoutReference })}`;
+      if (await tx.auditEvent.findUnique({ where: { eventKey } })) return { success: true, error: null };
+      if (pool.status !== (distributed ? "calculated" : "distributed")) throw new Error("Tip pool state changed; refresh before recording acknowledgement");
+      assertTipConservation(pool.totalTips, pool.distributions as any);
+      await tx.tipPool.update({ where: { id: pool.id }, data: { status: distributed ? "distributed" : "calculated" } });
+      await appendAuditEventWithClient(tx, context.session.itemId, { eventKey, eventType: distributed ? "tip_pool.payout_acknowledged" : "tip_pool.payout_reversal_acknowledged", entityType: "TipPool", entityId: pool.id, reason: payoutReference, before: { status: pool.status }, after: { status: distributed ? "distributed" : "calculated" }, metadata: { payoutReference: payoutReference, amount: pool.totalTips, distributions: pool.distributions } });
+      return { success: true, error: null };
+    }, { isolationLevel: "Serializable" });
+  } catch (error: any) { return { success: false, error: error.message }; }
 }

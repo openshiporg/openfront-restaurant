@@ -29,6 +29,7 @@ interface RestaurantOrder {
   deliveryCountryCode?: string;
   createdAt: string;
   updatedAt: string;
+  checkAllocation?: { sourceOrderNumber: string; ordinal: number; guestCount: number; allocatedTotals: { total: number } } | null;
   orderItems: any[];
   payments?: any[];
 }
@@ -42,6 +43,7 @@ const STATUS_LABEL: Record<string, string> = {
   sent_to_kitchen: "Sent to kitchen",
   in_progress: "Preparing",
   ready: "Ready",
+  dispatched: "On the way",
   served: "Served",
   completed: "Completed",
   cancelled: "Cancelled",
@@ -54,7 +56,7 @@ const ORDER_TYPE_LABEL: Record<string, string> = {
 };
 
 export default function OrderCompletedTemplate({ order }: OrderCompletedTemplateProps) {
-  const statusLabel = STATUS_LABEL[order.status] ?? order.status;
+  const statusLabel = order.orderType === "delivery" && order.status === "served" ? "Delivered" : STATUS_LABEL[order.status] ?? order.status;
   const typeLabel = ORDER_TYPE_LABEL[order.orderType] ?? order.orderType;
 
   return (
@@ -106,6 +108,7 @@ export default function OrderCompletedTemplate({ order }: OrderCompletedTemplate
 
           <div className="space-y-6">
             <div className="storefront-surface bg-card p-6">
+              {order.checkAllocation && <p className="border rounded p-3 mb-3">Independent check {order.checkAllocation.ordinal} of {order.checkAllocation.guestCount} from service {order.checkAllocation.sourceOrderNumber}. Your allocated charge is shown in the total. Any food details below describe the original service and are not charged again in full.</p>}
               <OrderItemsList items={order.orderItems} />
             </div>
             <div className="storefront-surface bg-card p-6">

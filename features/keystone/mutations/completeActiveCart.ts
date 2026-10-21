@@ -14,7 +14,41 @@ import {
 import { isKitchenActiveOrderStatus, syncKitchenTicketsForOrder } from "../utils/kitchenTicketSync";
 import { validateCartItemInput } from "../utils/cartItemValidation";
 import { appendAuditEventWithClient } from "../utils/audit";
+import { freezeOrderPricingPolicy, getOrderPricingPolicy } from "../utils/orderPricingPolicy";
+import { attachCheckoutRecipeWithClient } from "../utils/inventoryRecipeSnapshot";
+import { enqueueRestaurantNotification } from "../utils/restaurantNotifications";
 import { issueReceiptWithClient } from "../utils/receipt";
+import { assertCapturedCheckoutPayment, assertCheckoutProviderObservation } from "../utils/checkoutProviderObservation";
+import { assertCheckoutQuoteState } from "../utils/checkoutReservation";
+
+const VERIFIED_PROVIDER_CHECKOUT = Symbol("verified-provider-checkout");
+
+async function assertLiveCheckoutQuote(tx: any, input: {
+  cartId: string;
+  paymentCollectionId: string | null;
+  sessionId: string;
+  providerId: string;
+  quote: any;
+}) {
+  const liveCart = await tx.cart.findUnique({
+    where: { id: input.cartId },
+    include: {
+      user: { select: { id: true } },
+      items: { include: { menuItem: { select: { id: true } }, modifiers: { select: { id: true } } } },
+    },
+  });
+  const liveSession = await tx.paymentSession.findUnique({ where: { id: input.sessionId } });
+  assertCheckoutQuoteState({
+    cart: liveCart,
+    session: liveSession,
+    quote: input.quote,
+    cartId: input.cartId,
+    paymentCollectionId: input.paymentCollectionId,
+    providerId: input.providerId,
+    sessionId: input.sessionId,
+  });
+  return liveSession;
+}
 
 interface CompleteActiveCartArgs {
   cartId: string;
@@ -24,13 +58,14 @@ interface CompleteActiveCartArgs {
 export default async function completeActiveCart(
   root: any,
   { cartId, paymentSessionId }: CompleteActiveCartArgs,
-  context: Context
+  context: Context,
+  internal?: { token: symbol; providerId: string; providerPaymentId: string }
 ) {
   const sudoContext = context.sudo();
 
-  await assertCanAccessCart(context, cartId, "write");
+  if (internal?.token !== VERIFIED_PROVIDER_CHECKOUT) await assertCanAccessCart(context, cartId, "checkout");
 
-  const cart = await sudoContext.query.Cart.findOne({
+  let cart = await sudoContext.query.Cart.findOne({
     where: { id: cartId },
     query: `
       id
@@ -87,19 +122,11 @@ export default async function completeActiveCart(
   });
 
   if (!cart) throw new Error("Cart not found");
-  if (cart.order?.id) return cart.order;
+  if (cart.order?.id) {
+    if (isKitchenActiveOrderStatus(cart.order.status)) await syncKitchenTicketsForOrder(cart.order.id, context);
+    return cart.order;
+  }
   if (!cart.items?.length) throw new Error("Cart is empty");
-
-  const validatedItems = await Promise.all(
-    cart.items.map((item: any) =>
-      validateCartItemInput(context, {
-        menuItemId: item.menuItem?.id,
-        quantity: item.quantity,
-        modifierIds: (item.modifiers || []).map((modifier: any) => modifier.id),
-        specialInstructions: item.specialInstructions,
-      })
-    )
-  );
 
   const selectedSession = paymentSessionId
     ? cart.paymentCollection?.paymentSessions?.find(
@@ -111,12 +138,32 @@ export default async function completeActiveCart(
     throw new Error("No selected payment session found for this cart.");
   }
 
+  if (!selectedSession.isSelected || (selectedSession.data as any)?.state === "cancelled") throw new Error("Payment session was cancelled or replaced; refresh checkout");
+
   const sessionData = (selectedSession.data || {}) as Record<string, any>;
+  // The durable server-priced quote predates provider confirmation. Never
+  // reprice or reject its purchased menu snapshots after money has moved.
+  const quote = sessionData.checkoutQuote;
+  if (quote?.version === 1) cart = { ...cart, ...quote.cart, paymentCollection: cart.paymentCollection };
+  const validatedItems = quote?.version === 1 ? quote.items : await Promise.all(
+    cart.items.map((item: any) =>
+      validateCartItemInput(context, {
+        menuItemId: item.menuItem?.id,
+        quantity: item.quantity,
+        modifierIds: (item.modifiers || []).map((modifier: any) => modifier.id),
+        specialInstructions: item.specialInstructions,
+      })
+    )
+  );
+
+
   let paymentData: Record<string, any> = { ...sessionData };
 
   const providerCode = selectedSession.paymentProvider?.code || sessionData?.providerCode;
   const providerPaymentId = sessionData?.paymentIntentId || sessionData?.orderId;
   const paymentProvider = selectedSession.paymentProvider;
+
+  if (internal?.token === VERIFIED_PROVIDER_CHECKOUT && (paymentProvider?.id !== internal.providerId || providerPaymentId !== internal.providerPaymentId || !quote)) throw new Error("Verified provider event does not match this checkout quote");
 
   if (!paymentProvider) {
     throw new Error("Selected payment session is missing payment provider information.");
@@ -129,53 +176,14 @@ export default async function completeActiveCart(
     paymentIntentId: null,
   };
 
-  if (!isManual) {
-    if (!providerPaymentId) {
-      throw new Error("Selected payment session is missing provider payment data.");
-    }
-
-    const status = await getPaymentStatus({
-      provider: paymentProvider,
-      paymentId: providerPaymentId,
-    });
-
-    if (status.status === "succeeded") {
-      paymentResult = { status: "succeeded", paymentIntentId: providerPaymentId };
-    } else if (status.status === "requires_capture") {
-      const captured = await capturePayment({
-        provider: paymentProvider,
-        paymentId: providerPaymentId,
-      });
-      const captureId =
-        captured.data?.purchase_units?.[0]?.payments?.captures?.[0]?.id ||
-        captured.data?.id ||
-        null;
-      paymentData = {
-        ...paymentData,
-        capture: captured.data || captured,
-        captureId,
-      };
-      paymentResult = {
-        status: captured.status === "succeeded" ? "succeeded" : "failed",
-        paymentIntentId: providerPaymentId,
-      };
-    } else {
-      throw new Error(`Payment not successful. Status: ${status.status}`);
-    }
-
-    if (paymentResult.status === "failed") {
-      throw new Error("Payment capture failed");
-    }
-  }
-
   const settings = await getStoreDeliverySettings(context);
-  const currencyCode = settings?.currencyCode || "USD";
+  const currencyCode = quote?.currencyCode || settings?.currencyCode || "USD";
   const subtotal = validatedItems.reduce(
-    (sum, item) => sum + item.unitPrice * item.quantity,
+    (sum: number, item: any) => sum + item.unitPrice * item.quantity,
     0
   );
 
-  assertDeliveryAddressComplete({
+  if (!quote) assertDeliveryAddressComplete({
     orderType: cart.orderType,
     deliveryAddress: cart.deliveryAddress,
     deliveryCity: cart.deliveryCity,
@@ -183,14 +191,14 @@ export default async function completeActiveCart(
     deliveryZip: cart.deliveryZip,
   });
 
-  assertDeliveryAddressEligible({
+  if (!quote) assertDeliveryAddressEligible({
     orderType: cart.orderType,
     storeSettings: settings,
     deliveryCountryCode: cart.deliveryCountryCode,
     deliveryZip: cart.deliveryZip,
   });
 
-  const { tax, tip, pickupDiscount, deliveryFee, total, deliveryMinimumNotMet } = calculateRestaurantTotals({
+  const { tax, tip, pickupDiscount, deliveryFee, total, deliveryMinimumNotMet } = quote?.pricing || calculateRestaurantTotals({
     subtotal,
     orderType: cart.orderType,
     tipPercent: cart.tipPercent,
@@ -218,21 +226,113 @@ export default async function completeActiveCart(
     throw new Error("Cart total changed. Please return to payment and confirm your payment method again.");
   }
 
+  const prisma = context.prisma as any;
+  if (quote?.version === 1) {
+    await prisma.$transaction(async (tx: any) => {
+      const current = await assertLiveCheckoutQuote(tx, {
+        cartId,
+        paymentCollectionId: cart.paymentCollection?.id || null,
+        sessionId: selectedSession.id,
+        providerId: paymentProvider.id,
+        quote,
+      });
+      if (!isManual) {
+        await tx.paymentSession.update({ where: { id: current.id }, data: { data: { ...current.data, state: "finalizing" } } });
+      }
+    }, { isolationLevel: "Serializable" });
+  } else if (!isManual) {
+    await prisma.$transaction(async (tx: any) => {
+      const current = await tx.paymentSession.findUnique({ where: { id: selectedSession.id } });
+      if (!current?.isSelected || ["cancelled", "cancelling"].includes(current.data?.state)) throw new Error("Checkout is being cancelled; no capture was started");
+      await tx.paymentSession.update({ where: { id: current.id }, data: { data: { ...current.data, state: "finalizing" } } });
+    }, { isolationLevel: "Serializable" });
+  }
+
+  if (!isManual) {
+    if (!providerPaymentId) {
+      throw new Error("Selected payment session is missing provider payment data.");
+    }
+    try {
+    const status = await getPaymentStatus({
+      provider: paymentProvider,
+      paymentId: providerPaymentId,
+    });
+
+    assertCheckoutProviderObservation(status, total, currencyCode);
+    if (status.status === "succeeded") {
+      paymentResult = { status: "succeeded", paymentIntentId: providerPaymentId };
+    } else if (status.status === "requires_capture") {
+      const captured = await capturePayment({
+        provider: paymentProvider,
+        paymentId: providerPaymentId,
+        amount: total,
+        idempotencyKey: `capture:${selectedSession.idempotencyKey || selectedSession.id}`,
+      });
+      assertCapturedCheckoutPayment(captured, total, currencyCode);
+      const captureId =
+        captured.data?.purchase_units?.[0]?.payments?.captures?.[0]?.id ||
+        captured.data?.id ||
+        null;
+      paymentData = {
+        ...paymentData,
+        capture: captured.data || captured,
+        captureId,
+      };
+      const capturedStatus = await getPaymentStatus({
+        provider: paymentProvider,
+        paymentId: providerPaymentId,
+      });
+      assertCheckoutProviderObservation(capturedStatus, total, currencyCode);
+      paymentResult = {
+        status: "succeeded",
+        paymentIntentId: providerPaymentId,
+      };
+    } else {
+      throw new Error(`Payment not successful. Status: ${status.status}`);
+    }
+
+    if (paymentResult.status === "failed") {
+      throw new Error("Payment capture failed");
+    }
+    } catch (error) {
+      const current = await (context.prisma as any).paymentSession.findUnique({ where: { id: selectedSession.id } });
+      if (current?.data?.state === "finalizing") await (context.prisma as any).paymentSession.update({ where: { id: current.id }, data: { data: { ...current.data, state: "unknown" } } });
+      throw error;
+    }
+  }
+
+
   const paymentMethodMap: Record<string, string> = {
     pp_stripe_stripe: "credit_card",
     pp_paypal_paypal: "paypal",
     pp_system_default: "cash",
   };
   const paymentIdempotencyKey = `checkout:${selectedSession.idempotencyKey || selectedSession.id}`;
-  const prisma = context.prisma as any;
   const result = await prisma.$transaction(async (tx: any) => {
-    const lockedCart = await tx.cart.findUnique({ where: { id: cartId } });
+    const lockedCart = await tx.cart.findUnique({
+      where: { id: cartId },
+      include: {
+        user: { select: { id: true } },
+        items: { include: { menuItem: { select: { id: true } }, modifiers: { select: { id: true } } } },
+      },
+    });
     if (!lockedCart) throw new Error("Cart not found");
     if (lockedCart.orderId) {
       const existingOrder = await tx.restaurantOrder.findUnique({ where: { id: lockedCart.orderId } });
       return { order: existingOrder, payment: null, replay: true };
     }
 
+    const currentSession = await tx.paymentSession.findUnique({ where: { id: selectedSession.id } });
+    if (!currentSession?.isSelected || ["cancelled", "cancelling"].includes(currentSession.data?.state)) throw new Error("Checkout was cancelled before order placement; reconcile its payment if needed");
+    if (quote?.version === 1) assertCheckoutQuoteState({
+      cart: lockedCart,
+      session: currentSession,
+      quote,
+      cartId,
+      paymentCollectionId: cart.paymentCollection?.id || null,
+      providerId: paymentProvider.id,
+      sessionId: selectedSession.id,
+    });
     const order = await tx.restaurantOrder.create({
       data: {
         orderNumber,
@@ -257,8 +357,12 @@ export default async function completeActiveCart(
         deliveryZip: isDeliveryOrder ? cart.deliveryZip || "" : "",
         deliveryCountryCode: isDeliveryOrder ? cart.deliveryCountryCode || "" : "",
         secretKey,
-        orderItems: {
-          create: validatedItems.map((item) => ({
+
+      },
+    });
+    if (quote?.pricingPolicy) await freezeOrderPricingPolicy(tx, order.id, quote.pricingPolicy, context.session?.itemId);
+    else await getOrderPricingPolicy(tx, order.id, settings);
+    const snapshotItems = validatedItems.map((item: any) => ({
             quantity: item.quantity,
             price: item.unitPrice,
             itemNameSnapshot: item.menuItem.name,
@@ -273,14 +377,15 @@ export default async function completeActiveCart(
               priceAdjustment: modifier.priceAdjustment,
             })),
             specialInstructions: item.specialInstructions,
-            menuItemId: item.menuItem.id,
-            appliedModifiers: item.modifiers.length
+            menuItemId: quote ? null : item.menuItem.id,
+            appliedModifiers: !quote && item.modifiers.length
               ? { connect: item.modifiers.map((modifier: any) => ({ id: modifier.id })) }
               : undefined,
-          })),
-        },
-      },
-    });
+          }));
+    for (const [index, snapshot] of snapshotItems.entries()) {
+      const item = await tx.orderItem.create({ data: { ...snapshot, orderId: order.id, originalOrderIdSnapshot: order.id } });
+      if (quote) await attachCheckoutRecipeWithClient(tx, selectedSession.id, index, item.id, context.session?.itemId);
+    }
     const payment = await tx.payment.create({
       data: {
         idempotencyKey: paymentIdempotencyKey,
@@ -301,7 +406,7 @@ export default async function completeActiveCart(
     if (cart.paymentCollection?.id) {
       await tx.paymentCollection.update({ where: { id: cart.paymentCollection.id }, data: { amount: total } });
     }
-    if (isManual && Number(selectedSession.amount || 0) !== total) {
+    if (isManual && !quote && Number(selectedSession.amount || 0) !== total) {
       await tx.paymentSession.update({ where: { id: selectedSession.id }, data: { amount: total } });
     }
     await tx.cart.update({ where: { id: cartId }, data: { orderId: order.id } });
@@ -333,10 +438,15 @@ export default async function completeActiveCart(
         },
       });
     }
+    await enqueueRestaurantNotification(tx, context.session?.itemId, {
+      eventKey: `notification:order-confirmed:${order.id}`, entityType: "RestaurantOrder", entityId: order.id,
+      to: cart.email || "", subject: `Order ${order.orderNumber} received`,
+      text: `Your ${order.orderType} order ${order.orderNumber} has been received. Total: ${total} minor units ${currencyCode}. Payment: ${payment.status}. Please contact the restaurant with your order number for changes.`,
+    });
     return { order, payment, replay: false };
   }, { isolationLevel: "Serializable" });
 
-  if (!result.replay && isKitchenActiveOrderStatus(result.order.status)) {
+  if (isKitchenActiveOrderStatus(result.order.status)) {
     await syncKitchenTicketsForOrder(result.order.id, context);
   }
   return {
@@ -345,4 +455,9 @@ export default async function completeActiveCart(
     secretKey: result.order.secretKey,
     status: result.order.status,
   };
+}
+
+/** Internal capability used only after webhook signature and provider-scoped session correlation. */
+export async function completeVerifiedCheckout(context: Context, input: { cartId: string; paymentSessionId: string; providerId: string; providerPaymentId: string }) {
+  return completeActiveCart(null, input, context, { token: VERIFIED_PROVIDER_CHECKOUT, providerId: input.providerId, providerPaymentId: input.providerPaymentId });
 }

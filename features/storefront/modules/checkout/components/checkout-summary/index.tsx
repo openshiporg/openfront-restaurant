@@ -2,10 +2,8 @@
 
 import { useSearchParams } from "next/navigation";
 import { formatCurrency } from "@/features/storefront/lib/currency";
-import { calculateRestaurantCheckoutTotals } from "@/features/storefront/lib/checkout-totals";
+import { checkoutDisplayItems, checkoutDisplayPricing, checkoutSessionMatchesPricing, selectedCheckoutQuote } from "@/features/storefront/lib/checkout-quote-display";
 import PaymentButton from "../payment-button";
-import { isStripe } from "@/features/storefront/lib/constants";
-import { useCheckoutPaymentState } from "../checkout-state";
 import LineItemDisplay from "@/features/storefront/modules/common/components/line-item-display";
 
 type CheckoutSummaryProps = {
@@ -20,46 +18,22 @@ const CheckoutSummary = ({
   storeSettings,
 }: CheckoutSummaryProps) => {
   const searchParams = useSearchParams();
-  const { cardComplete } = useCheckoutPaymentState();
-
-  const items = cart?.items || [];
-  const subtotal =
-    cart?.subtotal ||
-    items.reduce((sum: number, item: any) => {
-      const itemPrice = item.menuItem?.price || 0;
-      const modifierPrice = (item.modifiers || []).reduce(
-        (subtotalSum: number, modifier: any) => subtotalSum + (modifier.priceAdjustment || 0),
-        0
-      );
-      return sum + (itemPrice + modifierPrice) * item.quantity;
-    }, 0);
-
-  const orderType = cart?.orderType || "pickup";
-  const tipPercent = String(cart?.tipPercent || "0");
-  const currencyConfig = {
-    currencyCode: storeSettings?.currencyCode || "USD",
-    locale: storeSettings?.locale || "en-US",
-  };
-
-  const { deliveryFee, pickupDiscount, tax, tip, total } =
-    calculateRestaurantCheckoutTotals({
-      subtotal,
-      orderType,
-      tipPercent: Number(tipPercent),
-      deliveryFee: Number(storeSettings?.deliveryFee || 0),
-      pickupDiscountPercent: Number(storeSettings?.pickupDiscount || 10),
-      taxRate: Number(storeSettings?.taxRate || 8.75),
-    });
-
   const activeSession = cart?.paymentCollection?.paymentSessions?.find(
     (session: any) => session.isSelected
   );
-  const activeSessionMatchesTotal = Boolean(
-    activeSession && activeSession.amount === total && activeSession.status !== "error"
-  );
-  const requiresStripeCard =
-    activeSessionMatchesTotal && isStripe(activeSession?.paymentProvider?.code);
+  const checkoutQuote = selectedCheckoutQuote(cart);
+  const items = checkoutDisplayItems(cart);
+  const pricing = checkoutDisplayPricing(cart, storeSettings);
+  const subtotal = pricing.subtotal;
+  const orderType = checkoutQuote?.cart?.orderType || cart?.orderType || "pickup";
+  const tipPercent = String(checkoutQuote?.cart?.tipPercent ?? cart?.tipPercent ?? "0");
+  const currencyConfig = {
+    currencyCode: checkoutQuote?.currencyCode || storeSettings?.currencyCode || "USD",
+    locale: storeSettings?.locale || "en-US",
+  };
 
+  const { deliveryFee, pickupDiscount, tax, tip, total } = pricing;
+  const activeSessionMatchesTotal = checkoutSessionMatchesPricing(activeSession, pricing);
   const currentStep = searchParams?.get("step") || "contact";
   const isPaymentStage = currentStep === "payment" || currentStep === "review";
 
@@ -73,12 +47,8 @@ const CheckoutSummary = ({
         cart?.deliveryCountryCode
     );
 
-  const canPlaceOrder = Boolean(
-    hasCustomerInfo &&
-      hasDeliveryInfo &&
-      isPaymentStage &&
-      activeSessionMatchesTotal &&
-      (!requiresStripeCard || cardComplete)
+  const canShowPaymentControls = Boolean(
+    hasCustomerInfo && hasDeliveryInfo && isPaymentStage && activeSession
   );
 
   return (
@@ -150,14 +120,18 @@ const CheckoutSummary = ({
           </div>
         </div>
 
-        {canPlaceOrder ? (
+        {canShowPaymentControls ? (
           <div className="mt-5 border-t border-border pt-5 space-y-3">
             <p className="text-sm leading-6 text-muted-foreground">
               By placing your order, you agree to our terms and acknowledge our privacy policy.
             </p>
+            {!activeSessionMatchesTotal && checkoutQuote ? (
+              <p role="alert" className="text-sm text-destructive">The saved checkout quote does not match its payment session. Cancel or reconcile this unpaid attempt before proceeding.</p>
+            ) : null}
             <PaymentButton
               cart={cart}
               billingAddress={customer?.billingAddress || null}
+              allowPlacement={activeSessionMatchesTotal}
               data-testid="submit-order-button"
             />
           </div>

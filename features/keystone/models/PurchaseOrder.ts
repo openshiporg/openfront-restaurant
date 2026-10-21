@@ -14,6 +14,7 @@ import { trackingFields } from "./trackingFields";
 
 export const PurchaseOrder = list({
   access: {
+    filter: { update: () => ({ status: { equals: "draft" } }), delete: () => ({ status: { equals: "draft" } }) },
     operation: {
       query: permissions.canReadInventory,
       create: permissions.canManageInventory,
@@ -43,16 +44,19 @@ export const PurchaseOrder = list({
     }),
 
     receivedDate: timestamp({
+      access: { create: () => false, update: () => false },
       ui: { description: "Actual received date" },
     }),
 
     status: select({
+      access: { create: () => false, update: () => false },
       type: "string",
       options: [
         { label: "Draft", value: "draft" },
         { label: "Sent", value: "sent" },
         { label: "Confirmed", value: "confirmed" },
         { label: "Shipped", value: "shipped" },
+        { label: "Partially received", value: "partially_received" },
         { label: "Received", value: "received" },
         { label: "Cancelled", value: "cancelled" },
       ],

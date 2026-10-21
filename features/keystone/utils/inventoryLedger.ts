@@ -1,83 +1,47 @@
-import type { Context } from ".keystone/types";
+import { allocateStockLots } from "./inventoryLots";
+import type { Context } from '.keystone/types';
 
-type DepletionLine = {
-  eventKey: string;
-  orderItemId: string;
-  ingredientId: string;
-  quantity: number;
-  recipeId: string;
-  recipeYield: number;
-};
-
+/** Frozen production facts, item identity and a serializable stock ledger survive check moves/retries. */
 export async function depleteInventoryForCompletedOrder(orderId: string, context: Context) {
-  const sudo = context.sudo();
-  const order = await sudo.query.RestaurantOrder.findOne({
-    where: { id: orderId },
-    query: "id orderNumber status orderItems { id quantity menuItem { id } }",
-  });
-  if (!order) throw new Error("Order not found");
-  if (order.status !== "completed") throw new Error("Inventory can only be depleted for a completed order");
-
-  const lines: DepletionLine[] = [];
-  for (const orderItem of order.orderItems || []) {
-    if (!orderItem.menuItem?.id) continue;
-    const recipes = await sudo.query.Recipe.findMany({
-      where: { menuItem: { id: { equals: orderItem.menuItem.id } } },
-      query: "id recipeIngredients yield",
-      take: 1,
-    });
-    const recipe = recipes[0];
-    if (!recipe || !Array.isArray(recipe.recipeIngredients)) continue;
-    const recipeYield = Math.max(1, Number(recipe.yield || 1));
-    const portions = Number(orderItem.quantity || 0) / recipeYield;
-    for (const recipeIngredient of recipe.recipeIngredients as any[]) {
-      const ingredientId = String(recipeIngredient?.ingredientId || "");
-      const quantity = Number(recipeIngredient?.quantity || 0) * portions;
-      if (!ingredientId || !Number.isFinite(quantity) || quantity <= 0) continue;
-      lines.push({
-        eventKey: `sale:${order.id}:${orderItem.id}:${ingredientId}`,
-        orderItemId: orderItem.id,
-        ingredientId,
-        quantity: Math.round(quantity * 100) / 100,
-        recipeId: recipe.id,
-        recipeYield,
-      });
+  return (context.prisma as any).$transaction(async (tx: any) => {
+    const order = await tx.restaurantOrder.findUnique({ where: { id: orderId }, include: { orderItems: true } });
+    if (!order) throw new Error('Order not found');
+    if (!['completed', 'cancelled'].includes(order.status)) throw new Error('Inventory can only be reconciled for a closed order');
+    let created = 0, existing = 0;
+    for (const item of order.orderItems || []) {
+      const prepared = Boolean(item.kitchenStartedAt || item.kitchenReadyAt || item.fulfilledAt);
+      const loss = item.isVoided || order.status === 'cancelled';
+      if (loss && !prepared) continue;
+      // Old versions keyed movements by order + item. Do not replay their consumption
+      // with a new key or reinterpret their historical recipe after this upgrade.
+      const historical = await tx.stockMovement.findMany({ where: { referenceType: 'OrderItem', referenceId: item.id } });
+      const legacy = historical.filter((m: any) => String(m.eventKey).startsWith('sale:') && String(m.eventKey).split(':').length === 4);
+      if (legacy.length) { existing += legacy.length; continue; }
+      const snapshot = await tx.auditEvent.findUnique({ where: { eventKey: `recipe-snapshot:${item.id}` } });
+      if (!snapshot) throw new Error(`Missing production recipe snapshot for ${item.id}; review legacy production before reconciling inventory`);
+      const recipe = snapshot.after;
+      if (!recipe?.recipeId) continue; // Explicit frozen "no recipe" is different from a missing snapshot.
+      if (!Array.isArray(recipe.ingredients) || !(Number(recipe.recipeYield) > 0)) throw new Error('Invalid frozen production recipe');
+      for (const row of recipe.ingredients) {
+        const raw = Number(row.quantity) * Number(item.quantity) / Number(recipe.recipeYield);
+        if (!row.ingredientId || !Number.isFinite(raw) || raw <= 0) throw new Error('Invalid frozen production recipe');
+        const quantity = Math.round(raw * 100) / 100;
+        if (!quantity) throw new Error('Consumption is below stock resolution; use grams or milliliters as the stocking unit');
+        const eventKey = `sale:${item.id}:${row.ingredientId}`;
+        if (await tx.stockMovement.findUnique({ where: { eventKey } })) { existing++; continue; }
+        const ingredient = await tx.ingredient.findUnique({ where: { id: row.ingredientId } });
+        if (!ingredient || ingredient.unit !== row.unit) throw new Error('Frozen recipe ingredient or stocking unit changed; review before reconciling');
+        const movement = await tx.stockMovement.create({ data: {
+          eventKey, referenceType: 'OrderItem', referenceId: item.id, ingredientId: row.ingredientId, orderId,
+          type: loss ? 'waste' : 'sale', quantity: (-quantity).toFixed(2),
+          reason: `${loss ? 'Prepared loss' : 'Theoretical depletion'} for order ${order.orderNumber}`,
+          metadata: { orderId, recipeId: recipe.recipeId, recipeVersion: recipe.recipeVersion, recipeYield: recipe.recipeYield, prepared, theoretical: true, reviewedLegacy: Boolean(recipe.reviewedLegacy) },
+        } });
+        await allocateStockLots(tx, movement, ingredient, { actorId: context.session?.itemId, purpose: loss ? 'waste' : 'production', now: item.kitchenStartedAt || item.kitchenReadyAt || item.fulfilledAt || undefined });
+        await tx.ingredient.update({ where: { id: ingredient.id }, data: { currentStock: (Number(ingredient.currentStock || 0) - quantity).toFixed(2) } });
+        created++;
+      }
     }
-  }
-
-  const prisma = context.prisma as any;
-  return prisma.$transaction(async (tx: any) => {
-    let created = 0;
-    for (const line of lines) {
-      const existing = await tx.stockMovement.findUnique({ where: { eventKey: line.eventKey } });
-      if (existing) continue;
-      const ingredient = await tx.ingredient.findUnique({ where: { id: line.ingredientId } });
-      if (!ingredient) throw new Error(`Ingredient not found: ${line.ingredientId}`);
-      const nextStock = Number(ingredient.currentStock || 0) - line.quantity;
-      await tx.stockMovement.create({
-        data: {
-          eventKey: line.eventKey,
-          referenceType: "OrderItem",
-          referenceId: line.orderItemId,
-          metadata: {
-            orderId: order.id,
-            recipeId: line.recipeId,
-            recipeYield: line.recipeYield,
-            theoretical: true,
-          },
-          ingredientId: line.ingredientId,
-          orderId: order.id,
-          type: "sale",
-          quantity: (-line.quantity).toFixed(2),
-          reason: `Theoretical depletion for order ${order.orderNumber}`,
-        },
-      });
-      await tx.ingredient.update({
-        where: { id: line.ingredientId },
-        data: { currentStock: nextStock.toFixed(2) },
-      });
-      created += 1;
-    }
-    return { created, existing: lines.length - created };
-  }, { isolationLevel: "Serializable" });
+    return { created, existing };
+  }, { isolationLevel: 'Serializable' });
 }

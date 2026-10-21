@@ -32,8 +32,8 @@ import { DollarSign, Plus, Users, RefreshCw, Calculator, Wallet, ArrowRight, Che
 import { gql, request } from 'graphql-request'
 import { PageBreadcrumbs } from "@/features/dashboard/components/PageBreadcrumbs"
 import { cn } from '@/lib/utils'
-import { formatCurrency, toMinorUnits } from '@/features/storefront/lib/currency'
-import { calculateTipDistributions } from '@/features/lib/tip-allocation'
+import { formatCurrency } from '@/features/storefront/lib/currency'
+import { tipPoolCsv } from '../lib/tipCsv'
 
 interface TipPool {
   id: string
@@ -44,6 +44,7 @@ interface TipPool {
   creditTips: string
   distributions: Distribution[] | null
   status: string
+  notes?: string
 }
 
 interface Distribution {
@@ -52,13 +53,6 @@ interface Distribution {
   role: string
   hoursWorked: number
   amount: number
-}
-
-interface CompletedShift {
-  id: string
-  staff: { id: string; name: string } | null
-  role: string
-  hoursWorked: number
 }
 
 const GET_TIP_POOLS = gql`
@@ -72,7 +66,9 @@ const GET_TIP_POOLS = gql`
       creditTips
       distributions
       status
+      notes
     }
+    restaurantAttendance
     storeSettings {
       currencyCode
       locale
@@ -80,31 +76,19 @@ const GET_TIP_POOLS = gql`
   }
 `
 
-const GET_COMPLETED_SHIFTS_FOR_DATE = gql`
-  query GetCompletedShiftsForDate($startDate: DateTime!, $endDate: DateTime!) {
-    shifts(
-      where: {
-        status: { equals: "completed" }
-        clockIn: { gte: $startDate, lte: $endDate }
-      }
-    ) {
-      id
-      staff { id name }
-      role
-      hoursWorked
-    }
+const PREVIEW_TIP_POOL = gql`
+  query PreviewRestaurantTipPool($date: String!, $tipPoolType: String!, $cashTips: String!, $creditTips: String!, $individualStaffId: ID) {
+    previewRestaurantTipPool(date: $date, tipPoolType: $tipPoolType, cashTips: $cashTips, creditTips: $creditTips, individualStaffId: $individualStaffId)
   }
 `
-
 const CREATE_TIP_POOL = gql`
-  mutation CreateTipPoolLedger($date: String!, $tipPoolType: String!, $cashTips: String!, $creditTips: String!) {
-    createTipPoolLedger(date: $date, tipPoolType: $tipPoolType, cashTips: $cashTips, creditTips: $creditTips) { success error }
+  mutation CreateTipPoolLedger($date: String!, $tipPoolType: String!, $cashTips: String!, $creditTips: String!, $sourceNote: String!, $individualStaffId: ID) {
+    createTipPoolLedger(date: $date, tipPoolType: $tipPoolType, cashTips: $cashTips, creditTips: $creditTips, sourceNote: $sourceNote, individualStaffId: $individualStaffId) { success error }
   }
 `
-
 const UPDATE_TIP_POOL = gql`
-  mutation UpdateTipPoolStatus($tipPoolId: ID!, $action: String!) {
-    updateTipPoolStatus(tipPoolId: $tipPoolId, action: $action) { success error }
+  mutation UpdateTipPoolStatus($tipPoolId: ID!, $action: String!, $payoutReference: String) {
+    updateTipPoolStatus(tipPoolId: $tipPoolId, action: $action, payoutReference: $payoutReference) { success error }
   }
 `
 
@@ -116,6 +100,8 @@ const TIP_POOL_TYPES = [
 
 export function TipsPage() {
   const [tipPools, setTipPools] = useState<TipPool[]>([])
+  const [eligibleStaff, setEligibleStaff] = useState<{ id: string; name: string }[]>([])
+  const [payoutReferences, setPayoutReferences] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [calculatedDistributions, setCalculatedDistributions] = useState<Distribution[]>([])
@@ -127,12 +113,17 @@ export function TipsPage() {
     tipPoolType: 'pool_by_role',
     cashTips: '0',
     creditTips: '0',
+    sourceNote: '',
+    individualStaffId: '',
   })
 
   const fetchTipPools = useCallback(async () => {
     try {
       const data = await request('/api/graphql', GET_TIP_POOLS)
       setTipPools((data as any).tipPools || [])
+      const staff = new Map<string, { id: string; name: string }>()
+      for (const entry of (data as any).restaurantAttendance?.entries || []) if (entry.state?.approved && entry.staff?.id) staff.set(entry.staff.id, entry.staff)
+      setEligibleStaff(Array.from(staff.values()))
       if ((data as any).storeSettings) {
         setCurrencyConfig({
           currencyCode: (data as any).storeSettings.currencyCode || 'USD',
@@ -151,36 +142,13 @@ export function TipsPage() {
   }, [fetchTipPools])
 
   const calculateDistributions = async () => {
-    const totalTips = parseFloat(form.cashTips || '0') + parseFloat(form.creditTips || '0')
-    if (totalTips <= 0 || form.tipPoolType === 'individual') {
-      setCalculatedDistributions([])
-      return
-    }
-
     try {
-      const startDate = new Date(form.date)
-      startDate.setHours(0, 0, 0, 0)
-      const endDate = new Date(form.date)
-      endDate.setHours(23, 59, 59, 999)
-
-      const data = await request('/api/graphql', GET_COMPLETED_SHIFTS_FOR_DATE, {
-        startDate: startDate.toISOString(),
-        endDate: endDate.toISOString(),
-      })
-      const entries = ((data as any).shifts || []) as CompletedShift[]
-      const distributions = calculateTipDistributions(
-        form.tipPoolType as 'house_pool' | 'pool_by_role',
-        toMinorUnits(totalTips, currencyConfig.currencyCode),
-        entries.map((entry) => ({
-          staffId: entry.staff?.id || '',
-          staffName: entry.staff?.name || '',
-          role: entry.role || '',
-          hoursWorked: Number(entry.hoursWorked || 0),
-        }))
-      )
-      setCalculatedDistributions(distributions)
-    } catch (err) {
-      console.error('Error calculating distributions:', err)
+      const data: any = await request('/api/graphql', PREVIEW_TIP_POOL, { ...form, individualStaffId: form.individualStaffId || null })
+      setCalculatedDistributions(data.previewRestaurantTipPool.distributions || [])
+      setActionError(null)
+    } catch (err: any) {
+      setCalculatedDistributions([])
+      setActionError(err?.message || 'Unable to preview approved attendance allocation')
     }
   }
 
@@ -188,15 +156,17 @@ export function TipsPage() {
     if (dialogOpen) {
       calculateDistributions()
     }
-  }, [form.cashTips, form.creditTips, form.tipPoolType, form.date, dialogOpen])
+  }, [form.cashTips, form.creditTips, form.tipPoolType, form.date, form.individualStaffId, dialogOpen])
 
   const handleCreate = async () => {
     try {
       const res: any = await request('/api/graphql', CREATE_TIP_POOL, {
-        date: new Date(form.date).toISOString(),
+        date: form.date,
         tipPoolType: form.tipPoolType,
         cashTips: form.cashTips || '0',
         creditTips: form.creditTips || '0',
+        sourceNote: form.sourceNote,
+        individualStaffId: form.individualStaffId || null,
       })
       if (!res?.createTipPoolLedger?.success) {
         throw new Error(res?.createTipPoolLedger?.error || 'Unable to create tip pool')
@@ -215,6 +185,7 @@ export function TipsPage() {
       const res: any = await request('/api/graphql', UPDATE_TIP_POOL, {
         tipPoolId: id,
         action: 'distribute',
+        payoutReference: payoutReferences[id] || '',
       })
       if (!res?.updateTipPoolStatus?.success) {
         throw new Error(res?.updateTipPoolStatus?.error || 'Unable to distribute tip pool')
@@ -225,6 +196,11 @@ export function TipsPage() {
       setActionError(err?.message || 'Unable to distribute tip pool')
       console.error('Error updating:', err)
     }
+  }
+
+  const exportCsv = () => {
+    const url = URL.createObjectURL(new Blob([tipPoolCsv(tipPools)], { type: 'text/csv;charset=utf-8' }))
+    const link = document.createElement('a'); link.href = url; link.download = 'restaurant-tip-ledger.csv'; link.click(); URL.revokeObjectURL(url)
   }
 
   if (loading) {
@@ -263,7 +239,7 @@ export function TipsPage() {
               <Landmark className="size-8 text-emerald-600 dark:text-emerald-400" />
               Tip Hub
             </h1>
-            <p className="text-muted-foreground font-medium">Daily tip pooling and recorded distribution status</p>
+            <p className="text-muted-foreground font-medium">Tips allocated from approved attendance and declared reconciliation evidence. Payouts require a separate acknowledgement.</p>
           </div>
           <Button onClick={() => setDialogOpen(true)} size="lg" className="h-12 px-8 rounded-2xl bg-emerald-600 hover:bg-emerald-700 shadow-xl shadow-emerald-500/20 font-black uppercase tracking-widest text-xs transition-all active:scale-95">
             <Plus className="h-5 w-5 mr-2" />
@@ -279,7 +255,7 @@ export function TipsPage() {
                 <Banknote className="h-7 w-7 text-emerald-600 dark:text-emerald-400" />
               </div>
               <div>
-                <div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">30-Day Distribution</div>
+                <div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Latest 30 Batches: Acknowledged Payouts</div>
                 <div className="text-3xl font-black mt-1">{formatCurrency(totalDistributed, currencyConfig)}</div>
               </div>
             </CardContent>
@@ -318,7 +294,7 @@ export function TipsPage() {
           <div className="flex items-center justify-between">
              <h2 className="text-xl font-black uppercase tracking-tight">Ledger History</h2>
              <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm" className="rounded-xl border-2 font-bold px-4 h-9">
+                <Button onClick={exportCsv} variant="outline" size="sm" className="rounded-xl border-2 font-bold px-4 h-9">
                    Export CSV
                 </Button>
              </div>
@@ -374,10 +350,10 @@ export function TipsPage() {
                           </Badge>
                           <div className="text-[9px] font-bold text-muted-foreground">{pool.distributions?.length || 0} Staff Members</div>
                           
-                          {pool.status === 'calculated' && (
+                          {pool.status === 'calculated' && (<><Input aria-label="Payout reference" placeholder="Payout receipt / reference" value={payoutReferences[pool.id] || ''} onChange={event => setPayoutReferences({ ...payoutReferences, [pool.id]: event.target.value })} />
                              <Button size="sm" onClick={() => markDistributed(pool.id)} className="w-full rounded-xl bg-emerald-600 hover:bg-emerald-700 font-bold text-[10px] uppercase tracking-widest h-9">
-                                Mark Distributed
-                             </Button>
+                                Record Payout Acknowledgement
+                             </Button></>
                           )}
                        </div>
                     </CardContent>
@@ -426,7 +402,7 @@ export function TipsPage() {
 
               <div className="grid grid-cols-2 gap-6">
                 <div className="space-y-2">
-                  <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Cash Tips ($)</Label>
+                  <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Cash Tips ({currencyConfig.currencyCode})</Label>
                   <div className="relative">
                      <Banknote className="absolute left-4 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
                      <Input
@@ -439,7 +415,7 @@ export function TipsPage() {
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Credit Card Tips ($)</Label>
+                  <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Credit Card Tips ({currencyConfig.currencyCode})</Label>
                   <div className="relative">
                      <CreditCard className="absolute left-4 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
                      <Input
@@ -452,6 +428,9 @@ export function TipsPage() {
                   </div>
                 </div>
               </div>
+
+              <div className="space-y-2"><Label>Reconciliation source / reference</Label><Input value={form.sourceNote} onChange={event => setForm({ ...form, sourceNote: event.target.value })} placeholder="Cash count and card-tip report reference" /><p className="text-xs text-muted-foreground">Amounts are an explicit manager declaration. Reconcile against recorded tenders before saving. Attendance uses the latest recorded business-day timezone and cutoff; dates before any recorded policy use restaurant-local midnight.</p></div>
+              {form.tipPoolType === 'individual' && <div className="space-y-2"><Label>Recipient</Label><Select value={form.individualStaffId} onValueChange={value => setForm({ ...form, individualStaffId: value })}><SelectTrigger><SelectValue placeholder="Choose employee with approved time" /></SelectTrigger><SelectContent>{eligibleStaff.map(staff => <SelectItem key={staff.id} value={staff.id}>{staff.name}</SelectItem>)}</SelectContent></Select></div>}
 
               <div className="p-6 bg-muted/40 rounded-[2rem] border-2 border-dashed flex justify-between items-center">
                 <span className="text-sm font-black uppercase tracking-widest opacity-60">Calculated Pool</span>
@@ -491,7 +470,7 @@ export function TipsPage() {
           </ScrollArea>
 
           <div className="pt-6 border-t mt-auto">
-             <Button onClick={handleCreate} className="w-full h-14 rounded-2xl text-base font-black uppercase tracking-widest bg-emerald-600 hover:bg-emerald-700 shadow-xl shadow-emerald-500/20">
+             <Button disabled={!form.sourceNote.trim() || !calculatedDistributions.length} onClick={handleCreate} className="w-full h-14 rounded-2xl text-base font-black uppercase tracking-widest bg-emerald-600 hover:bg-emerald-700 shadow-xl shadow-emerald-500/20">
                Confirm Distribution Record
              </Button>
           </div>

@@ -39,7 +39,7 @@ interface WaitlistEntry {
   phoneNumber: string
   partySize: number
   quotedWaitTime: number
-  status: 'waiting' | 'notified' | 'seated' | 'cancelled' | 'no_show'
+  status: 'waiting' | 'notified' | 'seated' | 'completed' | 'cancelled' | 'no_show'
   addedAt: string
   notifiedAt: string | null
   seatedAt: string | null
@@ -57,7 +57,7 @@ interface Table {
 const GET_WAITLIST = gql`
   query GetWaitlist {
     waitlistEntries(
-      where: { status: { in: ["waiting", "notified"] } }
+      where: { status: { in: ["waiting", "notified", "seated"] } }
       orderBy: { addedAt: asc }
     ) {
       id
@@ -114,8 +114,8 @@ const CREATE_WAITLIST_ENTRY = gql`
 `
 
 const UPDATE_WAITLIST_STATUS = gql`
-  mutation UpdateWaitlistStatus($entryId: ID!, $action: String!, $tableId: ID) {
-    updateWaitlistStatus(entryId: $entryId, action: $action, tableId: $tableId) { success error }
+  mutation UpdateWaitlistStatus($entryId: ID!, $action: String!, $tableId: ID, $contactConfirmed: Boolean) {
+    updateWaitlistStatus(entryId: $entryId, action: $action, tableId: $tableId, contactConfirmed: $contactConfirmed) { success error }
   }
 `
 
@@ -225,10 +225,12 @@ export function WaitlistPage() {
   }
 
   const handleNotify = async (entry: WaitlistEntry) => {
+    if (!window.confirm(`Call ${entry.customerName} at ${entry.phoneNumber}. Have you successfully contacted this guest?`)) return;
     try {
       const res: any = await request('/api/graphql', UPDATE_WAITLIST_STATUS, {
         entryId: entry.id,
         action: 'notify',
+        contactConfirmed: true,
       })
       if (!res?.updateWaitlistStatus?.success) {
         throw new Error(res?.updateWaitlistStatus?.error || 'Unable to notify guest')
@@ -574,14 +576,14 @@ export function WaitlistPage() {
                   </div>
 
                   <div className="p-4 bg-muted/20 border-t flex gap-2">
-                    {entry.status === 'waiting' ? (
+                    {entry.status === 'seated' ? <Button onClick={async () => { try { const r: any = await request('/api/graphql', UPDATE_WAITLIST_STATUS, { entryId: entry.id, action: 'complete' }); if (!r.updateWaitlistStatus.success) throw new Error(r.updateWaitlistStatus.error); await fetchWaitlist(); } catch (e: any) { setActionError(e.message); } }}>Complete table visit</Button> : entry.status === 'waiting' ? (
                       <>
                         <Button 
                           className="flex-1 rounded-xl bg-blue-600 hover:bg-blue-700 font-bold text-xs uppercase tracking-widest h-10" 
                           onClick={() => handleNotify(entry)}
                         >
                           <Bell className="h-3.5 w-3.5 mr-2" />
-                          Notify
+                          Record contact
                         </Button>
                         <Button 
                           className="flex-1 rounded-xl bg-indigo-600 hover:bg-indigo-700 font-bold text-xs uppercase tracking-widest h-10"

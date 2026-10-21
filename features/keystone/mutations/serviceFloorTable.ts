@@ -1,6 +1,8 @@
 import type { Context } from ".keystone/types";
 import { permissions } from "../access";
-import { appendAuditEvent } from "../utils/audit";
+import transitionRestaurantOrder from "./transitionRestaurantOrder";
+import { serviceTransaction } from "../utils/serviceOrderState";
+import { syncKitchenTicketsForOrder } from "../utils/kitchenTicketSync";
 
 
 type TableStatus = "available" | "occupied" | "reserved" | "cleaning";
@@ -23,16 +25,6 @@ interface ServiceFloorMutationResult {
 
 const ACTIVE_ORDER_STATUSES = ["open", "sent_to_kitchen", "in_progress", "ready", "served"];
 
-async function getActiveOrdersForTable(tableId: string, context: Context) {
-  return context.sudo().query.RestaurantOrder.findMany({
-    where: {
-      tables: { some: { id: { equals: tableId } } },
-      status: { in: ACTIVE_ORDER_STATUSES },
-    },
-    query: "id status orderNumber",
-    take: 5,
-  });
-}
 
 export async function updateServiceFloorTableStatus(
   root: any,
@@ -49,25 +41,16 @@ export async function updateServiceFloorTableStatus(
   }
 
   try {
-    const sudo = context.sudo();
-    const table = await sudo.query.Table.findOne({
-      where: { id: args.tableId },
-      query: "id tableNumber status",
-    });
-
-    if (!table) return { success: false, error: "Table not found" };
-
-    const activeOrders = await getActiveOrdersForTable(args.tableId, context);
-    if (activeOrders.length > 0 && ["available", "cleaning"].includes(args.status)) {
-      return {
-        success: false,
-        error: `Table ${table.tableNumber || ""} has an active check. Close or move the check before marking it ${args.status}.`,
-      };
-    }
-
-    await sudo.db.Table.updateOne({
-      where: { id: args.tableId },
-      data: { status: args.status },
+    await serviceTransaction(context.prisma, async tx => {
+      const table = await tx.table.findUnique({ where: { id: args.tableId } });
+      if (!table) throw new Error("Table not found");
+      const [checks, reservations, waitlist] = await Promise.all([
+        tx.restaurantOrder.count({ where: { tables: { some: { id: args.tableId } }, status: { in: ACTIVE_ORDER_STATUSES } } }),
+        tx.reservation.count({ where: { assignedTableId: args.tableId, status: "seated" } }),
+        tx.waitlistEntry.count({ where: { tableId: args.tableId, status: "seated" } }),
+      ]);
+      if ((checks || reservations || waitlist) && args.status !== "occupied") throw new Error("Finish active checks and seated parties before releasing this table");
+      await tx.table.update({ where: { id: args.tableId }, data: { status: args.status } });
     });
 
     return { success: true, error: null };
@@ -96,51 +79,22 @@ export async function updateServiceFloorCheckStatus(
 
     if (!order) return { success: false, error: "Check not found" };
 
-    let nextStatus: string | null = null;
+    if (args.action === "cancel_check") throw new Error("Use the approved order void workflow with a reason");
     if (args.action === "send_to_kitchen") {
-      if (!order.orderItems?.length) return { success: false, error: "Add at least one item before sending to kitchen" };
-      nextStatus = "sent_to_kitchen";
-    } else if (args.action === "mark_served") {
-      nextStatus = "served";
-    } else if (args.action === "close_check") {
-      const paid = (order.payments || [])
-        .filter((payment: any) => payment.status === "succeeded")
-        .reduce((sum: number, payment: any) => sum + Number(payment.amount || 0), 0);
-      if (paid < Number(order.total || 0)) {
-        return { success: false, error: "Check cannot be closed until payment is complete" };
-      }
-      nextStatus = "completed";
-    } else if (args.action === "cancel_check") {
-      return { success: false, error: "Use the approved order void workflow with a reason to cancel this check" };
-    } else {
-      return { success: false, error: "Invalid check action" };
-    }
-
-    await sudo.db.RestaurantOrder.updateOne({
-      where: { id: args.orderId },
-      data: { status: nextStatus },
-    });
-    await appendAuditEvent(context, {
-      eventType: "service_floor.check_status_changed",
-      entityType: "RestaurantOrder",
-      entityId: args.orderId,
-      before: { status: order.status },
-      after: { status: nextStatus },
-      metadata: { action: args.action },
-    }).catch((error) => console.error("Check status audit event failed:", error));
-
-    if (["completed", "cancelled"].includes(nextStatus)) {
-      for (const table of order.tables || []) {
-        const activeOrders = await getActiveOrdersForTable(table.id, context);
-        const otherActiveOrders = activeOrders.filter((activeOrder: any) => activeOrder.id !== order.id);
-        if (otherActiveOrders.length === 0) {
-          await sudo.db.Table.updateOne({
-            where: { id: table.id },
-            data: { status: nextStatus === "completed" ? "cleaning" : "available" },
-          });
-        }
-      }
-    }
+      await serviceTransaction(context.prisma, async tx => {
+        const current = await tx.restaurantOrder.findUnique({ where: { id: args.orderId }, include: { orderItems: true } });
+        if (!current || !["open", "sent_to_kitchen", "in_progress", "ready"].includes(current.status)) throw new Error("This check can no longer send work");
+        if (!current.orderItems.some((item: any) => !item.isVoided)) throw new Error("Add an active item before sending to kitchen");
+        const now = new Date();
+        const courses = await tx.orderCourse.findMany({ where: { orderId: current.id, status: "pending", onHold: false } });
+        await tx.orderCourse.updateMany({ where: { id: { in: courses.map((course: any) => course.id) } }, data: { status: "fired", fireTime: now } });
+        await tx.orderItem.updateMany({ where: { orderId: current.id, courseId: { in: courses.map((course: any) => course.id) }, isVoided: false }, data: { sentToKitchen: now, firedAt: now, kitchenStatus: "new" } });
+        await tx.restaurantOrder.update({ where: { id: current.id }, data: { status: "sent_to_kitchen" } });
+      });
+      await syncKitchenTicketsForOrder(args.orderId, context);
+    } else if (args.action === "mark_served" || args.action === "close_check") {
+      await transitionRestaurantOrder(null, { orderId: args.orderId, status: args.action === "mark_served" ? "served" : "completed" }, context);
+    } else throw new Error("Invalid check action");
 
     return { success: true, error: null };
   } catch (err) {

@@ -1,8 +1,8 @@
 import type { Context } from ".keystone/types";
+import { reserveGiftRefundValue } from "../utils/giftRefundReserve";
 import { permissions } from "../access";
+import { finalizeRefundWithClient } from "../utils/refundLedger";
 import { refundPayment as refundProviderPayment } from "../utils/paymentProviderAdapter";
-import { appendAuditEventWithClient } from "../utils/audit";
-import { issueReceiptWithClient } from "../utils/receipt";
 import { consumeManagerApproval } from "../utils/managerApproval";
 import { getOrCreateIdempotencyAttempt, updateIdempotencyAttempt } from "../utils/idempotency";
 
@@ -103,6 +103,7 @@ export default async function refundPayment(
         where: { id: refund.id },
         data: { approvedById: approval.approvedById },
       });
+      await reserveGiftRefundValue(tx, payment, approvedRefund);
       return { refund: approvedRefund, payment, replay: false };
     }, { isolationLevel: "Serializable" });
 
@@ -128,18 +129,23 @@ export default async function refundPayment(
     });
     if (!payment?.order?.id) throw new Error("Payment order is missing");
     const providerReference =
+      (payment.paymentProvider?.code === "pp_stripe_stripe" ? payment.providerPaymentId : null) ||
       (payment.data as any)?.captureId ||
       (payment.data as any)?.chargeId ||
       payment.providerPaymentId;
     let providerResult: any = { status: "succeeded", amount: reservation.refund.amount };
     if (!["cash", "gift_card"].includes(payment.paymentMethod || "")) {
       if (!payment.paymentProvider || !providerReference) throw new Error("Provider refund reference is missing");
+      if (reservation.replay && !reservation.refund.providerRefundId && reservation.refund.createdAt && Date.now() - new Date(reservation.refund.createdAt).getTime() > 60 * 60 * 1000) {
+        throw new Error("Uncertain refund has no provider reference and is outside the automatic replay window; reconcile with the provider before any replacement refund");
+      }
       providerResult = await refundProviderPayment({
         provider: payment.paymentProvider,
         paymentId: providerReference,
         amount: reservation.refund.amount,
         currency: payment.currencyCode || "USD",
         idempotencyKey: args.idempotencyKey,
+        refundId: reservation.refund.providerRefundId || undefined,
       });
     }
     const succeeded = ["succeeded", "refunded", "completed", "COMPLETED"].includes(providerResult.status);
@@ -154,73 +160,10 @@ export default async function refundPayment(
     if (succeeded && !providerRefundId) {
       throw new Error("Provider reported a successful refund without a refund reference");
     }
-    const final = await prisma.$transaction(async (tx: any) => {
-      const refund = await tx.refund.update({
-        where: { id: reservation.refund.id },
-        data: {
-          status: finalStatus,
-          providerRefundId: providerRefundId || "",
-          providerData: providerResult.data || providerResult,
-          processedAt: succeeded ? new Date() : null,
-        },
-      });
-      if (succeeded) {
-        if (payment.paymentMethod === "gift_card") {
-          const giftCardId = (payment.data as any)?.giftCardId;
-          if (!giftCardId) throw new Error("Gift card reference is missing from the original tender");
-          const giftCard = await tx.giftCard.findUnique({ where: { id: giftCardId } });
-          if (!giftCard) throw new Error("Gift card not found");
-          const balanceAfter = cents(giftCard.balance) + cents(refund.amount);
-          await tx.giftCard.update({ where: { id: giftCard.id }, data: { balance: balanceAfter } });
-          await tx.giftCardTransaction.create({
-            data: {
-              idempotencyKey: `refund:${args.idempotencyKey}`,
-              type: "refund",
-              amount: cents(refund.amount),
-              balanceAfter,
-              giftCardId: giftCard.id,
-              orderId: payment.order.id,
-            },
-          });
-        }
-        const nextRefunded = cents(payment.refundedAmount) + cents(refund.amount);
-        await tx.payment.update({
-          where: { id: payment.id },
-          data: {
-            refundedAmount: nextRefunded,
-            status: nextRefunded >= cents(payment.amount) ? "refunded" : "partially_refunded",
-          },
-        });
-        await appendAuditEventWithClient(tx, context.session?.itemId, {
-          eventKey: `payment-refunded:${refund.id}`,
-          eventType: "payment.refunded",
-          entityType: "Refund",
-          entityId: refund.id,
-          reason: args.reason,
-          after: { amount: refund.amount, paymentId: payment.id },
-          approverId: reservation.refund.approvedById,
-          metadata: { idempotencyKey: args.idempotencyKey, managerApprovalId: args.managerApprovalId },
-        });
-        await issueReceiptWithClient(tx, context.session?.itemId, {
-          kind: "refund",
-          entityId: refund.id,
-          orderId: payment.order.id,
-          paymentId: payment.id,
-          refundId: refund.id,
-          amount: -cents(refund.amount),
-          currencyCode: payment.currencyCode || "USD",
-          snapshot: {
-            orderNumber: payment.order.orderNumber,
-            originalPaymentId: payment.id,
-            refundAmount: cents(refund.amount),
-            reason: args.reason,
-            providerRefundId: refund.providerRefundId,
-            managerApprovalId: args.managerApprovalId,
-          },
-        });
-      }
-      return refund;
-    }, { isolationLevel: "Serializable" });
+    const final = await prisma.$transaction((tx: any) => finalizeRefundWithClient(tx, {
+      refundId: reservation.refund.id, payment, providerResult, finalStatus, providerRefundId,
+      actorId: context.session?.itemId, managerApprovalId: args.managerApprovalId,
+    }), { isolationLevel: "Serializable" });
 
     await updateIdempotencyAttempt(
       prisma,
@@ -231,6 +174,23 @@ export default async function refundPayment(
     );
     return { success: succeeded, refundId: final.id, status: final.status, error: succeeded ? null : "Refund provider outcome is not final" };
   } catch (error) {
-    return { success: false, refundId: null, status: null, error: error instanceof Error ? error.message : "Unknown error" };
+    // An exception does not prove that an external refund failed. Preserve its
+    // reservation and original idempotency key for safe provider replay.
+    const pending = args.idempotencyKey ? await (context.prisma as any).refund.findUnique({ where: { idempotencyKey: args.idempotencyKey } }) : null;
+    if (pending && ["processing", "unknown"].includes(pending.status)) {
+      await (context.prisma as any).refund.updateMany({ where: { id: pending.id, status: { in: ["processing", "unknown"] } }, data: { status: "unknown" } });
+    }
+    return { success: false, refundId: pending?.id || null, status: pending ? (pending.status === "processing" ? "unknown" : pending.status) : null, error: error instanceof Error ? error.message : "Unknown error" };
   }
+}
+
+/** Recover after a reload or another operator takes over; retain the original
+ * fingerprint, manager approval and provider idempotency key. */
+export async function reconcileRefundMutation(_root: unknown, { refundId }: { refundId: string }, context: Context) {
+  if (!permissions.canManagePayments({ session: context.session })) throw new Error("Payment management is required for refund recovery");
+  const refund = await (context.prisma as any).refund.findUnique({ where: { id: refundId } });
+  if (!refund) throw new Error("Refund not found");
+  const attempt = await (context.prisma as any).idempotencyKey.findUnique({ where: { idempotencyKey: `refund:${refund.idempotencyKey}` } });
+  if (!attempt?.requestParams?.managerApprovalId) throw new Error("Original refund approval evidence is missing");
+  return refundPayment(null, { paymentId: refund.paymentId, amount: attempt.requestParams.amount, reason: attempt.requestParams.reason, managerApprovalId: attempt.requestParams.managerApprovalId, idempotencyKey: refund.idempotencyKey }, context);
 }

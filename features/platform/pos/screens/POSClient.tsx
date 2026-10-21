@@ -1,6 +1,10 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import { RefundRecovery } from "@/features/platform/payments/components/RefundRecovery"
+import { readPosDraft, savePosDraft, clearPosDraft } from "@/features/lib/pos-draft"
+import React, { useState, useEffect, useRef } from 'react'
+import { RestaurantNotifications } from '@/features/platform/payments/components/RestaurantNotifications'
+import { CheckoutRecovery } from '@/features/platform/payments/components/CheckoutRecovery'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -98,6 +102,7 @@ const GET_DATA = gql`
 
 const CREATE_POS_ORDER = gql`
   mutation CreatePOSOrder(
+    $idempotencyKey: String!
     $orderType: String!
     $guestCount: Int
     $tableIds: [ID!]
@@ -106,6 +111,7 @@ const CREATE_POS_ORDER = gql`
     $items: [POSOrderItemInput!]!
   ) {
     createPOSOrder(
+      idempotencyKey: $idempotencyKey
       orderType: $orderType
       guestCount: $guestCount
       tableIds: $tableIds
@@ -155,6 +161,26 @@ export function POSClient() {
   const [configuringItem, setConfiguringItem] = useState<MenuItem | null>(null)
   const [selectedModifierIds, setSelectedModifierIds] = useState<string[]>([])
   const [itemInstructions, setItemInstructions] = useState('')
+  const submissionAttempt = useRef<{ fingerprint: string; key: string } | null>(null)
+  const draftReady = useRef(false)
+  const [draftMessage, setDraftMessage] = useState('')
+  const [offline, setOffline] = useState(false)
+  useEffect(() => {
+    const draft = readPosDraft(localStorage)
+    if (draft?.cart.length) {
+      setCart(draft.cart); setOrderType(draft.orderType === 'takeout' ? 'takeout' : 'dine_in'); setGuestCount(draft.guestCount || 1); setSelectedTables(draft.selectedTables || []); setIsUrgent(!!draft.isUrgent); setSpecialInstructions(draft.specialInstructions || ''); submissionAttempt.current = draft.attempt || null;
+      setDraftMessage('Recovered this device’s draft. Review the order before sending; the server rechecks prices and table availability.')
+    }
+    draftReady.current = true
+    const update = () => setOffline(!navigator.onLine)
+    update(); window.addEventListener('online', update); window.addEventListener('offline', update)
+    return () => { window.removeEventListener('online', update); window.removeEventListener('offline', update) }
+  }, [])
+  useEffect(() => {
+    if (!draftReady.current || submissionAttempt.current) return
+    try { if (cart.length) savePosDraft(localStorage, { cart, orderType, guestCount, selectedTables, isUrgent, specialInstructions, attempt: submissionAttempt.current }); else clearPosDraft(localStorage) }
+    catch { setDraftMessage('This browser could not persist the draft. Keep this page open until the server confirms the order.') }
+  }, [cart, orderType, guestCount, selectedTables, isUrgent, specialInstructions])
   const [modifierError, setModifierError] = useState<string | null>(null)
 
   const fetchData = async () => {
@@ -263,7 +289,16 @@ export function POSClient() {
     if (cart.length === 0 || submitting || (orderType === 'dine_in' && selectedTables.length === 0)) return
     try {
       setSubmitting(true)
+      const fingerprint = JSON.stringify({ orderType, guestCount, selectedTables, isUrgent, specialInstructions, cart })
+      if (submissionAttempt.current && submissionAttempt.current.fingerprint !== fingerprint) throw new Error('The previous send has an unresolved response. Reload to restore and retry that exact order before starting another.')
+      const key = submissionAttempt.current?.fingerprint === fingerprint ? submissionAttempt.current.key : crypto.randomUUID()
+      submissionAttempt.current = { fingerprint, key }
+      // Persist before the request. An uncertain response retries the same server key,
+      // including after reload. Never replay a card charge from this draft journal.
+      savePosDraft(localStorage, { cart, orderType, guestCount, selectedTables, isUrgent, specialInstructions, attempt: submissionAttempt.current })
+      if (!navigator.onLine) { setDraftMessage('Draft saved on this device. Reconnect, review, and send to the kitchen. No order has been acknowledged.'); return }
       const res: any = await request('/api/graphql', CREATE_POS_ORDER, {
+        idempotencyKey: key,
         orderType,
         guestCount,
         tableIds: orderType === 'dine_in' ? selectedTables : [],
@@ -277,6 +312,9 @@ export function POSClient() {
           specialInstructions: item.specialInstructions || null,
         })),
       })
+      submissionAttempt.current = null
+      clearPosDraft(localStorage)
+      setDraftMessage('')
       setCart([])
       setSelectedTables([])
       setIsUrgent(false)
@@ -321,6 +359,8 @@ export function POSClient() {
       // h-screen + overflow-hidden = self-contained viewport lock, no parent chain dependency
       <div className="flex flex-col bg-background overflow-hidden" style={{ height: '100svh' }}>
         <PageBreadcrumbs items={breadcrumbs} />
+      {(offline || draftMessage) && <p role="status" className="px-4 py-2 text-sm bg-amber-50 text-amber-950">{offline ? 'Offline: kitchen dispatch and payments require a server connection. ' : ''}{draftMessage}</p>}
+      <details className="px-4 shrink-0"><summary>Checkout recovery</summary><CheckoutRecovery /><RefundRecovery /><RestaurantNotifications /></details>
         <div className="flex items-center justify-center flex-1">
           <RefreshCw className="animate-spin text-muted-foreground h-5 w-5" />
         </div>

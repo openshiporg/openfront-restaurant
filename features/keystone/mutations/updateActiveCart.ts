@@ -1,3 +1,4 @@
+import { cartMutationTransaction, touchMutableCart } from "../utils/cartMutationTransaction";
 import type { Context } from ".keystone/types";
 import { permissions } from "../access";
 import { assertCanAccessCart } from "../utils/cartAccess";
@@ -35,7 +36,7 @@ function boundedText(value: unknown, field: string, maximum: number) {
   return normalized;
 }
 
-export default async function updateActiveCart(
+async function updateActiveCart(
   _root: unknown,
   { cartId, data }: { cartId: string; data: ActiveCartUpdateInput },
   context: Context
@@ -60,6 +61,7 @@ export default async function updateActiveCart(
   });
   if (!cart) throw new Error("Cart not found");
   if (cart.order?.id) throw new Error("Completed carts cannot be changed");
+  await touchMutableCart(context, cartId);
 
   const deliveryInput = Object.fromEntries(
     Object.entries({
@@ -125,4 +127,8 @@ export default async function updateActiveCart(
     where: { id: cartId },
     data: updateData,
   });
+}
+
+export default function updateActiveCartTransactional(...args: Parameters<typeof updateActiveCart>) {
+  return cartMutationTransaction(args[2], (tx) => updateActiveCart(args[0], args[1], tx));
 }

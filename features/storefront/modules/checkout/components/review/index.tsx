@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils"
 import { useSearchParams } from "next/navigation"
 import Image from "next/image"
 import { formatCurrency } from "@/features/storefront/lib/currency"
-import { calculateRestaurantCheckoutTotals } from "@/features/storefront/lib/checkout-totals"
+import { checkoutDisplayItems, checkoutDisplayPricing, checkoutSessionMatchesPricing, selectedCheckoutQuote } from "@/features/storefront/lib/checkout-quote-display"
 import PaymentButton from "../payment-button"
 import { ClipboardCheck } from "lucide-react"
 
@@ -28,23 +28,18 @@ const Review = ({
   const hasDeliveryInfo =
     orderType === "pickup" ||
     !!(cart?.deliveryAddress && cart?.deliveryCity && cart?.deliveryZip && cart?.deliveryCountryCode)
-  const hasPaymentSession = !!cart?.paymentCollection?.paymentSessions?.find(
-    (s: any) => s.isSelected
-  )
-  const previousStepsCompleted =
-    hasCustomerInfo && hasDeliveryInfo && hasPaymentSession
+  const activeSession = cart?.paymentCollection?.paymentSessions?.find((s: any) => s.isSelected)
+  const hasPaymentSession = Boolean(activeSession)
+  const previousStepsCompleted = hasCustomerInfo && hasDeliveryInfo && hasPaymentSession
 
-  const subtotal = cart?.subtotal || 0
-  const tipPercent = Number(cart?.tipPercent || 0)
-  const currencyConfig = { currencyCode: storeInfo?.currencyCode || "USD", locale: storeInfo?.locale || "en-US" }
-  const { deliveryFee, pickupDiscount, tax, tip, total } = calculateRestaurantCheckoutTotals({
-    subtotal,
-    orderType,
-    tipPercent,
-    deliveryFee: Number(storeInfo?.deliveryFee || 0),
-    pickupDiscountPercent: Number(storeInfo?.pickupDiscount || 10),
-    taxRate: Number(storeInfo?.taxRate || 8.75),
-  })
+  const checkoutQuote = selectedCheckoutQuote(cart)
+  const displayItems = checkoutDisplayItems(cart)
+  const pricing = checkoutDisplayPricing(cart, storeInfo)
+  const subtotal = pricing.subtotal
+  const tipPercent = Number(checkoutQuote?.cart?.tipPercent ?? cart?.tipPercent ?? 0)
+  const currencyConfig = { currencyCode: checkoutQuote?.currencyCode || storeInfo?.currencyCode || "USD", locale: storeInfo?.locale || "en-US" }
+  const { deliveryFee, pickupDiscount, tax, tip, total } = pricing
+  const sessionMatchesQuote = checkoutSessionMatchesPricing(activeSession, pricing)
 
   return (
     <div>
@@ -67,7 +62,7 @@ const Review = ({
         <>
           {/* Order items */}
           <div className="space-y-3 mb-6">
-            {cart?.items?.map((item: any) => {
+            {displayItems.map((item: any) => {
               const modifiersTotal = item.modifiers?.reduce((sum: number, m: any) => sum + (m.priceAdjustment || 0), 0) || 0
               const itemTotal = (item.menuItem?.price || 0) + modifiersTotal
               return (
@@ -130,9 +125,13 @@ const Review = ({
             By placing your order, you agree to our Terms of Use, Terms of Sale and acknowledge our Privacy Policy.
           </p>
 
+          {!sessionMatchesQuote && checkoutQuote ? (
+            <p role="alert" className="mb-4 text-sm text-destructive">The saved checkout quote does not match its payment session. Cancel or reconcile this unpaid attempt before proceeding.</p>
+          ) : null}
           <PaymentButton
             cart={cart}
             billingAddress={customer?.billingAddress || null}
+            allowPlacement={sessionMatchesQuote}
             data-testid="submit-order-button"
           />
         </>

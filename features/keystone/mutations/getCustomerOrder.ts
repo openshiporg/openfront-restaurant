@@ -1,3 +1,4 @@
+import { getActiveCheckAllocation } from "../utils/checkAllocations";
 import { Context } from ".keystone/types";
 
 export default async function getCustomerOrder(
@@ -6,6 +7,7 @@ export default async function getCustomerOrder(
   context: Context
 ) {
   const sudoContext = context.sudo();
+  if ((context.session as any)?.apiKeyId) throw new Error("Customer session required");
   const sessionUserId = context.session?.itemId;
 
   const order = await sudoContext.query.RestaurantOrder.findOne({
@@ -79,7 +81,8 @@ export default async function getCustomerOrder(
     if (order.secretKey !== secretKey) {
       throw new Error("Invalid secret key");
     }
-    return order;
+    const allocation = await getActiveCheckAllocation(context.prisma, order.id);
+    return { ...order, checkAllocation: allocation ? { sourceOrderNumber: allocation.sourceOrderNumber, ordinal: allocation.ordinal, guestCount: allocation.guestCount, allocatedTotals: allocation.allocatedTotals } : null };
   }
 
   // If no secretKey, check user authentication
@@ -89,7 +92,8 @@ export default async function getCustomerOrder(
 
   // Verify the order belongs to the user
   if (order.customer?.id === sessionUserId) {
-    return order;
+    const allocation = await getActiveCheckAllocation(context.prisma, order.id);
+    return { ...order, checkAllocation: allocation ? { sourceOrderNumber: allocation.sourceOrderNumber, ordinal: allocation.ordinal, guestCount: allocation.guestCount, allocatedTotals: allocation.allocatedTotals } : null };
   }
 
   throw new Error("Order not found");

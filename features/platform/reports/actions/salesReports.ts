@@ -23,11 +23,13 @@ export async function getSalesOverview(
         orderSource
         status
         guestCount
+        physicalGuestCount
         subtotal
         tax
         tip
         discount
         total
+        payments { amount status refundedAmount }
         createdAt
         tables {
           id
@@ -41,6 +43,8 @@ export async function getSalesOverview(
           id
           quantity
           price
+          isVoided
+          adjustmentTotal
           itemNameSnapshot
           modifiersSnapshot
           menuItem {
@@ -67,9 +71,12 @@ export async function getSalesOverview(
       ) {
         id
         orderType
+        orderSource
         status
         guestCount
+        physicalGuestCount
         total
+        payments { amount status refundedAmount }
         createdAt
       }
       previousOrdersCount: restaurantOrdersCount(
@@ -95,11 +102,12 @@ export async function getPaymentBreakdown(startDate: string, endDate: string) {
       payments(
         where: {
           createdAt: { gte: $startDate, lte: $endDate }
-          status: { equals: "succeeded" }
+          status: { in: ["succeeded", "partially_refunded", "refunded"] }
         }
       ) {
         id
         amount
+        refundedAmount
         status
         paymentMethod
         tipAmount
@@ -112,7 +120,7 @@ export async function getPaymentBreakdown(startDate: string, endDate: string) {
       paymentsCount(
         where: {
           createdAt: { gte: $startDate, lte: $endDate }
-          status: { equals: "succeeded" }
+          status: { in: ["succeeded", "partially_refunded", "refunded"] }
         }
       )
     }
@@ -135,6 +143,8 @@ export async function getMenuItemPerformance(startDate: string, endDate: string)
         id
         quantity
         price
+        isVoided
+        adjustmentTotal
         itemNameSnapshot
         modifiersSnapshot
         menuItem {
@@ -162,10 +172,10 @@ export async function getServerPerformance(startDate: string, endDate: string) {
     query GetServerPerformance($startDate: DateTime!, $endDate: DateTime!) {
       users(
         where: {
-          restaurantOrders_some: {
+          restaurantOrders: { some: {
             createdAt: { gte: $startDate, lte: $endDate }
             status: { equals: "completed" }
-          }
+          } }
         }
       ) {
         id
@@ -182,6 +192,7 @@ export async function getServerPerformance(startDate: string, endDate: string) {
         total
         tip
         guestCount
+        physicalGuestCount
         server {
           id
           name
@@ -199,20 +210,23 @@ export async function getCategoryPerformance(startDate: string, endDate: string)
       menuCategories {
         id
         name
-        menuItems {
+      }
+      restaurantOrders(
+        where: {
+          createdAt: { gte: $startDate, lte: $endDate }
+          status: { equals: "completed" }
+        }
+      ) {
+        id
+        orderItems(where: { isVoided: { equals: false } }) {
           id
-          name
-          orderItems(
-            where: {
-              order: {
-                createdAt: { gte: $startDate, lte: $endDate }
-                status: { equals: "completed" }
-              }
-            }
-          ) {
+          quantity
+          price
+          adjustmentTotal
+          menuItem {
             id
-            quantity
-            price
+            name
+            category { id name }
           }
         }
       }
@@ -222,11 +236,11 @@ export async function getCategoryPerformance(startDate: string, endDate: string)
   return await keystoneClient(query, { startDate, endDate });
 }
 
-export async function getOperationalMetrics() {
+export async function getOperationalMetrics(startDate: string, endDate: string) {
   const query = `
-    query GetOperationalMetrics {
+    query GetOperationalMetrics($startDate: DateTime!, $endDate: DateTime!) {
       openOrders: restaurantOrdersCount(
-        where: { status: { in: ["open", "in_progress"] } }
+        where: { status: { in: ["open", "sent_to_kitchen", "in_progress", "ready", "dispatched", "served"] } }
       )
       inProgressOrders: restaurantOrdersCount(
         where: { status: { equals: "in_progress" } }
@@ -238,21 +252,22 @@ export async function getOperationalMetrics() {
         where: { status: { equals: "occupied" } }
       )
       totalTables: tablesCount
+      voidAdjustments: orderAdjustments(where: { type: { equals: "void" }, createdAt: { gte: $startDate, lte: $endDate } }, take: 10001) { metadata order { id } }
       cancelledOrders: restaurantOrdersCount(
         where: { 
           status: { equals: "cancelled" }
-          createdAt: { gte: "${new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()}" }
+          createdAt: { gte: $startDate, lte: $endDate }
         }
       )
       totalRecentOrders: restaurantOrdersCount(
         where: { 
-          createdAt: { gte: "${new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()}" }
+          createdAt: { gte: $startDate, lte: $endDate }
         }
       )
       recentOrders: restaurantOrders(
         where: { 
           status: { equals: "completed" }
-          createdAt: { gte: "${new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()}" }
+          createdAt: { gte: $startDate, lte: $endDate }
         }
         orderBy: { createdAt: desc }
         take: 50
@@ -261,11 +276,12 @@ export async function getOperationalMetrics() {
         createdAt
         status
         guestCount
+        physicalGuestCount
         orderType
       }
       recentTickets: kitchenTickets(
         where: {
-          completedAt: { gte: "${new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()}" }
+          completedAt: { gte: $startDate, lte: $endDate }
           firedAt: { not: null }
         }
         take: 100
@@ -295,5 +311,12 @@ export async function getOperationalMetrics() {
     }
   `;
 
-  return await keystoneClient(query);
+  return await keystoneClient(query, { startDate, endDate });
+}
+
+export async function getDayFinancialActivity(startDate: string, endDate: string) {
+  return keystoneClient(`query($startDate:DateTime!,$endDate:DateTime!){
+    payments(where:{processedAt:{gte:$startDate,lte:$endDate},status:{in:["succeeded","partially_refunded","refunded"]}}){id amount status order{orderSource}}
+    refunds(where:{processedAt:{gte:$startDate,lte:$endDate},status:{equals:"succeeded"}}){id amount status payment{order{orderSource}}}
+  }`, { startDate, endDate });
 }

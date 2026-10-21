@@ -5,7 +5,7 @@ interface PageProps {
 }
 
 export function MenuItemModifierListPage({ searchParams }: PageProps) {
-  return <ListPage listKey="menu-item-modifiers" searchParams={searchParams} />
+  return <ListPage params={Promise.resolve({ listKey: "menu-item-modifiers" })} searchParams={searchParams} />
 }
 
 export default MenuItemModifierListPage

@@ -1,3 +1,8 @@
+import { freezeOrderPricingPolicy } from "../utils/orderPricingPolicy";
+import crypto from "node:crypto";
+import { appendAuditEventWithClient } from "../utils/audit";
+import { assertTablesAvailable, serviceTransaction } from "../utils/serviceOrderState";
+import { syncKitchenTicketsForOrder } from "../utils/kitchenTicketSync";
 import type { Context } from ".keystone/types";
 import { permissions } from "../access";
 import { calculateRestaurantTotals } from "../../lib/restaurant-order-pricing";
@@ -12,6 +17,7 @@ interface POSOrderItemInput {
 }
 
 interface CreatePOSOrderArgs {
+  idempotencyKey: string;
   orderType: "dine_in" | "takeout";
   guestCount?: number;
   tableIds?: string[];
@@ -41,6 +47,16 @@ export default async function createPOSOrder(
     throw new Error("Not authorized to create POS orders");
   }
 
+  if (!args.idempotencyKey || args.idempotencyKey.length > 200) throw new Error("A stable request key is required");
+  const requestKey = `pos:${context.session?.itemId}:${args.idempotencyKey}`;
+  const fingerprint = crypto.createHash("sha256").update(JSON.stringify(args)).digest("hex");
+  const existingAttempt = await (context.prisma as any).auditEvent.findUnique({ where: { eventKey: requestKey } });
+  if (existingAttempt) {
+    if (existingAttempt.metadata?.fingerprint !== fingerprint) throw new Error("Request key was already used for different order contents");
+    await syncKitchenTicketsForOrder(existingAttempt.entityId, context);
+    return (context.prisma as any).restaurantOrder.findUnique({ where: { id: existingAttempt.entityId } });
+  }
+  if (!["dine_in", "takeout"].includes(args.orderType)) throw new Error("Invalid POS service type");
   const orderType = args.orderType || "dine_in";
   const items = (args.items || []).filter((item) => item?.menuItemId && Number(item.quantity) > 0);
   const tableIds = Array.from(new Set(args.tableIds || []));
@@ -81,62 +97,46 @@ export default async function createPOSOrder(
     currencyCode,
   });
 
-  const order = await sudo.db.RestaurantOrder.createOne({
-    data: {
-      orderNumber: generateOrderNumber(),
-      orderType,
-      orderSource: "pos",
-      status: "sent_to_kitchen",
-      guestCount: Math.max(1, args.guestCount || 1),
-      subtotal,
-      tax,
-      total,
-      isUrgent: Boolean(args.isUrgent),
-      specialInstructions: args.specialInstructions || "",
-      currencyCode,
-      tables: tableIds.length ? { connect: tableIds.map((id) => ({ id })) } : undefined,
-      server: context.session?.itemId ? { connect: { id: context.session.itemId } } : undefined,
-      createdBy: context.session?.itemId ? { connect: { id: context.session.itemId } } : undefined,
-    },
-  });
-
-  const courseMap = new Map<number, string>();
-  for (const item of validatedItems) {
-    if (!courseMap.has(item.courseNumber)) {
-      const course = await sudo.db.OrderCourse.createOne({
-        data: {
-          order: { connect: { id: order.id } },
-          courseNumber: item.courseNumber,
-          courseType: getCourseType(item.courseNumber),
-          status: "pending",
-        },
-      });
-      courseMap.set(item.courseNumber, course.id);
+  // Prisma is intentional: order, immutable lines, courses and table allocation commit together.
+  const order = await serviceTransaction(context.prisma, async tx => {
+    const prior = await tx.auditEvent.findUnique({ where: { eventKey: requestKey } });
+    if (prior) {
+      if (prior.metadata?.fingerprint !== fingerprint) throw new Error("Request key was already used for different order contents");
+      return tx.restaurantOrder.findUnique({ where: { id: prior.entityId } });
     }
-
-    await sudo.db.OrderItem.createOne({
-      data: {
-        order: { connect: { id: order.id } },
-        course: { connect: { id: courseMap.get(item.courseNumber)! } },
-        menuItem: { connect: { id: item.menuItem.id } },
-        appliedModifiers: item.modifiers.length
-          ? { connect: item.modifiers.map((modifier) => ({ id: modifier.id })) }
-          : undefined,
-        quantity: item.quantity,
-        price: item.unitPrice,
-        itemNameSnapshot: item.menuItem.name,
-        itemThumbnailSnapshot: item.menuItem.thumbnail || "",
-        kitchenStationSnapshot: item.menuItem.kitchenStation || "expo",
-        menuItemIdSnapshot: item.menuItem.id,
-        modifiersSnapshot: item.modifiers,
-        specialInstructions: item.specialInstructions,
-        courseNumber: item.courseNumber,
-      },
+    await assertTablesAvailable(tx, tableIds, Math.max(1, args.guestCount || 1), undefined, true);
+    const order = await tx.restaurantOrder.create({ data: {
+      orderNumber: `POS-${crypto.createHash("sha256").update(requestKey).digest("hex").slice(0, 24)}`,
+      orderType, orderSource: "pos", status: "sent_to_kitchen", guestCount: Math.max(1, args.guestCount || 1),
+      subtotal, tax, total, isUrgent: Boolean(args.isUrgent), specialInstructions: args.specialInstructions || "", currencyCode,
+      tables: { connect: tableIds.map(id => ({ id })) }, serverId: context.session?.itemId, createdById: context.session?.itemId,
+    } });
+    await freezeOrderPricingPolicy(tx, order.id, storeSettings, context.session?.itemId);
+    const courseMap = new Map<number, string>();
+    const now = new Date();
+    for (const item of validatedItems) {
+      if (!courseMap.has(item.courseNumber)) {
+        const course = await tx.orderCourse.create({ data: {
+          orderId: order.id, courseNumber: item.courseNumber, courseType: getCourseType(item.courseNumber), status: "fired", fireTime: now,
+        } });
+        courseMap.set(item.courseNumber, course.id);
+      }
+      await tx.orderItem.create({ data: {
+        orderId: order.id, originalOrderIdSnapshot: order.id, courseId: courseMap.get(item.courseNumber), menuItemId: item.menuItem.id,
+        appliedModifiers: { connect: item.modifiers.map(modifier => ({ id: modifier.id })) },
+        quantity: item.quantity, price: item.unitPrice, itemNameSnapshot: item.menuItem.name,
+        itemThumbnailSnapshot: item.menuItem.thumbnail || "", kitchenStationSnapshot: item.menuItem.kitchenStation || "expo",
+        menuItemIdSnapshot: item.menuItem.id, modifiersSnapshot: item.modifiers,
+        specialInstructions: item.specialInstructions, courseNumber: item.courseNumber, sentToKitchen: now, firedAt: now,
+      } });
+    }
+    await tx.table.updateMany({ where: { id: { in: tableIds } }, data: { status: "occupied" } });
+    await appendAuditEventWithClient(tx, context.session?.itemId, {
+      eventKey: requestKey, eventType: "pos.order_created", entityType: "RestaurantOrder", entityId: order.id, metadata: { fingerprint },
     });
-  }
-
-  return sudo.query.RestaurantOrder.findOne({
-    where: { id: order.id },
-    query: "id orderNumber status subtotal tax total",
+    return order;
   });
+  // Also on replay: a dispatch failure after commit must be recoverable without another sale.
+  await syncKitchenTicketsForOrder(order.id, context);
+  return order;
 }

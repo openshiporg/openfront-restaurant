@@ -9,6 +9,7 @@ import {
 import { list } from "@keystone-6/core";
 
 import { isSignedIn } from "../access";
+import { normalizeIp, validApiKeyScopes } from "../utils/apiKeyPolicy";
 import { trackingFields } from "./trackingFields";
 
 // Restaurant-focused API key scopes
@@ -42,24 +43,23 @@ export const ApiKey = list({
     },
   },
   hooks: {
-    validate: {
-      create: async ({ resolvedData, addValidationError }) => {
-        if (!resolvedData.scopes || resolvedData.scopes.length === 0) {
-          addValidationError("At least one scope is required for API keys");
-        }
-      },
+    validate: async ({ operation, resolvedData, item, context, addValidationError }) => {
+      if (operation === "delete") return;
+      const current = item as any;
+      const scopes = resolvedData.scopes ?? current?.scopes;
+      if (!validApiKeyScopes(scopes, context.session?.data?.role)) addValidationError("Scopes must be known capabilities currently granted to the key owner");
+      if (current?.status === "revoked" && resolvedData.status && resolvedData.status !== "revoked") addValidationError("Revoked keys cannot be reactivated");
+      const ips = resolvedData.restrictedToIPs;
+      if (ips != null && (!Array.isArray(ips) || ips.some((ip: unknown) => !normalizeIp(ip)))) addValidationError("IP restrictions must contain valid IP addresses");
     },
-    resolveInput: {
-      create: async ({ resolvedData, context }) => {
-        return {
-          ...resolvedData,
-          user:
-            resolvedData.user ||
-            (context.session?.itemId
-              ? { connect: { id: context.session.itemId } }
-              : undefined),
-        };
-      },
+    resolveInput: ({ operation, inputData, resolvedData, context }) => {
+      const result = { ...resolvedData };
+      if (operation === "create") result.user = context.session?.itemId ? { connect: { id: context.session.itemId } } : undefined;
+      if (typeof inputData.tokenSecret === "string") {
+        if (!/^of_[A-Za-z0-9_-]{32,128}$/.test(inputData.tokenSecret)) throw new Error("API token must be an of_ token with at least 32 random characters");
+        result.tokenPreview = `${inputData.tokenSecret.slice(0, 12)}...`;
+      }
+      return result;
     },
   },
   fields: {
@@ -71,6 +71,7 @@ export const ApiKey = list({
       },
     }),
     tokenSecret: password({
+      access: { read: () => false },
       validation: { isRequired: true },
       ui: {
         createView: { fieldMode: "hidden" },
@@ -80,6 +81,7 @@ export const ApiKey = list({
       },
     }),
     tokenPreview: text({
+      access: { update: () => false },
       ui: {
         createView: { fieldMode: "hidden" },
         itemView: { fieldMode: "read" },
@@ -112,6 +114,7 @@ export const ApiKey = list({
       },
     }),
     lastUsedAt: timestamp({
+      access: { create: () => false, update: () => false },
       ui: {
         createView: { fieldMode: "hidden" },
         itemView: { fieldMode: "read" },
@@ -119,6 +122,7 @@ export const ApiKey = list({
       },
     }),
     usageCount: json({
+      access: { create: () => false, update: () => false },
       defaultValue: { total: 0, daily: {} },
       ui: {
         createView: { fieldMode: "hidden" },
@@ -135,6 +139,7 @@ export const ApiKey = list({
     }),
     ...trackingFields,
     user: relationship({
+      access: { create: () => false, update: () => false },
       ref: "User.apiKeys",
       ui: {
         createView: { fieldMode: "hidden" },

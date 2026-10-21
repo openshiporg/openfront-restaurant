@@ -1,3 +1,4 @@
+import { reservedTenderValue, allocateTenderTip } from "../utils/paymentState";
 import type { Context } from ".keystone/types";
 import { permissions } from "../access";
 import { appendAuditEventWithClient } from "../utils/audit";
@@ -93,8 +94,8 @@ export default async function redeemGiftCard(
           throw new Error("Idempotency key was already used with a different gift-card request");
         }
         const order = await tx.restaurantOrder.findUnique({ where: { id: args.orderId } });
-        const payments = await tx.payment.findMany({ where: { orderId: args.orderId, status: "succeeded" } });
-        const paid = payments.reduce((sum: number, payment: any) => sum + cents(payment.amount), 0);
+        const payments = await tx.payment.findMany({ where: { orderId: args.orderId, status: { in: ["succeeded", "partially_refunded", "refunded"] } } });
+        const paid = payments.reduce((sum: number, payment: any) => sum + reservedTenderValue(payment), 0);
         return {
           payment: existingPayment,
           order,
@@ -111,14 +112,15 @@ export default async function redeemGiftCard(
       const desiredTip = Math.max(cents(order.tip), cents(args.tipAmount));
       const orderTotal = Math.max(0, cents(order.total) - cents(order.tip) + desiredTip);
       const reservedPayments = await tx.payment.findMany({
-        where: { orderId: args.orderId, status: { in: ["processing", "authorized", "succeeded"] } },
+        where: { orderId: args.orderId, status: { in: ["processing", "authorized", "succeeded", "partially_refunded", "refunded", "unknown"] } },
       });
-      const reserved = reservedPayments.reduce((sum: number, payment: any) => sum + cents(payment.amount), 0);
+      const reserved = reservedPayments.reduce((sum: number, payment: any) => sum + reservedTenderValue(payment), 0);
       const remaining = orderTotal - reserved;
       if (remaining <= 0) throw new Error("Order has no remaining balance");
 
       const giftCard = await tx.giftCard.findUnique({ where: { code } });
       if (!giftCard || giftCard.isDisabled) throw new Error("Gift card not found or disabled");
+      if (giftCard.metadata?.currencyCode && giftCard.metadata.currencyCode !== (order.currencyCode || "USD")) throw new Error("Gift card currency differs from this order");
       if (giftCard.endsAt && new Date(giftCard.endsAt) <= new Date()) throw new Error("Gift card has expired");
       const amount = Math.min(cents(giftCard.balance), remaining);
       if (amount <= 0) throw new Error("Gift card has no available balance");
@@ -133,7 +135,7 @@ export default async function redeemGiftCard(
           currencyCode: order.currencyCode || "USD",
           status: "succeeded",
           paymentMethod: "gift_card",
-          tipAmount: desiredTip,
+          tipAmount: allocateTenderTip(desiredTip, orderTotal, amount, remaining - amount, reservedPayments),
           processedAt: new Date(),
           orderId: order.id,
           processedById: context.session?.itemId || null,

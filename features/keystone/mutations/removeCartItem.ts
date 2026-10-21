@@ -1,7 +1,8 @@
+import { cartMutationTransaction, touchMutableCart } from "../utils/cartMutationTransaction";
 import { Context } from ".keystone/types";
 import { assertCanAccessCartItem } from "../utils/cartAccess";
 
-export default async function removeCartItem(
+async function removeCartItem(
   root: any, 
   { cartItemId }: { cartItemId: string }, 
   context: Context
@@ -15,6 +16,7 @@ export default async function removeCartItem(
     query: "id order { id }",
   });
   if (cart?.order?.id) throw new Error("Completed carts cannot be changed");
+  await touchMutableCart(context, cartId);
 
   await sudoContext.db.CartItem.deleteOne({
     where: { id: cartItemId }
@@ -24,4 +26,8 @@ export default async function removeCartItem(
   return await sudoContext.db.Cart.findOne({
     where: { id: cartId }
   });
+}
+
+export default function removeCartItemTransactional(...args: Parameters<typeof removeCartItem>) {
+  return cartMutationTransaction(args[2], (tx) => removeCartItem(args[0], args[1], tx));
 }

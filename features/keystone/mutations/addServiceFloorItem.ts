@@ -1,11 +1,13 @@
+import crypto from "node:crypto";
 import type { Context } from ".keystone/types";
-import { calculateRestaurantTotals } from "../../lib/restaurant-order-pricing";
 import { permissions } from "../access";
 import { getStoreDeliverySettings } from "../utils/deliveryValidation";
 import { validateCartItemInput } from "../utils/cartItemValidation";
-
-
+import { assertMutableServiceOrder, assertTablesAvailable, serviceTransaction } from "../utils/serviceOrderState";
+import { recalculateServiceOrder } from "../utils/serviceOrderTotals";
+import { appendAuditEventWithClient } from "../utils/audit";
 interface AddServiceFloorItemArgs {
+  idempotencyKey: string;
   orderId?: string | null;
   tableId: string;
   menuItemId: string;
@@ -16,171 +18,53 @@ interface AddServiceFloorItemArgs {
   modifierIds?: string[] | null;
 }
 
-function generateDineInOrderNumber() {
-  return `DIN-${Date.now().toString(36).toUpperCase()}`;
-}
-
-function getCourseType(courseNumber: number) {
-  if (courseNumber === 1) return "appetizers";
-  if (courseNumber === 2) return "mains";
-  if (courseNumber === 3) return "desserts";
-  return "mains";
-}
-
-async function recalculateOrderTotals(orderId: string, context: Context) {
-  const sudo = context.sudo();
-  const [settings, order] = await Promise.all([
-    getStoreDeliverySettings(context),
-    sudo.query.RestaurantOrder.findOne({
-      where: { id: orderId },
-      query: `
-        id
-        orderType
-        currencyCode
-        tip
-        discount
-        orderItems { id quantity price }
-      `,
-    }),
-  ]);
-
-  if (!order) throw new Error("Order not found while recalculating totals");
-
-  const subtotal = (order.orderItems || []).reduce(
-    (sum: number, item: any) => sum + Number(item.price || 0) * Number(item.quantity || 0),
-    0
-  );
-
-  const { tax } = calculateRestaurantTotals({
-    subtotal,
-    orderType: order.orderType || "dine_in",
-    taxRate: settings?.taxRate,
-    currencyCode: settings?.currencyCode || order.currencyCode || "USD",
-  });
-
-  const tip = Math.max(0, Number(order.tip || 0));
-  const discount = Math.max(0, Number(order.discount || 0));
-  const total = Math.max(0, subtotal + tax + tip - discount);
-
-  await sudo.db.RestaurantOrder.updateOne({
-    where: { id: orderId },
-    data: {
-      subtotal,
-      tax,
-      total,
-      currencyCode: settings?.currencyCode || order.currencyCode || "USD",
-    },
-  });
-
-  return { subtotal, tax, total };
-}
-
-export default async function addServiceFloorItem(
-  root: any,
-  args: AddServiceFloorItemArgs,
-  context: Context
-) {
-  if (!permissions.canManageOrders({ session: context.session })) {
-    throw new Error("Not authorized to manage service-floor checks");
+export default async function addServiceFloorItem(_root: unknown, args: AddServiceFloorItemArgs, context: Context) {
+  if (!permissions.canManageOrders({ session: context.session })) throw new Error("Not authorized to manage service-floor checks");
+  if (!args.tableId || !args.menuItemId) throw new Error("Table and menu item are required");
+  if (!args.idempotencyKey || args.idempotencyKey.length > 200) throw new Error("A stable request key is required");
+  const key = `service-add:${context.session?.itemId}:${args.idempotencyKey}`;
+  const fingerprint = crypto.createHash("sha256").update(JSON.stringify(args)).digest("hex");
+  const existingAttempt = await (context.prisma as any).auditEvent.findUnique({ where: { eventKey: key } });
+  if (existingAttempt) {
+    if (existingAttempt.metadata?.fingerprint !== fingerprint) throw new Error("Request key was already used for different item contents");
+    return (context.prisma as any).restaurantOrder.findUnique({ where: { id: existingAttempt.entityId } });
   }
-
-  const quantity = Math.max(1, Math.floor(Number(args.quantity || 1)));
+  const settings = await getStoreDeliverySettings(context);
+  const item = await validateCartItemInput(context, args);
   const courseNumber = Math.max(1, Math.floor(Number(args.courseNumber || 1)));
-  const sudo = context.sudo();
-
-  if (!args.tableId) throw new Error("Table is required");
-  if (!args.menuItemId) throw new Error("Menu item is required");
-
-  const [settings, table, validatedItem] = await Promise.all([
-    getStoreDeliverySettings(context),
-    sudo.query.Table.findOne({
-      where: { id: args.tableId },
-      query: "id tableNumber status",
-    }),
-    validateCartItemInput(context, {
-      menuItemId: args.menuItemId,
-      quantity,
-      modifierIds: args.modifierIds || [],
-      specialInstructions: args.specialInstructions,
-    }),
-  ]);
-
-  if (!table) throw new Error("Table not found");
-
-  let orderId = args.orderId || null;
-  let order: any = null;
-
-  if (orderId) {
-    order = await sudo.query.RestaurantOrder.findOne({
-      where: { id: orderId },
-      query: "id status orderType tables { id } courses { id courseNumber }",
-    });
-    if (!order) throw new Error("Active check not found");
-  } else {
-    const currencyCode = settings?.currencyCode || "USD";
-    order = await sudo.db.RestaurantOrder.createOne({
-      data: {
-        orderNumber: generateDineInOrderNumber(),
-        orderType: "dine_in",
-        orderSource: "pos",
-        status: "open",
-        guestCount: 1,
-        subtotal: 0,
-        tax: 0,
-        total: 0,
-        currencyCode,
-        tables: { connect: [{ id: args.tableId }] },
-        server: context.session?.itemId ? { connect: { id: context.session.itemId } } : undefined,
-        createdBy: context.session?.itemId ? { connect: { id: context.session.itemId } } : undefined,
-      },
-    });
-    orderId = order.id;
-
-    await sudo.db.Table.updateOne({
-      where: { id: args.tableId },
-      data: { status: "occupied" },
-    });
-  }
-
-  const existingCourse = (order.courses || []).find((course: any) => Number(course.courseNumber) === courseNumber);
-  const course = existingCourse || await sudo.db.OrderCourse.createOne({
-    data: {
-      order: { connect: { id: orderId } },
-      courseNumber,
-      courseType: getCourseType(courseNumber),
-      status: "pending",
-    },
+  return serviceTransaction(context.prisma, async tx => {
+    const prior = await tx.auditEvent.findUnique({ where: { eventKey: key } });
+    if (prior) {
+      if (prior.metadata?.fingerprint !== fingerprint) throw new Error("Request key was already used for different item contents");
+      return tx.restaurantOrder.findUnique({ where: { id: prior.entityId } });
+    }
+    let order = args.orderId ? await tx.restaurantOrder.findUnique({ where: { id: args.orderId }, include: { payments: true, tables: true } }) : null;
+    if (args.orderId) {
+      assertMutableServiceOrder(order);
+      if (!order.tables.some((table: any) => table.id === args.tableId)) throw new Error("This check does not belong to the selected table");
+    } else {
+      await assertTablesAvailable(tx, [args.tableId], 1, undefined, true);
+      order = await tx.restaurantOrder.create({ data: {
+        orderNumber: `DIN-${crypto.createHash("sha256").update(key).digest("hex").slice(0, 24)}`,
+        orderType: "dine_in", orderSource: "pos", status: "open", guestCount: 1, subtotal: 0, tax: 0, total: 0,
+        currencyCode: settings?.currencyCode || "USD", tables: { connect: [{ id: args.tableId }] },
+        serverId: context.session?.itemId, createdById: context.session?.itemId,
+      } });
+      await tx.table.update({ where: { id: args.tableId }, data: { status: "occupied" } });
+    }
+    let course = await tx.orderCourse.findFirst({ where: { orderId: order.id, courseNumber } });
+    if (course && course.status !== "pending") throw new Error("Add new work to a pending course; dispatched courses cannot be silently changed");
+    if (!course) course = await tx.orderCourse.create({ data: { orderId: order.id, courseNumber, courseType: courseNumber === 1 ? "appetizers" : courseNumber === 3 ? "desserts" : "mains", status: "pending" } });
+    await tx.orderItem.create({ data: {
+      orderId: order.id, originalOrderIdSnapshot: order.id, courseId: course.id, menuItemId: item.menuItem.id,
+      appliedModifiers: { connect: item.modifiers.map(modifier => ({ id: modifier.id })) },
+      quantity: item.quantity, price: item.unitPrice, itemNameSnapshot: item.menuItem.name,
+      itemThumbnailSnapshot: item.menuItem.thumbnail || "", kitchenStationSnapshot: item.menuItem.kitchenStation || "expo",
+      menuItemIdSnapshot: item.menuItem.id, modifiersSnapshot: item.modifiers, courseNumber,
+      seatNumber: args.seatNumber ?? null, specialInstructions: item.specialInstructions,
+    } });
+    const updated = await recalculateServiceOrder(tx, order.id, settings);
+    await appendAuditEventWithClient(tx, context.session?.itemId, { eventKey: key, eventType: "service.item_added", entityType: "RestaurantOrder", entityId: order.id, metadata: { fingerprint } });
+    return updated;
   });
-
-  if (!orderId) throw new Error("Unable to create or find active order for this table");
-
-  await sudo.db.OrderItem.createOne({
-    data: {
-      order: { connect: { id: orderId } },
-      course: { connect: { id: course.id } },
-      menuItem: { connect: { id: validatedItem.menuItem.id } },
-      appliedModifiers: validatedItem.modifiers.length
-        ? { connect: validatedItem.modifiers.map((modifier) => ({ id: modifier.id })) }
-        : undefined,
-      quantity: validatedItem.quantity,
-      price: validatedItem.unitPrice,
-      itemNameSnapshot: validatedItem.menuItem.name,
-      itemThumbnailSnapshot: validatedItem.menuItem.thumbnail || "",
-      kitchenStationSnapshot: validatedItem.menuItem.kitchenStation || "expo",
-      menuItemIdSnapshot: validatedItem.menuItem.id,
-      modifiersSnapshot: validatedItem.modifiers,
-      courseNumber,
-      seatNumber: args.seatNumber ?? undefined,
-      specialInstructions: validatedItem.specialInstructions,
-    },
-  });
-
-  await recalculateOrderTotals(orderId, context);
-
-  const refreshed = await sudo.query.RestaurantOrder.findOne({
-    where: { id: orderId },
-    query: "id orderNumber status subtotal tax total",
-  });
-
-  return refreshed;
 }

@@ -121,7 +121,7 @@ export async function getFilteredPaymentProviders(
 export async function getPaymentProvider(id: string) {
   const query = `
     query GetPaymentProvider($id: ID!) {
-      paymentprovider(where: { id: $id }) {
+      paymentprovider: paymentProvider(where: { id: $id }) {
         id name code isInstalled metadata
       }
     }

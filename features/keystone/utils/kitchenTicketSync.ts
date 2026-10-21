@@ -1,5 +1,7 @@
+import { snapshotOrderRecipes } from "./inventoryRecipeSnapshot";
 import crypto from "crypto";
 import type { Context } from ".keystone/types";
+import { hasKitchenWorkCoverage, serviceTransaction } from "./serviceOrderState";
 import { appendKitchenTicketEventWithClient } from "./kitchenTicketEvents";
 
 export type TicketItem = {
@@ -8,6 +10,9 @@ export type TicketItem = {
   quantity: number;
   notes?: string | null;
   station: string;
+  modifiers?: Array<{ name?: string; label?: string; value?: string }>;
+  seatNumber?: number | null;
+  courseNumber?: number | null;
   status: "new" | "in_progress" | "fulfilled" | "cancelled";
   fulfilledAt?: string | null;
   /** Stable kitchen-work fingerprint; unlike updatedAt it ignores KDS status writes. */
@@ -24,14 +29,32 @@ type TicketProjection = {
 const ACTIVE_ORDER_STATUSES = ["sent_to_kitchen", "in_progress", "ready"] as const;
 const ACTIVE_TICKET_STATUSES = ["new", "in_progress", "ready"] as const;
 
-async function mutateKitchenState(
+async function mutateKitchenState<T>(
   context: Context,
-  operation: (tx: any, actorId: string | null) => Promise<void>
-) {
-  await (context.prisma as any).$transaction(
-    (tx: any) => operation(tx, context.session?.itemId || null),
-    { isolationLevel: "Serializable" }
-  );
+  expectedOrder: any,
+  operation: (tx: any, actorId: string | null) => Promise<T>
+): Promise<T | undefined> {
+  const orderId = expectedOrder.id;
+  return serviceTransaction(context.prisma, async tx => {
+    const currentOrder = await tx.restaurantOrder.findUnique({ where: { id: orderId }, include: { orderItems: { include: { course: true, menuItem: true } } } });
+    if (!currentOrder || ["completed", "dispatched", "served"].includes(currentOrder.status)) return undefined;
+    assertKitchenProjectionCurrent(expectedOrder, currentOrder);
+    // Every projection write re-reads the aggregate inside its serializable commit.
+    // A concurrent close/cancellation conflicts with this read instead of resurrecting work.
+    const guarded = Object.create(tx);
+    guarded.kitchenTicket = Object.create(tx.kitchenTicket);
+    guarded.kitchenTicket.update = async (args: any) => {
+      const current = await tx.kitchenTicket.findUnique({ where: args.where });
+      if (current && ["served", "cancelled"].includes(current.status)) return current;
+      if (currentOrder.status === "cancelled" && args.data.status !== "cancelled") return current;
+      return tx.kitchenTicket.update(args);
+    };
+    guarded.kitchenTicket.create = async (args: any) => {
+      if (currentOrder.status === "cancelled") throw new Error("Order was cancelled before kitchen dispatch");
+      return tx.kitchenTicket.create(args);
+    };
+    return operation(guarded, context.session?.itemId || null);
+  });
 }
 
 function normalizeStationName(name: string) {
@@ -58,6 +81,13 @@ function getTicketStatusForOrderStatus(orderStatus?: string | null) {
   if (orderStatus === "ready") return "ready";
   if (orderStatus === "in_progress") return "in_progress";
   return "new";
+}
+
+export function getKitchenProjectionTicketStatus(currentStatus: string, items: TicketItem[]) {
+  if (currentStatus === "ready" && items.some((item) => ["new", "in_progress"].includes(item.status))) {
+    return "in_progress";
+  }
+  return currentStatus;
 }
 
 async function getOrCreateStation(
@@ -94,6 +124,9 @@ function normalizeKitchenWork(item: {
   notes?: string | null;
   station: string;
   modifiersSnapshot?: unknown;
+  seatNumber?: number | null;
+  courseNumber?: number | null;
+  dispatchVersion?: string | null;
 }) {
   return {
     id: item.id,
@@ -102,6 +135,8 @@ function normalizeKitchenWork(item: {
     notes: item.notes || null,
     station: normalizeStationName(item.station || "expo"),
     modifiersSnapshot: item.modifiersSnapshot ?? null,
+    seatNumber: item.seatNumber ?? null, courseNumber: item.courseNumber ?? null,
+    dispatchVersion: item.dispatchVersion ?? null,
   };
 }
 
@@ -150,11 +185,28 @@ export function getUncoveredKitchenWorkItems(
   });
 }
 
-function mapOrderItemsByStation(order: any): Record<string, TicketItem[]> {
+/** Coalescing split/merged check tickets retains the most advanced state for
+ * identical production work. A deliberately refired signature starts fresh. */
+export function mergeKitchenProjectionItems(desiredItems: TicketItem[], tickets: TicketProjection[]): TicketItem[] {
+  const history = tickets.flatMap(ticket => ticket.items || []);
+  const rank = { cancelled: 0, new: 1, in_progress: 2, fulfilled: 3 };
+  const desiredIds = new Set(desiredItems.map(item => item.id));
+  const cancelled = new Map<string, TicketItem>();
+  for (const item of history) if (!desiredIds.has(item.id)) cancelled.set(item.id, { ...item, status: "cancelled" });
+  return [...desiredItems.map(item => {
+    const previous = history.filter(candidate => candidate.id === item.id && isSameKitchenWork(candidate, item))
+      .sort((a, b) => rank[b.status] - rank[a.status])[0];
+    if (!previous || previous.status === "cancelled") return item;
+    return { ...item, status: previous.status, fulfilledAt: previous.fulfilledAt || null };
+  }), ...cancelled.values()];
+}
+
+export function mapOrderItemsByStation(order: any): Record<string, TicketItem[]> {
   const grouped: Record<string, TicketItem[]> = {};
 
+  if (order.onHold) return grouped;
   for (const item of order.orderItems || []) {
-    if (!item?.id || item.isVoided) continue;
+    if (!item?.id || item.isVoided || item.course?.onHold || (item.course && item.course.status !== "fired")) continue;
     const station = item.kitchenStationSnapshot || item.menuItem?.kitchenStation || "expo";
     const name = item.itemNameSnapshot || item.menuItem?.name || "Item";
     const quantity = item.quantity || 1;
@@ -166,6 +218,8 @@ function mapOrderItemsByStation(order: any): Record<string, TicketItem[]> {
       quantity,
       notes,
       station,
+      modifiers: Array.isArray(item.modifiersSnapshot) ? item.modifiersSnapshot : [],
+      seatNumber: item.seatNumber ?? null, courseNumber: item.courseNumber ?? null,
       status: "new",
       fulfilledAt: null,
       workSignature: createKitchenWorkSignature({
@@ -175,6 +229,8 @@ function mapOrderItemsByStation(order: any): Record<string, TicketItem[]> {
         notes,
         station,
         modifiersSnapshot: item.modifiersSnapshot,
+        seatNumber: item.seatNumber, courseNumber: item.courseNumber,
+        dispatchVersion: item.firedAt || null,
       }),
     });
   }
@@ -182,39 +238,32 @@ function mapOrderItemsByStation(order: any): Record<string, TicketItem[]> {
   return grouped;
 }
 
+/** The desired projection was read before this commit; reject intervening
+ * course/hold/item changes instead of reviving stale work. The next sync reloads. */
+export function assertKitchenProjectionCurrent(expected: any, current: any) {
+  const fingerprint = (order: any) => JSON.stringify({
+    cancelled: order.status === "cancelled", onHold: Boolean(order.onHold), urgent: Boolean(order.isUrgent),
+    work: Object.values(mapOrderItemsByStation(order)).flat().map(item => [item.id, item.workSignature]).sort((a, b) => String(a[0]).localeCompare(String(b[0]))),
+  });
+  if (fingerprint(expected) !== fingerprint(current)) throw new Error("Kitchen work changed during synchronization; refresh and retry");
+}
+
 export async function reconcileRestaurantOrderStatus(orderId: string, context: Context) {
-  const sudo = context.sudo();
-  const [order, tickets] = await Promise.all([
-    sudo.query.RestaurantOrder.findOne({
-      where: { id: orderId },
-      query: "id status",
-    }),
-    sudo.query.KitchenTicket.findMany({
-      where: { order: { id: { equals: orderId } } },
-      query: "id status",
-    }),
-  ]);
-
-  if (!order || !tickets.length) return;
-
-  const hasNew = tickets.some((t: any) => t.status === "new");
-  const hasInProgress = tickets.some((t: any) => t.status === "in_progress");
-  const hasReady = tickets.some((t: any) => t.status === "ready");
-  const hasServed = tickets.some((t: any) => t.status === "served");
-  const allServed = tickets.every((t: any) => ["served", "cancelled"].includes(t.status));
-
-  let nextStatus: string | null = null;
-  if (hasInProgress) nextStatus = "in_progress";
-  else if (hasReady && !hasNew) nextStatus = "ready";
-  else if (hasReady || hasNew) nextStatus = "sent_to_kitchen";
-  else if (allServed || hasServed) nextStatus = "served";
-
-  if (nextStatus && nextStatus !== order.status) {
-    await sudo.db.RestaurantOrder.updateOne({
-      where: { id: orderId },
-      data: { status: nextStatus },
-    });
-  }
+  await serviceTransaction(context.prisma, async tx => {
+    const order = await tx.restaurantOrder.findUnique({ where: { id: orderId }, include: { orderItems: { select: { id: true, isVoided: true } }, courses: { where: { orderItems: { some: { isVoided: false } } } } } });
+    if (!order || ["completed", "cancelled", "dispatched", "served", "open"].includes(order.status)) return;
+    const tickets = await tx.kitchenTicket.findMany({ where: { orderId }, include: { orderItems: { select: { id: true } } } });
+    if (!tickets.length) return;
+    const active = tickets.filter((ticket: any) => ticket.status !== "cancelled");
+    if (!active.length) return;
+    const held = order.onHold || order.courses.some((course: any) => course.onHold || course.status === "pending");
+    const nextStatus = active.some((ticket: any) => ticket.status === "in_progress") ? "in_progress"
+      : active.some((ticket: any) => ticket.status === "new") ? "sent_to_kitchen"
+      : active.some((ticket: any) => ticket.status === "ready") ? "ready"
+      : !held && active.every((ticket: any) => ticket.status === "served") ? (["delivery", "takeout"].includes(order.orderType) ? "ready" : "served") : "in_progress";
+    if (["ready", "served"].includes(nextStatus) && !hasKitchenWorkCoverage(order, tickets, ["ready", "served"])) return;
+    if (nextStatus !== order.status) await tx.restaurantOrder.update({ where: { id: orderId }, data: { status: nextStatus } });
+  });
 }
 
 export async function syncKitchenTicketsForOrder(orderId: string, context: Context) {
@@ -235,6 +284,10 @@ export async function syncKitchenTicketsForOrder(orderId: string, context: Conte
         itemNameSnapshot
         kitchenStationSnapshot
         modifiersSnapshot
+        seatNumber
+        courseNumber
+        firedAt
+        course { id status onHold }
         isVoided
         menuItem { id name kitchenStation }
       }
@@ -254,13 +307,15 @@ export async function syncKitchenTicketsForOrder(orderId: string, context: Conte
     orderBy: { firedAt: "asc" },
   });
 
-  if (order.status === "completed" || order.status === "cancelled") {
+  // Completion cannot rewrite unfinished preparation as served. Closure validates this invariant.
+  if (order.status === "completed") return { created: 0, updated: 0, removed: 0 };
+  if (order.status === "cancelled") {
     const now = new Date().toISOString();
     let updated = 0;
 
     for (const ticket of existingTickets.filter((t: any) => ACTIVE_TICKET_STATUSES.includes(t.status))) {
-      const nextStatus = order.status === "completed" ? "served" : "cancelled";
-      await mutateKitchenState(context, async (tx, actorId) => {
+      const nextStatus = "cancelled";
+      await mutateKitchenState(context, order, async (tx, actorId) => {
         await tx.kitchenTicket.update({
           where: { id: ticket.id },
           data: {
@@ -287,6 +342,8 @@ export async function syncKitchenTicketsForOrder(orderId: string, context: Conte
     return { created: 0, updated: 0, removed: 0 };
   }
 
+  await snapshotOrderRecipes(order.id, context);
+
   const stations = await sudo.query.KitchenStation.findMany({
     query: "id name displayOrder",
     where: { isActive: { equals: true } },
@@ -302,7 +359,7 @@ export async function syncKitchenTicketsForOrder(orderId: string, context: Conte
 
   if (desiredStationKeys.size === 0) {
     for (const ticket of existingTickets.filter((t: any) => ACTIVE_TICKET_STATUSES.includes(t.status))) {
-      await mutateKitchenState(context, async (tx, actorId) => {
+      await mutateKitchenState(context, order, async (tx, actorId) => {
         await tx.kitchenTicket.update({
           where: { id: ticket.id },
           data: {
@@ -325,142 +382,101 @@ export async function syncKitchenTicketsForOrder(orderId: string, context: Conte
 
   for (const [stationKey, items] of Object.entries(stationItemMap)) {
     const station = await getOrCreateStation(stationKey, context, stations as any);
-    const stationTickets = existingTickets.filter(
-      (ticket: any) =>
-        normalizeStationName(ticket.station?.name || "") === normalizeStationName(station.name)
-    );
-    const matchingTickets = stationTickets.filter((ticket: any) =>
-      ACTIVE_TICKET_STATUSES.includes(ticket.status)
-    );
-    const workItems = getUncoveredKitchenWorkItems(items, stationTickets);
-
     const priority = order.isUrgent ? 100 : order.onHold ? -10 : 0;
     const ticketType = isExpediterStation(station.name) ? "expediter" : "prep";
 
-    // A terminal ticket is immutable proof that identical kitchen work was
-    // already handled. Cancel any stale active replacement rather than
-    // dispatching it again. Changed/new work remains uncovered and continues
-    // through the normal delta/create path below.
-    if (workItems.length === 0) {
-      for (const stale of matchingTickets) {
-        await mutateKitchenState(context, async (tx, actorId) => {
+    const projection = await mutateKitchenState(context, order, async (tx, actorId) => {
+      // Re-read station history inside the serializable transaction. Parallel
+      // syncs that both observed an empty projection must converge on one ticket.
+      const stationHistory = await tx.kitchenTicket.findMany({
+        where: { orderId: order.id, stationId: station.id },
+        orderBy: { firedAt: "asc" },
+      });
+      const workItems = getUncoveredKitchenWorkItems(items, stationHistory);
+      const activeTickets = stationHistory.filter((ticket: any) => ACTIVE_TICKET_STATUSES.includes(ticket.status));
+
+      if (workItems.length === 0) {
+        for (const stale of activeTickets) {
           await tx.kitchenTicket.update({
             where: { id: stale.id },
             data: {
               status: "cancelled",
-              items: ((stale.items as TicketItem[] | null) || []).map((item) => ({
-                ...item,
-                status: "cancelled",
-              })),
+              items: ((stale.items as TicketItem[] | null) || []).map((item) => ({ ...item, status: "cancelled" })),
             },
           });
           await appendKitchenTicketEventWithClient(tx, actorId, {
-            eventType: "cancel",
-            ticketId: stale.id,
-            orderId: order.id,
+            eventType: "cancel", ticketId: stale.id, orderId: order.id,
             payload: { reason: "Terminal ticket already covers unchanged kitchen work" },
             eventKey: `ticket-terminal-covered-cancel:${stale.id}`,
           });
-        });
-        updated += 1;
-      }
-      continue;
-    }
-
-    if (matchingTickets.length > 0) {
-      const existing = matchingTickets[0];
-      const existingItems = (existing.items as TicketItem[] | null) || [];
-      const existingMap = new Map(existingItems.map((i) => [i.id, i]));
-
-      const currentIds = new Set(workItems.map((item) => item.id));
-      const cancelledItems = existingItems
-        .filter((item) => !currentIds.has(item.id))
-        .map((item) => ({ ...item, status: "cancelled" as const }));
-      const mergedItems = [
-        ...workItems.map((item) => {
-          const prev = existingMap.get(item.id);
-          if (!prev) return item;
-          return {
-            ...item,
-            status: prev.status === "cancelled" ? "new" : prev.status || "new",
-            fulfilledAt: prev.fulfilledAt || null,
-          };
-        }),
-        ...cancelledItems,
-      ];
-
-      const projectionChanged =
-        JSON.stringify(existingItems) !== JSON.stringify(mergedItems) ||
-        Number(existing.priority || 0) !== priority ||
-        existing.ticketType !== ticketType ||
-        !existing.firedAt;
-      if (projectionChanged) {
-        const digest = crypto.createHash("sha256").update(JSON.stringify({ mergedItems, priority, ticketType })).digest("hex");
-        await mutateKitchenState(context, async (tx, actorId) => {
-          await tx.kitchenTicket.update({
-            where: { id: existing.id },
-            data: {
-              items: mergedItems,
-              orderItems: { set: mergedItems.map((item) => ({ id: item.id })) },
-              priority,
-              ticketType,
-              firedAt: existing.firedAt ? new Date(existing.firedAt) : new Date(order.createdAt),
-            },
-          });
-          await appendKitchenTicketEventWithClient(tx, actorId, {
-            eventType: "delta",
-            ticketId: existing.id,
-            orderId: order.id,
-            payload: { before: existingItems, after: mergedItems, priority, ticketType },
-            eventKey: `ticket-delta:${existing.id}:${digest}`,
-          });
-        });
-        updated += 1;
+        }
+        return { created: 0, updated: activeTickets.length };
       }
 
-      for (const duplicate of matchingTickets.slice(1)) {
-        await mutateKitchenState(context, async (tx, actorId) => {
-          await tx.kitchenTicket.update({ where: { id: duplicate.id }, data: { status: "cancelled" } });
-          await appendKitchenTicketEventWithClient(tx, actorId, {
-            eventType: "cancel",
-            ticketId: duplicate.id,
-            orderId: order.id,
-            payload: { reason: "Duplicate active projection superseded", canonicalTicketId: existing.id },
-            eventKey: `ticket-duplicate-cancel:${duplicate.id}`,
-          });
-        });
-        updated += 1;
-      }
-    } else {
-      await mutateKitchenState(context, async (tx, actorId) => {
-        const createdTicket = await tx.kitchenTicket.create({
-          data: {
-            orderId: order.id,
-            stationId: station.id,
-            items: workItems,
-            orderItems: { connect: workItems.map((item) => ({ id: item.id })) },
+      if (activeTickets.length > 0) {
+        const current = activeTickets[0];
+        const mergedItems = mergeKitchenProjectionItems(workItems, stationHistory);
+        const nextStatus = getKitchenProjectionTicketStatus(current.status, mergedItems);
+        const projectionChanged = JSON.stringify(current.items || []) !== JSON.stringify(mergedItems) ||
+          Number(current.priority || 0) !== priority || current.ticketType !== ticketType ||
+          !current.firedAt || nextStatus !== current.status;
+        if (projectionChanged) {
+          const digest = crypto.createHash("sha256").update(JSON.stringify({ mergedItems, priority, ticketType, nextStatus })).digest("hex");
+          const resumed = nextStatus !== current.status;
+          await tx.kitchenTicket.update({ where: { id: current.id }, data: {
+            items: mergedItems,
+            orderItems: { set: mergedItems.map(item => ({ id: item.id })) },
             priority,
             ticketType,
-            status: getTicketStatusForOrderStatus(order.status),
-            firedAt: new Date(order.createdAt),
-          },
-        });
-        await appendKitchenTicketEventWithClient(tx, actorId, {
-          eventType: "dispatch",
-          ticketId: createdTicket.id,
+            status: nextStatus,
+            completedAt: resumed ? null : undefined,
+            recalledAt: resumed ? new Date() : undefined,
+            firedAt: current.firedAt || new Date(order.createdAt),
+          } });
+          await appendKitchenTicketEventWithClient(tx, actorId, {
+            eventType: "delta", ticketId: current.id, orderId: order.id,
+            payload: { before: current.items, after: mergedItems, fromStatus: current.status, toStatus: nextStatus, priority, ticketType },
+            eventKey: `ticket-delta:${current.id}:${digest}`,
+          });
+        }
+        for (const duplicate of activeTickets.filter((ticket: any) => ticket.id !== current.id)) {
+          await tx.kitchenTicket.update({ where: { id: duplicate.id }, data: { status: "cancelled" } });
+          await appendKitchenTicketEventWithClient(tx, actorId, {
+            eventType: "cancel", ticketId: duplicate.id, orderId: order.id,
+            payload: { reason: "Duplicate active projection superseded", canonicalTicketId: current.id },
+            eventKey: `ticket-duplicate-cancel:${duplicate.id}`,
+          });
+        }
+        return { created: 0, updated: Number(projectionChanged || activeTickets.length > 1) };
+      }
+
+      const createdTicket = await tx.kitchenTicket.create({
+        data: {
           orderId: order.id,
-          payload: { station: station.name, items: workItems, priority, ticketType },
-          eventKey: `ticket-dispatch:${createdTicket.id}`,
-        });
+          stationId: station.id,
+          items: workItems,
+          orderItems: { connect: workItems.map((item) => ({ id: item.id })) },
+          priority,
+          ticketType,
+          status: order.status === "ready" ? "new" : getTicketStatusForOrderStatus(order.status),
+          firedAt: new Date(order.createdAt),
+        },
       });
-      created += 1;
-    }
+      await appendKitchenTicketEventWithClient(tx, actorId, {
+        eventType: "dispatch", ticketId: createdTicket.id, orderId: order.id,
+        payload: { station: station.name, items: workItems, priority, ticketType },
+        eventKey: `ticket-dispatch:${createdTicket.id}`,
+      });
+      return { created: 1, updated: 0 };
+    });
+    created += projection?.created || 0;
+    updated += projection?.updated || 0;
   }
 
   for (const ticket of existingTickets.filter((ticket: any) => ACTIVE_TICKET_STATUSES.includes(ticket.status))) {
     const stationName = normalizeStationName(ticket.station?.name || "");
     if (!desiredStationKeys.has(stationName)) {
-      await mutateKitchenState(context, async (tx, actorId) => {
+      await mutateKitchenState(context, order, async (tx, actorId) => {
         await tx.kitchenTicket.update({
           where: { id: ticket.id },
           data: {

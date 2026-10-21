@@ -8,7 +8,7 @@ export const GiftCard = list({
   access: {
     operation: {
       query: permissions.canReadGiftCards,
-      create: permissions.canManageGiftCards,
+      create: () => false,
       update: () => false,
       delete: () => false,
     },

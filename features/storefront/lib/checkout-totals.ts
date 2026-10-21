@@ -7,6 +7,7 @@ export function calculateRestaurantCheckoutTotals({
   deliveryFee,
   pickupDiscountPercent,
   taxRate,
+  currencyCode = "USD",
 }: {
   subtotal: number
   orderType: string
@@ -14,6 +15,7 @@ export function calculateRestaurantCheckoutTotals({
   deliveryFee: number
   pickupDiscountPercent: number
   taxRate: number
+  currencyCode?: string
 }) {
   return calculateRestaurantTotals({
     subtotal,
@@ -22,5 +24,6 @@ export function calculateRestaurantCheckoutTotals({
     deliveryFee,
     pickupDiscountPercent,
     taxRate,
+    currencyCode,
   })
 }

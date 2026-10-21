@@ -29,7 +29,7 @@ export async function OrderListPage({ searchParams }: PageProps) {
   if (viewFilter === 'kitchen') {
     where.status = { in: ['open', 'sent_to_kitchen', 'in_progress', 'ready'] };
   } else if (viewFilter === 'expedite') {
-    where.status = { in: ['ready', 'served'] };
+    where.status = { in: ['ready', 'dispatched', 'served'] };
   } else if (viewFilter === 'cashier') {
     where.status = { in: ['served', 'completed'] };
   }
@@ -60,6 +60,7 @@ export async function OrderListPage({ searchParams }: PageProps) {
     sent_to_kitchen: 0,
     in_progress: 0,
     ready: 0,
+    dispatched: 0,
     served: 0,
     completed: 0,
     cancelled: 0,

@@ -24,6 +24,7 @@ import { PageBreadcrumbs } from "@/features/dashboard/components/PageBreadcrumbs
 import { cn } from '@/lib/utils'
 import { PlatformDatePicker } from '@/features/platform/components/PlatformDatePicker'
 import { formatCurrency } from "../lib/reportHelpers"
+import { toMinorUnits } from "@/features/storefront/lib/currency"
 
 interface LaborShift {
   id: string
@@ -55,15 +56,8 @@ interface TipPool {
 }
 
 const GET_LABOR_DATA = gql`
-  query GetLaborData($startDate: DateTime!, $endDate: DateTime!) {
-    shifts(
-      where: { startTime: { gte: $startDate, lte: $endDate } }
-      orderBy: { startTime: desc }
-    ) {
-      id
-      staff { id name }
-      startTime endTime clockIn clockOut role status hourlyRate hoursWorked laborCost
-    }
+  query GetLaborData($startDate: DateTime!, $endDate: DateTime!, $fromDate:String!, $toDate:String!) {
+    restaurantAttendance(fromDate:$fromDate,toDate:$toDate,skip:0,take:200)
     tipPools(
       where: {
         date: { gte: $startDate, lte: $endDate }
@@ -81,7 +75,7 @@ const GET_LABOR_DATA = gql`
     ) {
       id total createdAt
     }
-    storeSettings { currencyCode locale }
+    storeSettings { currencyCode locale timezone }
   }
 `
 
@@ -111,17 +105,24 @@ export function LaborReportPage() {
   const fetchData = useCallback(async () => {
     try {
       setLoading(true)
-      const startDate = new Date(dateRange.start)
-      startDate.setHours(0, 0, 0, 0)
-      const endDate = new Date(dateRange.end)
-      endDate.setHours(23, 59, 59, 999)
+      // Fetch a timezone-independent envelope, then apply venue calendar dates.
+      const startDate = new Date(Date.parse(dateRange.start + 'T00:00:00Z') - 2 * 86400000)
+      const endDate = new Date(Date.parse(dateRange.end + 'T00:00:00Z') + 3 * 86400000)
       const data = await request('/api/graphql', GET_LABOR_DATA, {
         startDate: startDate.toISOString(),
         endDate: endDate.toISOString(),
+        fromDate: dateRange.start, toDate: dateRange.end,
       })
-      setEntries((data as any).shifts || [])
-      setTipPools((data as any).tipPools || [])
-      const orders = (data as any).restaurantOrders || []
+      const attendance = (data as any).restaurantAttendance;
+      const actualEntries = [...attendance.entries]; let offset = 200; let more = attendance.hasMore;
+      while (more) {
+        const response: any = await request('/api/graphql', `query($fromDate:String!,$toDate:String!,$skip:Int!){restaurantAttendance(fromDate:$fromDate,toDate:$toDate,skip:$skip,take:200)}`, { fromDate: dateRange.start, toDate: dateRange.end, skip: offset });
+        actualEntries.push(...response.restaurantAttendance.entries); more = response.restaurantAttendance.hasMore; offset += 200;
+      }
+      const inRange = (value: string) => new Date(value).getTime() >= Date.parse(attendance.windowStart) && new Date(value).getTime() < Date.parse(attendance.windowEnd);
+      setEntries(actualEntries.map((entry: any) => ({ ...entry, startTime: entry.clockIn, endTime: entry.clockOut, status: entry.clockOut ? 'completed' : 'started', hoursWorked: entry.paidHours, laborCost: entry.paidHours * Number(entry.hourlyRate || 0) })));
+      setTipPools(((data as any).tipPools || []).filter((pool: any) => String(pool.date).slice(0, 10) >= dateRange.start && String(pool.date).slice(0, 10) <= dateRange.end))
+      const orders = ((data as any).restaurantOrders || []).filter((order: any) => inRange(order.createdAt))
       setTotalSales(orders.reduce((sum: number, o: any) => sum + Number(o.total || 0), 0))
       if ((data as any).storeSettings) {
         setCurrencyConfig({
@@ -166,7 +167,7 @@ export function LaborReportPage() {
   }
 
   const totalHours = filteredEntries.reduce((s, e) => s + (e.hoursWorked || 0), 0)
-  const totalLaborCostCents = filteredEntries.reduce((s, e) => s + Math.round((e.laborCost || 0) * 100), 0)
+  const totalLaborCostCents = filteredEntries.reduce((s, e) => s + toMinorUnits(e.laborCost || 0, currencyConfig.currencyCode), 0)
   const totalTips = Array.from(distributedTipsByStaff.values()).reduce((s, amount) => s + amount, 0)
   const laborPercentage = totalSales > 0 ? (totalLaborCostCents / totalSales) * 100 : 0
   const salesPerLaborHour = totalHours > 0 ? totalSales / totalHours : 0
@@ -176,7 +177,7 @@ export function LaborReportPage() {
     return {
       role: role.label,
       hours: roleEntries.reduce((s, e) => s + (e.hoursWorked || 0), 0),
-      cost: roleEntries.reduce((s, e) => s + Math.round((e.laborCost || 0) * 100), 0),
+      cost: roleEntries.reduce((s, e) => s + toMinorUnits(e.laborCost || 0, currencyConfig.currencyCode), 0),
       staff: new Set(roleEntries.map((e) => e.staff?.id).filter(Boolean)).size,
     }
   }).filter((r) => r.hours > 0).sort((a, b) => b.cost - a.cost)
@@ -196,7 +197,7 @@ export function LaborReportPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Labor Report</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            Staffing efficiency, payroll cost, and hourly productivity.
+            Recorded attendance by restaurant business date and estimated labor cost. Employee attestation and manager approval are shown in Time Clock. Tip amounts include pending allocations.
           </p>
         </div>
         {/* Date + role controls */}
@@ -339,7 +340,7 @@ export function LaborReportPage() {
                           {entry.hoursWorked?.toFixed(1) || '0.0'}
                         </TableCell>
                         <TableCell className="text-right font-semibold text-sm tabular-nums">
-                          {formatCurrency(Math.round((entry.laborCost || 0) * 100), currencyConfig)}
+                          {formatCurrency(toMinorUnits(entry.laborCost || 0, currencyConfig.currencyCode), currencyConfig)}
                         </TableCell>
                         <TableCell className="text-right text-sm tabular-nums text-emerald-600 dark:text-emerald-400 font-medium">
                           {formatCurrency(getTipCentsForEntry(entry), currencyConfig)}

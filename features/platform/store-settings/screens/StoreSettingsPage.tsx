@@ -1,5 +1,6 @@
 'use client'
 
+import { Label } from "@/components/ui/label"
 import { useMemo, useState, type ReactNode } from 'react'
 import { gql, request } from 'graphql-request'
 import { PageBreadcrumbs } from '@/features/dashboard/components/PageBreadcrumbs'
@@ -223,7 +224,7 @@ export function StoreSettingsPage({ initialSettings }: { initialSettings: StoreS
     locale: initialSettings?.locale || 'en-US',
     timezone: initialSettings?.timezone || 'America/New_York',
     countryCode: normalizeCountryCode(initialSettings?.countryCode || 'US'),
-    deliveryEnabled: initialSettings?.deliveryEnabled ?? true,
+    deliveryEnabled: initialSettings?.deliveryEnabled ?? false,
     deliveryPostalCodes: getUniqueDeliveryPostalCodes(initialSettings?.deliveryPostalCodes),
     taxRate: initialSettings?.taxRate || '8.75',
     deliveryFee: initialSettings?.deliveryFee || '4.99',
@@ -234,6 +235,9 @@ export function StoreSettingsPage({ initialSettings }: { initialSettings: StoreS
     promoBanner: initialSettings?.promoBanner || '',
   })
 
+  const [maxActiveOnlineOrders, setMaxActiveOnlineOrders] = useState(String(initialSettings?.hours?._ordering?.maxActiveOnlineOrders || 0))
+  const [orderingCutoff, setOrderingCutoff] = useState(String(initialSettings?.hours?._ordering?.cutoffMinutes || 0))
+  const [mealWindows, setMealWindows] = useState(JSON.stringify(initialSettings?.hours?._ordering?.mealPeriods || { breakfast: { open: '06:00', close: '11:00' }, lunch: { open: '11:00', close: '16:00' }, dinner: { open: '16:00', close: '02:00' } }))
   const [hours, setHours] = useState<HoursState>(parseHours(initialSettings?.hours))
 
   const deliveryPostalCodeOptions = useMemo<Option[]>(
@@ -329,7 +333,7 @@ export function StoreSettingsPage({ initialSettings }: { initialSettings: StoreS
         estimatedDelivery: form.estimatedDelivery,
         estimatedPickup: form.estimatedPickup,
         promoBanner: form.promoBanner,
-        hours: serializeHours(hours),
+        hours: { ...serializeHours(hours), _ordering: { ...(initialSettings?.hours?._ordering || {}), cutoffMinutes: Number(orderingCutoff), maxActiveOnlineOrders: Number(maxActiveOnlineOrders), mealPeriods: JSON.parse(mealWindows) } },
       }
 
       if (initialSettings?.id) {
@@ -661,6 +665,17 @@ export function StoreSettingsPage({ initialSettings }: { initialSettings: StoreS
             </div>
           </Section>
 
+          <div className="space-y-2 mb-4">
+            <Label>Stop new orders this many minutes before closing</Label>
+            <Label>Maximum active online orders (0 = no automatic limit)</Label>
+            <Input aria-label="Maximum active online orders" type="number" min="0" max="1000" value={maxActiveOnlineOrders} onChange={e => setMaxActiveOnlineOrders(e.target.value)} />
+            <p className="text-sm text-muted-foreground">Counts open online orders and reserved checkouts, including uncertain payments. Served orders release capacity. Operators can still take POS orders.</p>
+            <Label>Ordering cutoff minutes before closing</Label>
+            <Input type="number" min="0" max="240" value={orderingCutoff} onChange={e => setOrderingCutoff(e.target.value)} />
+            <Label>Menu service windows (venue-local open/close times)</Label>
+            <textarea className="w-full border rounded p-2" value={mealWindows} onChange={e => setMealWindows(e.target.value)} aria-label="Menu service windows" />
+            <p className="text-sm text-muted-foreground">All-day menu items remain available during operating hours. Other items must match their item and category service windows. Overnight windows are supported.</p>
+          </div>
           <WeeklyHoursEditor
             days={days}
             hours={hours}

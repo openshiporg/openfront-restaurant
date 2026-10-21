@@ -1,5 +1,6 @@
 import type { Context } from ".keystone/types";
 import { permissions } from "../access";
+import { allocateStockLots, reverseStockLotAllocation, stockHundredths } from "../utils/inventoryLots";
 import { appendAuditEvent } from "../utils/audit";
 import { getOrCreateIdempotencyAttempt, updateIdempotencyAttempt } from "../utils/idempotency";
 
@@ -14,7 +15,7 @@ function normalizeQuantity(value: unknown) {
   if (!Number.isFinite(quantity) || quantity <= 0) {
     throw new Error("Waste quantity must be greater than zero");
   }
-  return Math.round(quantity * 100) / 100;
+  return stockHundredths(quantity) / 100;
 }
 
 export async function recordWaste(
@@ -83,7 +84,7 @@ export async function recordWaste(
           loggedById: context.session?.itemId || null,
         },
       });
-      await tx.stockMovement.create({
+      const movement = await tx.stockMovement.create({
         data: {
           eventKey: `waste:${wasteLog.id}`,
           referenceType: "WasteLog",
@@ -95,6 +96,7 @@ export async function recordWaste(
           createdById: context.session?.itemId || null,
         },
       });
+      await allocateStockLots(tx, movement, ingredient, { purpose: "waste", actorId: context.session?.itemId });
       await tx.ingredient.update({
         where: { id: args.ingredientId },
         data: { currentStock: nextStock.toFixed(2) },
@@ -132,6 +134,7 @@ export async function adjustInventory(
   try {
     const quantity = Number(args.quantity);
     if (!Number.isFinite(quantity) || quantity === 0) throw new Error("Adjustment quantity must be non-zero");
+    stockHundredths(Math.abs(quantity));
     if (!args.reason?.trim()) throw new Error("Adjustment reason is required");
     if (!args.idempotencyKey?.trim()) throw new Error("Idempotency key is required");
     const prisma = context.prisma as any;
@@ -180,6 +183,7 @@ export async function adjustInventory(
           createdById: context.session?.itemId || null,
         },
       });
+      if (quantity < 0) await allocateStockLots(tx, movement, ingredient, { purpose: "count", actorId: context.session?.itemId });
       await tx.ingredient.update({
         where: { id: args.ingredientId },
         data: { currentStock: (Number(ingredient.currentStock || 0) + quantity).toFixed(2) },
@@ -239,7 +243,7 @@ export async function reverseWaste(
       const ingredient = await tx.ingredient.findUnique({ where: { id: waste.ingredientId } });
       if (!ingredient) throw new Error("Ingredient not found");
       const quantity = Number(waste.quantity || 0);
-      await tx.stockMovement.create({
+      const movement = await tx.stockMovement.create({
         data: {
           eventKey: args.idempotencyKey,
           referenceType: "WasteLogReversal",
@@ -251,6 +255,8 @@ export async function reverseWaste(
           createdById: context.session?.itemId || null,
         },
       });
+      const originalMovement = await tx.stockMovement.findUnique({ where: { eventKey: `waste:${waste.id}` } });
+      if (originalMovement) await reverseStockLotAllocation(tx, originalMovement.id, movement, ingredient, context.session?.itemId);
       await tx.ingredient.update({
         where: { id: waste.ingredientId },
         data: { currentStock: (Number(ingredient.currentStock || 0) + quantity).toFixed(2) },

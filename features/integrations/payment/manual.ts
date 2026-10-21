@@ -55,3 +55,5 @@ export async function getPaymentStatusFunction({ paymentId }: { paymentId: strin
 export async function generatePaymentLinkFunction({ paymentId }: { paymentId: string }) {
   return null;
 }
+
+export async function cancelPaymentFunction() { return { status: "cancelled" }; }

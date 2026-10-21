@@ -9,6 +9,7 @@ export default async function getCustomerOrders(
   { limit = 10, offset = 0 }: { limit?: number; offset?: number },
   context: Context
 ) {
+  if ((context.session as any)?.apiKeyId) throw new Error("Customer session required");
   const sessionUserId = context.session?.itemId;
 
   if (!sessionUserId) {

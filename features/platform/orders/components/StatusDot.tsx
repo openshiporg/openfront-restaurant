@@ -22,6 +22,7 @@ export const statusConfig = {
     dotClass: "bg-emerald-500 dark:bg-emerald-400 outline-3 -outline-offset-1 outline-emerald-100 dark:outline-emerald-900/50",
     color: "emerald" 
   },
+  dispatched: { label: "Dispatched", dotClass: "bg-indigo-500 outline-3 -outline-offset-1 outline-indigo-100", color: "indigo" },
   served: { 
     label: "Served", 
     dotClass: "bg-purple-500 dark:bg-purple-400 outline-3 -outline-offset-1 outline-purple-100 dark:outline-purple-900/50",

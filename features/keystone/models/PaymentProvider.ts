@@ -4,15 +4,17 @@ import { text, checkbox, json, relationship } from "@keystone-6/core/fields";
 import { isSignedIn, permissions } from "../access";
 import { trackingFields } from "./trackingFields";
 
+const canConfigureProvider = (args: any) => isSignedIn(args) && permissions.canManagePayments(args);
+
 export const PaymentProvider = list({
   access: {
     operation: {
       query: ({ session }) =>
         permissions.canReadPayments({ session }) ||
         permissions.canManagePayments({ session }),
-      create: permissions.canManagePayments,
-      update: permissions.canManagePayments,
-      delete: permissions.canManagePayments,
+      create: canConfigureProvider,
+      update: canConfigureProvider,
+      delete: canConfigureProvider,
     },
   },
   ui: {
@@ -39,6 +41,7 @@ export const PaymentProvider = list({
       defaultValue: true,
     }),
     credentials: json({
+      access: { read: () => false, create: canConfigureProvider, update: canConfigureProvider },
       defaultValue: {},
     }),
     metadata: json({

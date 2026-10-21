@@ -77,7 +77,7 @@ export function PaymentProviderListPageClient({
     return { where, take: pageSize, skip: (currentPage - 1) * pageSize, orderBy }
   }, [list, currentSearchParams, currentPage, pageSize, searchString])
 
-  const querySelectedFields = `id name code isInstalled credentials metadata createdAt`
+  const querySelectedFields = `id name code isInstalled metadata createdAt`
 
   const { data: queryData, error: queryError } = useListItemsQuery(
     { listKey: list.key, variables, selectedFields: querySelectedFields },
@@ -161,7 +161,6 @@ export function PaymentProviderListPageClient({
             data?.items?.map((provider: any) => {
               const isConnected = provider.isInstalled
               const typeLabel = PROVIDER_TYPE_LABELS[provider.code] || provider.name || 'Unknown'
-              const hasCredentials = provider.credentials && Object.keys(provider.credentials).length > 0
 
               return (
                 <div
@@ -198,7 +197,7 @@ export function PaymentProviderListPageClient({
 
                           {/* Credentials status */}
                           <span className="text-[11px] text-muted-foreground">
-                            {hasCredentials ? 'Credentials configured' : 'No credentials'}
+                            {'Credentials are write-only'}
                           </span>
 
                         </div>

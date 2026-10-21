@@ -1,5 +1,7 @@
 import crypto from "crypto";
+import { claimCheckoutSession, checkoutCartSignature } from "../utils/checkoutReservation";
 import type { Context } from ".keystone/types";
+import { snapshotCheckoutRecipes } from "../utils/inventoryRecipeSnapshot";
 import { createPayment } from "../utils/paymentProviderAdapter";
 import { calculateRestaurantTotals } from "../../lib/restaurant-order-pricing";
 import { assertCanAccessCart } from "../utils/cartAccess";
@@ -34,12 +36,12 @@ export default async function initiatePaymentSession(
   { cartId, paymentProviderId }: InitiatePaymentSessionArgs,
   context: Context
 ) {
-  await assertCanAccessCart(context, cartId, "write");
+  await assertCanAccessCart(context, cartId, "checkout");
   const sudo = context.sudo();
-  const cart = await sudo.query.Cart.findOne({
+  let cart = await sudo.query.Cart.findOne({
     where: { id: cartId },
     query: `
-      id updatedAt orderType deliveryAddress deliveryCity deliveryCountryCode deliveryZip tipPercent
+      id updatedAt orderType email customerName customerPhone deliveryAddress deliveryAddress2 deliveryCity deliveryState deliveryCountryCode deliveryZip tipPercent user { id }
       order { id }
       paymentCollection {
         id amount
@@ -55,6 +57,15 @@ export default async function initiatePaymentSession(
   if (!cart) throw new Error("Cart not found");
   if (cart.order?.id) throw new Error("Completed carts cannot start another payment");
   if (!cart.items?.length) throw new Error("Cart is empty");
+  // A provider attempt owns its immutable quote until its outcome is resolved.
+  // Retrying must not create a differently priced intent after a catalog edit.
+  const activeAttempt = cart.paymentCollection?.paymentSessions?.find((session: any) =>
+    session.isSelected && session.data?.checkoutQuote && ["initializing", "provider_pending", "ready", "unknown", "finalizing", "cancelling"].includes(session.data?.state)
+  );
+  if (activeAttempt) {
+    if (activeAttempt.paymentProvider?.code !== paymentProviderId) throw new Error("Resolve the existing payment attempt before changing provider");
+    if (activeAttempt.isInitiated) return sudo.query.PaymentSession.findOne({ where: { id: activeAttempt.id }, query: SESSION_QUERY });
+  }
 
   const provider = await sudo.query.PaymentProvider.findOne({
     where: { code: paymentProviderId },
@@ -67,7 +78,7 @@ export default async function initiatePaymentSession(
     throw new Error(`Payment provider ${paymentProviderId} is not installed and configured`);
   }
 
-  const validatedItems = await Promise.all(
+  const validatedItems = activeAttempt?.data?.checkoutQuote?.items || await Promise.all(
     cart.items.map((item: any) => validateCartItemInput(context, {
       menuItemId: item.menuItem?.id,
       quantity: item.quantity,
@@ -75,24 +86,24 @@ export default async function initiatePaymentSession(
       specialInstructions: item.specialInstructions,
     }))
   );
-  const subtotal = validatedItems.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
+  const subtotal = validatedItems.reduce((sum: number, item: any) => sum + item.unitPrice * item.quantity, 0);
   const settings = await getStoreDeliverySettings(context);
-  const currency = settings?.currencyCode || "USD";
-  assertDeliveryAddressComplete({
+  const currency = activeAttempt?.data?.checkoutQuote?.currencyCode || settings?.currencyCode || "USD";
+  if (!activeAttempt?.data?.checkoutQuote) assertDeliveryAddressComplete({
     orderType: cart.orderType,
     deliveryAddress: cart.deliveryAddress,
     deliveryCity: cart.deliveryCity,
     deliveryCountryCode: cart.deliveryCountryCode,
     deliveryZip: cart.deliveryZip,
   });
-  assertDeliveryAddressEligible({
+  if (!activeAttempt?.data?.checkoutQuote) assertDeliveryAddressEligible({
     orderType: cart.orderType,
     storeSettings: settings,
     deliveryCountryCode: cart.deliveryCountryCode,
     deliveryZip: cart.deliveryZip,
   });
 
-  const pricing = calculateRestaurantTotals({
+  const pricing = activeAttempt?.data?.checkoutQuote?.pricing || calculateRestaurantTotals({
     subtotal,
     orderType: cart.orderType,
     tipPercent: cart.tipPercent,
@@ -106,12 +117,14 @@ export default async function initiatePaymentSession(
     throw new Error(`Delivery orders require a minimum subtotal of ${settings?.deliveryMinimum || "0.00"}.`);
   }
   const amount = pricing.total;
-  const idempotencyKey = sessionKey({
+  const { paymentCollection: _collection, ...quotedCart } = cart;
+  const checkoutQuote = activeAttempt?.data?.checkoutQuote || { version: 1, pricingPolicy: { taxRate: settings?.taxRate || 0, currencyCode: currency, deliveryFee: settings?.deliveryFee, deliveryMinimum: settings?.deliveryMinimum, pickupDiscount: settings?.pickupDiscount }, cart: quotedCart, cartSignature: checkoutCartSignature(cart), items: validatedItems, pricing: { ...pricing, subtotal }, currencyCode: currency, createdAt: new Date().toISOString() };
+  const idempotencyKey = activeAttempt?.idempotencyKey || sessionKey({
     cartId,
     cartUpdatedAt: cart.updatedAt,
     provider: provider.code,
     amount,
-    items: validatedItems.map((item) => ({
+    items: validatedItems.map((item: any) => ({
       menuItemId: item.menuItem.id,
       quantity: item.quantity,
       modifierIds: item.modifiers.map((modifier: any) => modifier.id).sort(),
@@ -119,87 +132,42 @@ export default async function initiatePaymentSession(
     })),
   });
 
-  let collection = cart.paymentCollection;
-  if (!collection) {
-    collection = await sudo.query.PaymentCollection.createOne({
-      data: { cart: { connect: { id: cart.id } }, amount, description: "default" },
-      query: "id amount paymentSessions { id idempotencyKey isSelected isInitiated amount data paymentProvider { id code } }",
-    });
-  } else if (Number(collection.amount || 0) !== amount) {
-    await sudo.query.PaymentCollection.updateOne({ where: { id: collection.id }, data: { amount } });
+  const reserved = await claimCheckoutSession(context.prisma, { cart, providerId: provider.id, providerCode: provider.code, checkoutQuote, fingerprint: idempotencyKey });
+  const paymentSession = reserved.session;
+  const reservedQuote = paymentSession.data.checkoutQuote;
+  if (paymentSession.isInitiated) return sudo.query.PaymentSession.findOne({ where: { id: paymentSession.id }, query: SESSION_QUERY });
+  try { await snapshotCheckoutRecipes(context, paymentSession.id, reservedQuote.items); }
+  catch (error) {
+    // Only a never-started provider attempt may be released on local validation
+    // failure. An uncertain external attempt keeps its quote and original key.
+    await (context.prisma as any).$transaction(async (tx: any) => {
+      const current = await tx.paymentSession.findUnique({ where: { id: paymentSession.id } });
+      if (current?.data?.state === "initializing") await tx.paymentSession.update({ where: { id: current.id }, data: { isSelected: false, data: { ...current.data, state: "failed", error: "Production recipe validation failed before provider initiation" } } });
+    }, { isolationLevel: "Serializable" });
+    throw error;
   }
-
-  let paymentSession = collection.paymentSessions?.find(
-    (candidate: any) => candidate.idempotencyKey === idempotencyKey
-  );
-  if (!paymentSession) {
-    try {
-      paymentSession = await sudo.query.PaymentSession.createOne({
-        data: {
-          paymentCollection: { connect: { id: collection.id } },
-          paymentProvider: { connect: { id: provider.id } },
-          amount,
-          idempotencyKey,
-          isSelected: true,
-          isInitiated: false,
-          data: { providerCode: provider.code, state: "initializing" },
-        },
-        query: SESSION_QUERY,
-      });
-    } catch (error) {
-      const matches = await sudo.query.PaymentSession.findMany({
-        where: { idempotencyKey: { equals: idempotencyKey } },
-        query: SESSION_QUERY,
-        take: 1,
-      });
-      paymentSession = matches[0];
-      if (!paymentSession) throw error;
-    }
-  }
-
-  for (const candidate of collection.paymentSessions || []) {
-    if (candidate.id !== paymentSession.id && candidate.isSelected) {
-      await sudo.query.PaymentSession.updateOne({ where: { id: candidate.id }, data: { isSelected: false } });
-    }
-  }
-  if (paymentSession.isInitiated) {
-    if (!paymentSession.isSelected) {
-      await sudo.query.PaymentSession.updateOne({ where: { id: paymentSession.id }, data: { isSelected: true } });
-    }
-    return sudo.query.PaymentSession.findOne({ where: { id: paymentSession.id }, query: SESSION_QUERY });
-  }
-
+  const shouldInitiate = await (context.prisma as any).$transaction(async (tx: any) => {
+    const current = await tx.paymentSession.findUnique({ where: { id: paymentSession.id } });
+    if (!current?.isSelected || ["cancelled", "cancelling"].includes(current.data?.state)) throw new Error("Checkout was cancelled before payment initiation");
+    if (current.isInitiated) return false;
+    await tx.paymentSession.update({ where: { id: current.id }, data: { data: { ...current.data, state: "provider_pending" } } });
+    return true;
+  }, { isolationLevel: "Serializable" });
+  if (!shouldInitiate) return sudo.query.PaymentSession.findOne({ where: { id: paymentSession.id }, query: SESSION_QUERY });
   const isManual = provider.code === "pp_system_default" || provider.code.startsWith("pp_manual");
   try {
     const providerData = isManual
       ? { providerCode: provider.code, status: "pending" }
-      : await createPayment({
-          provider,
-          cart: { ...cart, subtotal },
-          amount,
-          currency: currency.toLowerCase(),
-          idempotencyKey,
-        });
-    return sudo.query.PaymentSession.updateOne({
-      where: { id: paymentSession.id },
-      data: {
-        isSelected: true,
-        isInitiated: true,
-        data: { ...providerData, providerCode: provider.code, state: "ready" },
-      },
-      query: SESSION_QUERY,
-    });
+      : await createPayment({ provider, cart: { ...reservedQuote.cart, subtotal: reservedQuote.pricing.subtotal }, amount: reservedQuote.pricing.total, currency: reservedQuote.currencyCode.toLowerCase(), idempotencyKey: paymentSession.idempotencyKey });
+    await (context.prisma as any).$transaction(async (tx: any) => {
+      const current = await tx.paymentSession.findUnique({ where: { id: paymentSession.id } });
+      if (!current?.isSelected || ["cancelled", "cancelling"].includes(current.data?.state)) throw new Error("Checkout was cancelled during initiation");
+      if (!current.isInitiated) await tx.paymentSession.update({ where: { id: current.id }, data: { isInitiated: true, data: { ...providerData, providerCode: provider.code, state: "ready", checkoutQuote: reservedQuote } } });
+    }, { isolationLevel: "Serializable" });
+    return sudo.query.PaymentSession.findOne({ where: { id: paymentSession.id }, query: SESSION_QUERY });
   } catch (error) {
-    await sudo.query.PaymentSession.updateOne({
-      where: { id: paymentSession.id },
-      data: {
-        data: {
-          providerCode: provider.code,
-          state: "failed",
-          error: error instanceof Error ? error.message : "Provider initiation failed",
-        },
-      },
-    });
+    const current = await (context.prisma as any).paymentSession.findUnique({ where: { id: paymentSession.id } });
+    if (!current?.isInitiated && current?.isSelected && current.data?.state === "provider_pending") await (context.prisma as any).paymentSession.update({ where: { id: paymentSession.id }, data: { data: { ...current.data, state: "unknown", error: "Provider initiation outcome is uncertain; retry the original attempt" } } });
     throw error;
   }
 }

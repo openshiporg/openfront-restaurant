@@ -1,5 +1,8 @@
 'use client'
 
+import { OperationsRecovery } from "../components/OperationsRecovery";
+import { StockTransfer } from "../components/StockTransfer";
+import { StockCount } from "../components/StockCount"
 import React, { useState, useEffect, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -24,7 +27,6 @@ import {
   Boxes,
   AlertTriangle,
   Edit2,
-  Trash2,
 } from 'lucide-react'
 import { gql, request } from 'graphql-request'
 import { cn } from '@/lib/utils'
@@ -88,12 +90,6 @@ const UPDATE_INGREDIENT = gql`
   }
 `
 
-const DELETE_INGREDIENT = gql`
-  mutation DeleteIngredient($id: ID!) {
-    deleteIngredient(where: { id: $id }) { id }
-  }
-`
-
 const EMPTY_FORM = {
   name: '',
   unit: 'each',
@@ -112,7 +108,6 @@ export function IngredientsPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [form, setForm] = useState({ ...EMPTY_FORM })
   const [isSaving, setIsSaving] = useState(false)
-  const [deletingId, setDeletingId] = useState<string | null>(null)
 
   const fetchData = useCallback(async () => {
     try {
@@ -152,9 +147,8 @@ export function IngredientsPage() {
     try {
       const data = {
         name: form.name.trim(),
-        unit: form.unit,
+        ...(!editingId ? { unit: form.unit } : {}),
         category: form.category,
-        currentStock: form.currentStock ? parseFloat(form.currentStock) : null,
         parLevel: form.parLevel ? parseFloat(form.parLevel) : null,
         costPerUnit: form.costPerUnit || null,
       }
@@ -169,19 +163,6 @@ export function IngredientsPage() {
       console.error(err)
     } finally {
       setIsSaving(false)
-    }
-  }
-
-  const handleDelete = async (id: string) => {
-    if (!confirm('Delete this ingredient?')) return
-    setDeletingId(id)
-    try {
-      await request('/api/graphql', DELETE_INGREDIENT, { id })
-      await fetchData()
-    } catch (err) {
-      console.error(err)
-    } finally {
-      setDeletingId(null)
     }
   }
 
@@ -214,6 +195,7 @@ export function IngredientsPage() {
 
   return (
     <div className="flex flex-col h-full bg-background">
+      <StockCount /><StockTransfer /><OperationsRecovery />
       <PageBreadcrumbs items={breadcrumbs} />
 
       {/* Header */}
@@ -371,13 +353,7 @@ export function IngredientsPage() {
                       >
                         <Edit2 size={13} />
                       </button>
-                      <button
-                        onClick={() => handleDelete(item.id)}
-                        disabled={deletingId === item.id}
-                        className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors disabled:opacity-40"
-                      >
-                        <Trash2 size={13} />
-                      </button>
+
                     </div>
                   </div>
                 )
@@ -392,6 +368,7 @@ export function IngredientsPage() {
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>{editingId ? 'Edit Ingredient' : 'New Ingredient'}</DialogTitle>
+            <p className="text-xs text-muted-foreground">Stock records are retained for receipt and lot history. Their stocking unit cannot change; create a new stock record and use a controlled transfer for unit conversion. Receipt/count actions maintain the stock balance.</p>
           </DialogHeader>
           <div className="space-y-4 pt-2">
             {/* Name */}
@@ -422,7 +399,7 @@ export function IngredientsPage() {
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">Unit</Label>
-                <Select value={form.unit} onValueChange={(v) => setForm((f) => ({ ...f, unit: v }))}>
+                <Select disabled={Boolean(editingId)} value={form.unit} onValueChange={(v) => setForm((f) => ({ ...f, unit: v }))}>
                   <SelectTrigger className="h-8 text-sm">
                     <SelectValue />
                   </SelectTrigger>
@@ -438,11 +415,11 @@ export function IngredientsPage() {
             {/* Stock + Par */}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label className="text-xs">Current Stock</Label>
+                <Label className="text-xs">Stock from receipt/count ledger</Label>
                 <Input
                   type="number"
                   value={form.currentStock}
-                  onChange={(e) => setForm((f) => ({ ...f, currentStock: e.target.value }))}
+                  disabled
                   placeholder="0"
                   className="h-8 text-sm"
                 />

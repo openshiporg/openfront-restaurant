@@ -21,7 +21,8 @@ import { StatusTabs } from '../components/StatusTabs'
 import { GiftCardDetailsComponent } from '../components/GiftCardDetailsComponent'
 import { Pagination } from '../../../dashboard/components/Pagination'
 import { FilterList } from '../../../dashboard/components/FilterList'
-import { CreateItemDrawerClientWrapper } from '@/features/platform/components/CreateItemDrawerClientWrapper'
+import { RestaurantNotifications } from '@/features/platform/payments/components/RestaurantNotifications'
+import { IssueGiftCard } from '@/features/platform/payments/components/IssueGiftCard'
 import { useDashboard } from '../../../dashboard/context/DashboardProvider'
 import { useSelectedFields } from '../../../dashboard/hooks/useSelectedFields'
 import { useSort } from '../../../dashboard/hooks/useSort'
@@ -234,12 +235,8 @@ export function GiftCardListPageClient({
         </div>
       </ScrollArea>
 
-      <CreateItemDrawerClientWrapper
-        listKey="gift-cards"
-        open={isCreateDrawerOpen}
-        onClose={() => setIsCreateDrawerOpen(false)}
-        onCreate={() => { window.location.reload() }}
-      />
+      <div className="p-4 space-y-4"><RestaurantNotifications /></div>
+      {isCreateDrawerOpen && <div className="p-4"><IssueGiftCard /><Button variant="outline" onClick={() => { setIsCreateDrawerOpen(false); window.location.reload(); }}>Close and refresh</Button></div>}
     </div>
   )
 }

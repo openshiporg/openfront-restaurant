@@ -1,26 +1,6 @@
-type NumericLike = number | string | null | undefined
+import { majorToMinorUnits } from "./currency-units"
 
-const NO_DIVISION_CURRENCIES = [
-  "krw",
-  "jpy",
-  "vnd",
-  "clp",
-  "pyg",
-  "xaf",
-  "xof",
-  "bif",
-  "djf",
-  "gnf",
-  "kmf",
-  "mga",
-  "rwf",
-  "xpf",
-  "htg",
-  "vuv",
-  "xag",
-  "xdr",
-  "xau",
-]
+type NumericLike = number | string | null | undefined
 
 function toNumber(value: NumericLike, fallback = 0): number {
   const parsed = typeof value === "string" ? Number.parseFloat(value) : Number(value)
@@ -28,9 +8,7 @@ function toNumber(value: NumericLike, fallback = 0): number {
 }
 
 function toMinorUnits(value: NumericLike, currencyCode = "USD"): number {
-  const parsed = toNumber(value)
-  const shouldDivideBy100 = !NO_DIVISION_CURRENCIES.includes(currencyCode.toLowerCase())
-  return shouldDivideBy100 ? Math.round(parsed * 100) : Math.round(parsed)
+  return majorToMinorUnits(toNumber(value), currencyCode)
 }
 
 export function isDeliveryOrder(orderType?: string | null): boolean {

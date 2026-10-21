@@ -85,6 +85,7 @@ export const User = list({
     }),
 
     apiKeys: relationship({
+      access: { create: () => false, update: () => false },
       ref: 'ApiKey.user',
       many: true,
       ui: {
@@ -99,6 +100,7 @@ export const User = list({
     }),
 
     restaurantOrders: relationship({
+      access: { create: () => false, update: () => false },
       ref: 'RestaurantOrder.customer',
       many: true,
       ui: {
@@ -112,6 +114,7 @@ export const User = list({
     }),
 
     carts: relationship({
+      access: { create: () => false, update: () => false },
       ref: 'Cart.user',
       many: true,
     }),
@@ -164,6 +167,7 @@ export const User = list({
 
     // Restaurant Staff Fields
     employeeId: text({
+      access: { create: permissions.canManageStaff, update: permissions.canManageStaff },
       db: { isNullable: true },
       ui: {
         description: 'Unique employee identifier (staff only)',
@@ -171,6 +175,7 @@ export const User = list({
     }),
 
     staffRole: select({
+      access: { create: permissions.canManageStaff, update: permissions.canManageStaff },
       type: 'string',
       options: [
         { label: 'Server', value: 'server' },
@@ -189,12 +194,14 @@ export const User = list({
     }),
 
     hireDate: timestamp({
+      access: { create: permissions.canManageStaff, update: permissions.canManageStaff },
       ui: {
         description: 'Date employee was hired',
       },
     }),
 
     hourlyRate: decimal({
+      access: { create: permissions.canManageStaff, update: permissions.canManageStaff },
       precision: 10,
       scale: 2,
       ui: {
@@ -214,12 +221,14 @@ export const User = list({
     }),
 
     staffPermissions: json({
+      access: { create: permissions.canManageStaff, update: permissions.canManageStaff },
       ui: {
         description: 'Additional staff permissions and settings',
       },
     }),
 
     isActive: checkbox({
+      access: { create: permissions.canManageStaff, update: permissions.canManageStaff },
       defaultValue: true,
       ui: {
         description: 'Whether this employee is currently active',
@@ -259,6 +268,7 @@ export const User = list({
 
     // Certifications
     certifications: json({
+      access: { create: permissions.canManageStaff, update: permissions.canManageStaff },
       ui: {
         description: 'Food handler, alcohol service, and other certifications (JSON)',
       },

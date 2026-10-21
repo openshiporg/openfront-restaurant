@@ -1,5 +1,10 @@
 'use client'
 
+import { CheckAllocationNotice } from '@/features/platform/payments/components/CheckAllocationNotice'
+import { RefundRecovery } from '@/features/platform/payments/components/RefundRecovery'
+import { CheckoutRecovery } from '@/features/platform/payments/components/CheckoutRecovery'
+import { CorrectionActions, ManagerApprovalQueue } from '@/features/platform/payments/components/CorrectionActions'
+import { equalTenderAmounts } from '@/features/keystone/utils/paymentState'
 import React, { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -61,6 +66,7 @@ interface Payment {
 }
 
 interface Order {
+  customer?: { id: string } | null
   id: string
   orderNumber: string
   status: string
@@ -88,6 +94,7 @@ interface SplitPayment {
 const GET_ORDER = gql`
   query GetOrder($id: ID!) {
     restaurantOrder(where: { id: $id }) {
+      customer { id }
       id
       orderNumber
       status
@@ -229,6 +236,7 @@ export function PaymentClient({ orderId }: PaymentClientProps) {
   const [checkingGiftCard, setCheckingGiftCard] = useState(false)
 
   // Split payment state
+  const [equalGuests, setEqualGuests] = useState('2')
   const [splitPayments, setSplitPayments] = useState<SplitPayment[]>([])
   const [splitDialogOpen, setSplitDialogOpen] = useState(false)
   const [newSplitAmount, setNewSplitAmount] = useState<string>('')
@@ -458,6 +466,13 @@ export function PaymentClient({ orderId }: PaymentClientProps) {
     }
   }
 
+  const planEqualTenders = () => {
+    try {
+      if (splitPayments.some(payment => payment.status !== 'pending')) throw new Error('Resolve existing tender attempts before replanning');
+      setSplitPayments(equalTenderAmounts(getRemainingBalance(), Number(equalGuests)).map(amount => ({ id: crypto.randomUUID(), amount, method: newSplitMethod === 'card' ? 'card' : 'cash', status: 'pending' })));
+    } catch (error) { alert(error instanceof Error ? error.message : 'Unable to plan equal tenders'); }
+  }
+
   // Split payment functions
   const addSplitPayment = () => {
     if (newSplitMethod === 'gift_card') {
@@ -577,6 +592,14 @@ export function PaymentClient({ orderId }: PaymentClientProps) {
 
   return (
     <div className="flex h-[calc(100vh-200px)] gap-4 p-4">
+      <aside className="w-80 shrink-0 space-y-3 overflow-y-auto">
+      <CheckoutRecovery />
+      <RefundRecovery />
+      <CheckAllocationNotice orderId={order.id} />
+      <ManagerApprovalQueue />
+      {order.payments.filter(payment => ["succeeded", "partially_refunded"].includes(payment.status)).map(payment => <CorrectionActions key={payment.id} actionType="refund_payment" targetId={payment.id} onComplete={() => fetchOrder()} />)}
+      </aside>
+
       {/* Order Summary */}
       <Card className="w-96 flex flex-col">
         <CardHeader>
@@ -844,6 +867,7 @@ export function PaymentClient({ orderId }: PaymentClientProps) {
 
             {/* Split Payment */}
             <TabsContent value="split" className="flex-1 flex flex-col">
+              <div className="space-y-2 pb-3"><Label>Plan equal tenders on this check</Label><Input type="number" min={2} max={50} value={equalGuests} onChange={event => setEqualGuests(event.target.value)} /><Button variant="outline" disabled={processing} onClick={planEqualTenders}>Divide remaining balance equally</Button><p className="text-xs text-muted-foreground">Allocates remainder cents across guests. All tenders settle this same check; no kitchen items are copied.</p></div>
               <div className="space-y-4 flex-1">
                 <div className="flex justify-between">
                   <div>

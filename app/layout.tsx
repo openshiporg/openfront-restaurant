@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Next x Keystone Starter",
+  title: "Openfront Restaurant",
   description: "Next, Keystone, and Tailwind Starter Template",
   icons: {
     icon: "/next-keystone-favicon.svg",

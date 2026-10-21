@@ -3,6 +3,7 @@ import {
   getMenuCategories,
   getMenuItems,
   getStoreSettings,
+  StorefrontDataUnavailableError,
 } from "@/features/storefront/lib/data/menu"
 import {
   type MenuCategory,
@@ -15,7 +16,10 @@ import { StoreInfoBar } from "@/features/storefront/components/StoreInfoBar"
 import { CategoryNav } from "@/features/storefront/components/CategoryNav"
 import { MenuSection } from "@/features/storefront/components/MenuSection"
 import { getMenuItemDescriptionText } from "@/features/storefront/lib/menu-item-utils"
+import { buildMenuVisibility, selectHeroMenuItems } from "@/features/storefront/lib/menu-visibility"
+import { getStorefrontRating } from "@/features/storefront/lib/store-rating-display"
 import { cn } from "@/lib/utils"
+import { StorefrontUnavailable } from "@/features/storefront/components/StorefrontUnavailable"
 
 export async function generateMetadata(): Promise<Metadata> {
   const storeSettings = await getStoreSettings()
@@ -29,30 +33,36 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function HomePage() {
-  const [categories, allItems, storeSettings] = await Promise.all([
-    getMenuCategories(),
-    getMenuItems(),
-    getStoreSettings(),
-  ])
-
-  if (!storeSettings) {
-    return null
+  let categories: MenuCategory[]
+  let allItems: MenuItem[]
+  let storeSettings: any
+  try {
+    [categories, allItems, storeSettings] = await Promise.all([
+      getMenuCategories(true),
+      getMenuItems(undefined, true),
+      getStoreSettings(true),
+    ])
+  } catch (error) {
+    if (!(error instanceof StorefrontDataUnavailableError)) throw error
+    return <StorefrontUnavailable
+      title="We can't load the menu right now"
+      message="Restaurant and menu information is temporarily unavailable. Please try again in a moment. If the problem continues, contact the restaurant directly."
+    />
   }
 
-  const featuredItems = allItems.filter((item: MenuItem) => item.featured).slice(0, 6)
-  const popularItems = allItems.filter((item: MenuItem) => item.popular).slice(0, 4)
+  if (!storeSettings) {
+    return <StorefrontUnavailable
+      title="Restaurant information isn't available yet"
+      message="Ordering details haven't been published. Please try again later or contact the restaurant directly."
+    />
+  }
 
-  const prioritizedHeroItems = [
-    ...featuredItems.filter((item: MenuItem) => !/bacon/i.test(item.name)),
-    ...popularItems.filter((item: MenuItem) => !/bacon/i.test(item.name)),
-    ...allItems.filter((item: MenuItem) => !/bacon/i.test(item.name)).slice(0, 6),
-  ]
+  const { featuredItems, popularItems, houseItems, categorySections, otherItems } = buildMenuVisibility<MenuItem, MenuCategory>(allItems, categories)
 
-  const heroCandidates = Array.from(
-    new Map(prioritizedHeroItems.map((item) => [item.id, item])).values()
-  ).slice(0, 4)
+  const heroCandidates = selectHeroMenuItems(allItems, featuredItems, popularItems)
 
   const currencyConfig = getCurrencyConfig(storeSettings)
+  const storefrontRating = getStorefrontRating(storeSettings.rating, storeSettings.reviewCount)
 
   const storeInfo: StoreInfo = {
     name: storeSettings.name,
@@ -78,37 +88,12 @@ export default async function HomePage() {
     heroSubheadline: storeSettings.heroSubheadline,
     heroTagline: storeSettings.heroTagline,
     promoBanner: storeSettings.promoBanner,
-    rating: parseFloat(storeSettings.rating) || undefined,
-    reviewCount: storeSettings.reviewCount || undefined,
+    rating: storefrontRating?.rating,
+    reviewCount: storefrontRating?.reviewCount,
   }
 
   const popularSectionId = "popular-dishes"
   const featuredSectionId = "house-picks"
-
-  const categorySections: Array<{
-    category: MenuCategory
-    items: MenuItem[]
-    sectionId: string
-  }> = categories
-    .map((category: MenuCategory) => {
-      const items = allItems.filter((item: MenuItem) => {
-        const categoryId =
-          typeof item.category === "object" && item.category?.id
-            ? item.category.id
-            : typeof item.category === "string"
-              ? item.category
-              : item.categoryId
-
-        return categoryId === category.id && !item.featured
-      })
-
-      return {
-        category,
-        items,
-        sectionId: `category-${category.id}`,
-      }
-    })
-    .filter((section: { items: MenuItem[] }) => section.items.length > 0)
 
   const navItems: Array<{ href: string; label: string }> = []
 
@@ -123,6 +108,7 @@ export default async function HomePage() {
   categorySections.forEach(({ category, sectionId }: { category: MenuCategory; sectionId: string }) => {
     navItems.push({ href: `#${sectionId}`, label: category.name })
   })
+  if (otherItems.length > 0) navItems.push({ href: "#other-menu-items", label: "More" })
 
   const menuHref = categorySections[0]?.sectionId
     ? `#${categorySections[0].sectionId}`
@@ -191,7 +177,7 @@ export default async function HomePage() {
               </div>
 
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-                {featuredItems.slice(0, 3).map((item: MenuItem) => (
+                {houseItems.map((item: MenuItem) => (
                   <MenuSection.FeatureCard
                     key={item.id}
                     item={item}
@@ -218,6 +204,16 @@ export default async function HomePage() {
                 className={sectionScrollMt}
               />
             ))}
+            {otherItems.length > 0 ? (
+              <MenuSection
+                sectionId="other-menu-items"
+                title="More to enjoy"
+                items={otherItems}
+                currencyCode={storeInfo.currencyCode}
+                locale={storeInfo.locale}
+                className={sectionScrollMt}
+              />
+            ) : null}
           </div>
         </div>
       </main>

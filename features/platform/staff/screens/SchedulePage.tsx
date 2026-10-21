@@ -71,7 +71,7 @@ const GET_SHIFTS = gql`
       clockOut
       hoursWorked
     }
-    users(where: { role: { isNot: null } }, orderBy: { name: asc }) {
+    users(where: { NOT: { role: null } }, orderBy: { name: asc }) {
       id
       name
       email

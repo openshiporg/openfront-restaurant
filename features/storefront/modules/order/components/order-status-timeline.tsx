@@ -5,6 +5,7 @@ export type OrderStatus =
   | "sent_to_kitchen"
   | "in_progress"
   | "ready"
+  | "dispatched"
   | "served"
   | "completed"
   | "cancelled";
@@ -21,7 +22,8 @@ const PICKUP_STEPS: StatusStep[] = [
   { status: "sent_to_kitchen", label: "Kitchen" },
   { status: "in_progress", label: "Preparing" },
   { status: "ready", label: "Ready" },
-  { status: "completed", label: "Picked up" },
+  { status: "served", label: "Picked up" },
+  { status: "completed", label: "Closed" },
 ];
 
 const DELIVERY_STEPS: StatusStep[] = [
@@ -29,8 +31,9 @@ const DELIVERY_STEPS: StatusStep[] = [
   { status: "sent_to_kitchen", label: "Kitchen" },
   { status: "in_progress", label: "Preparing" },
   { status: "ready", label: "Ready" },
-  { status: "served", label: "On the way" },
-  { status: "completed", label: "Delivered" },
+  { status: "dispatched", label: "On the way" },
+  { status: "served", label: "Delivered" },
+  { status: "completed", label: "Closed" },
 ];
 
 const DINE_IN_STEPS: StatusStep[] = [

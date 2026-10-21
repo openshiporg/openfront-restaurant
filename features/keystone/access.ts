@@ -1,7 +1,11 @@
+import { scopeAllowsPermission } from "./utils/apiKeyPolicy";
 export type Session = {
+  apiKeyId?: string
+  apiKeyScopes?: string[]
   itemId: string
   listKey: string
   data: {
+    isActive?: boolean
     name: string
     role: {
       id: string
@@ -47,59 +51,54 @@ type AccessArgs = {
 }
 
 export function isSignedIn({ session }: AccessArgs) {
-  return Boolean(session)
+  return Boolean(session && session.data?.isActive !== false && !session.apiKeyId && !session.apiKeyScopes)
 }
 
 // ─── Permissions (boolean checks) ───────────────────────────────────
 // Each reads a checkbox from session.data.role. auto-generated from Role model fields.
 
+export function hasPermission(session: Session | undefined, permission: string) {
+  if (!session || session.data?.isActive === false) return false;
+  const grantedByRole = (session.data?.role as any)?.[permission] === true;
+  if (session.apiKeyId || session.apiKeyScopes) {
+    return grantedByRole && scopeAllowsPermission(session.apiKeyScopes, permission);
+  }
+  return grantedByRole;
+}
+
 export const permissions = {
-  canAccessDashboard:       ({ session }: AccessArgs) => !!session?.data?.role?.canAccessDashboard,
-
-  canReadOrders:            ({ session }: AccessArgs) => !!session?.data?.role?.canReadOrders,
-  canManageOrders:          ({ session }: AccessArgs) => !!session?.data?.role?.canManageOrders,
-
-  canReadPayments:          ({ session }: AccessArgs) => !!session?.data?.role?.canReadPayments,
-  canManagePayments:        ({ session }: AccessArgs) => !!session?.data?.role?.canManagePayments,
-
-  canReadProducts:          ({ session }: AccessArgs) => !!session?.data?.role?.canReadProducts,
-  canManageProducts:        ({ session }: AccessArgs) => !!session?.data?.role?.canManageProducts,
-
-  canReadCart:              ({ session }: AccessArgs) => !!session?.data?.role?.canReadCart,
-  canManageCart:            ({ session }: AccessArgs) => !!session?.data?.role?.canManageCart,
-
-  canReadInventory:         ({ session }: AccessArgs) => !!session?.data?.role?.canReadInventory,
-  canManageInventory:       ({ session }: AccessArgs) => !!session?.data?.role?.canManageInventory,
-
-  canReadUsers:             ({ session }: AccessArgs) => !!session?.data?.role?.canReadUsers,
-  canManageUsers:           ({ session }: AccessArgs) => !!session?.data?.role?.canManageUsers,
-  canSeeOtherPeople:        ({ session }: AccessArgs) => !!session?.data?.role?.canSeeOtherPeople,
-  canEditOtherPeople:       ({ session }: AccessArgs) => !!session?.data?.role?.canEditOtherPeople,
-  canManagePeople:          ({ session }: AccessArgs) => !!session?.data?.role?.canManagePeople,
-
-  canReadRoles:             ({ session }: AccessArgs) => !!session?.data?.role?.canReadRoles,
-  canManageRoles:           ({ session }: AccessArgs) => !!session?.data?.role?.canManageRoles,
-
-  canReadKitchen:           ({ session }: AccessArgs) => !!session?.data?.role?.canReadKitchen,
-  canManageKitchen:         ({ session }: AccessArgs) => !!session?.data?.role?.canManageKitchen,
-
-  canReadTables:            ({ session }: AccessArgs) => !!session?.data?.role?.canReadTables,
-  canManageTables:          ({ session }: AccessArgs) => !!session?.data?.role?.canManageTables,
-
-  canReadStaff:             ({ session }: AccessArgs) => !!session?.data?.role?.canReadStaff,
-  canManageStaff:           ({ session }: AccessArgs) => !!session?.data?.role?.canManageStaff,
-
-  canManageSettings:        ({ session }: AccessArgs) => !!session?.data?.role?.canManageSettings,
-  canManageOnboarding:      ({ session }: AccessArgs) => !!session?.data?.role?.canManageOnboarding,
-
-  canReadVendors:           ({ session }: AccessArgs) => !!session?.data?.role?.canReadVendors,
-  canManageVendors:         ({ session }: AccessArgs) => !!session?.data?.role?.canManageVendors,
-
-  canReadGiftCards:         ({ session }: AccessArgs) => !!session?.data?.role?.canReadGiftCards,
-  canManageGiftCards:       ({ session }: AccessArgs) => !!session?.data?.role?.canManageGiftCards,
-
-  canReadDiscounts:         ({ session }: AccessArgs) => !!session?.data?.role?.canReadDiscounts,
-  canManageDiscounts:       ({ session }: AccessArgs) => !!session?.data?.role?.canManageDiscounts,
+  canAccessDashboard: ({ session }: AccessArgs) => hasPermission(session, "canAccessDashboard"),
+  canReadOrders: ({ session }: AccessArgs) => hasPermission(session, "canReadOrders"),
+  canManageOrders: ({ session }: AccessArgs) => hasPermission(session, "canManageOrders"),
+  canReadPayments: ({ session }: AccessArgs) => hasPermission(session, "canReadPayments"),
+  canManagePayments: ({ session }: AccessArgs) => hasPermission(session, "canManagePayments"),
+  canReadProducts: ({ session }: AccessArgs) => hasPermission(session, "canReadProducts"),
+  canManageProducts: ({ session }: AccessArgs) => hasPermission(session, "canManageProducts"),
+  canReadCart: ({ session }: AccessArgs) => hasPermission(session, "canReadCart"),
+  canManageCart: ({ session }: AccessArgs) => hasPermission(session, "canManageCart"),
+  canReadInventory: ({ session }: AccessArgs) => hasPermission(session, "canReadInventory"),
+  canManageInventory: ({ session }: AccessArgs) => hasPermission(session, "canManageInventory"),
+  canReadUsers: ({ session }: AccessArgs) => hasPermission(session, "canReadUsers"),
+  canManageUsers: ({ session }: AccessArgs) => hasPermission(session, "canManageUsers"),
+  canSeeOtherPeople: ({ session }: AccessArgs) => hasPermission(session, "canSeeOtherPeople"),
+  canEditOtherPeople: ({ session }: AccessArgs) => hasPermission(session, "canEditOtherPeople"),
+  canManagePeople: ({ session }: AccessArgs) => hasPermission(session, "canManagePeople"),
+  canReadRoles: ({ session }: AccessArgs) => hasPermission(session, "canReadRoles"),
+  canManageRoles: ({ session }: AccessArgs) => hasPermission(session, "canManageRoles"),
+  canReadKitchen: ({ session }: AccessArgs) => hasPermission(session, "canReadKitchen"),
+  canManageKitchen: ({ session }: AccessArgs) => hasPermission(session, "canManageKitchen"),
+  canReadTables: ({ session }: AccessArgs) => hasPermission(session, "canReadTables"),
+  canManageTables: ({ session }: AccessArgs) => hasPermission(session, "canManageTables"),
+  canReadStaff: ({ session }: AccessArgs) => hasPermission(session, "canReadStaff"),
+  canManageStaff: ({ session }: AccessArgs) => hasPermission(session, "canManageStaff"),
+  canManageSettings: ({ session }: AccessArgs) => hasPermission(session, "canManageSettings"),
+  canManageOnboarding: ({ session }: AccessArgs) => hasPermission(session, "canManageOnboarding"),
+  canReadVendors: ({ session }: AccessArgs) => hasPermission(session, "canReadVendors"),
+  canManageVendors: ({ session }: AccessArgs) => hasPermission(session, "canManageVendors"),
+  canReadGiftCards: ({ session }: AccessArgs) => hasPermission(session, "canReadGiftCards"),
+  canManageGiftCards: ({ session }: AccessArgs) => hasPermission(session, "canManageGiftCards"),
+  canReadDiscounts: ({ session }: AccessArgs) => hasPermission(session, "canReadDiscounts"),
+  canManageDiscounts: ({ session }: AccessArgs) => hasPermission(session, "canManageDiscounts"),
 }
 
 // ─── Rules (boolean or filter returns) ──────────────────────────────
@@ -107,26 +106,24 @@ export const permissions = {
 
 export const rules = {
   canManageOrders({ session }: AccessArgs) {
-    if (!isSignedIn({ session })) return false
     if (permissions.canManageOrders({ session })) return true
     return false
   },
 
   canManagePayments({ session }: AccessArgs) {
-    if (!isSignedIn({ session })) return false
     if (permissions.canManagePayments({ session })) return true
     return false
   },
 
   canReadPeople({ session }: AccessArgs) {
-    if (!session) return false
+    if (!isSignedIn({ session })) return false
     if (permissions.canSeeOtherPeople({ session })) return true
-    return { id: { equals: session.itemId } }
+    return { id: { equals: session?.itemId } }
   },
 
   canUpdatePeople({ session }: AccessArgs) {
-    if (!session) return false
+    if (!isSignedIn({ session })) return false
     if (permissions.canEditOtherPeople({ session })) return true
-    return { id: { equals: session.itemId } }
+    return { id: { equals: session?.itemId } }
   },
 }

@@ -1,101 +1,55 @@
 import * as cookie from "cookie";
 import type { Context } from ".keystone/types";
-import { permissions } from "../access";
+import { isSignedIn, permissions } from "../access";
+import { cartIdFromProof, verifyCartProof } from "./cartProof";
 
-type CartAccessMode = "read" | "write";
-
-function getRequestCartId(context: Context): string | undefined {
-  const cookieHeader = context.req?.headers?.cookie;
-  if (!cookieHeader) return undefined;
-  return cookie.parse(cookieHeader)._restaurant_cart_id;
+type CartAccessMode = "read" | "write" | "checkout";
+function requestProof(context: Context): string | undefined {
+  const headers = context.req?.headers as Record<string, any> | undefined;
+  const header = headers?.["x-restaurant-cart-proof"];
+  if (typeof header === "string") return header;
+  try { return cookie.parse(headers?.cookie || "")._restaurant_cart_proof; } catch { return undefined; }
 }
-
-function canBypassCartAccess(context: Context, mode: CartAccessMode) {
-  if (permissions.canManageOrders({ session: context.session })) return true;
-  if (mode === "read" && permissions.canReadOrders({ session: context.session })) return true;
-  return false;
+function canBypass(context: Context, mode: CartAccessMode) {
+  return permissions.canManageOrders({ session: context.session }) ||
+    (mode === "read" && permissions.canReadOrders({ session: context.session }));
 }
-
-function assertOwnership({
-  context,
-  cartId,
-  cartUserId,
-  mode,
-}: {
-  context: Context;
-  cartId: string;
-  cartUserId?: string | null;
-  mode: CartAccessMode;
-}) {
-  if (canBypassCartAccess(context, mode)) return;
-
-  const requestCartId = getRequestCartId(context);
-  const sessionItemId = context.session?.itemId;
-  const ownsByUser = Boolean(sessionItemId && cartUserId && cartUserId === sessionItemId);
-  const ownsByCookie = requestCartId === cartId;
-
-  if (!ownsByUser && !ownsByCookie) {
-    throw new Error("Access denied");
+export async function assertCanAccessCart(context: Context, cartId: string, mode: CartAccessMode = "write") {
+  const bypass = canBypass(context, mode);
+  const proof = requestProof(context);
+  const human = isSignedIn({ session: context.session });
+  const validProof = verifyCartProof(proof, cartId);
+  // Anonymous and scoped service callers cannot probe privileged cart lookups by ID.
+  if (!bypass && !human && !validProof) throw new Error("Cart not found");
+  const cart = await context.sudo().query.Cart.findOne({ where: { id: cartId }, query: "id user { id }" });
+  if (!cart) throw new Error("Cart not found");
+  if (!bypass) {
+    const owner = human && cart.user?.id === context.session?.itemId;
+    const guest = !cart.user?.id && validProof && !(context.session as any)?.apiKeyId;
+    if (!owner && !guest) throw new Error("Cart not found");
   }
-}
-
-export async function assertCanAccessCart(
-  context: Context,
-  cartId: string,
-  mode: CartAccessMode = "write"
-) {
-  const cart = await context.sudo().query.Cart.findOne({
-    where: { id: cartId },
-    query: `
-      id
-      user {
-        id
-      }
-    `,
-  });
-
-  if (!cart) {
-    throw new Error("Cart not found");
+  if (mode === "write") {
+    const state = await context.sudo().query.Cart.findOne({
+      where: { id: cartId }, query: "paymentCollection { paymentSessions { isSelected data paymentProvider { code } } }",
+    });
+    const reserved = state?.paymentCollection?.paymentSessions?.some((session: any) =>
+      session.isSelected && session.data?.checkoutQuote &&
+      ["initializing", "provider_pending", "ready", "unknown", "finalizing", "cancelling"].includes(session.data?.state));
+    if (reserved) throw new Error("Checkout is reserved. Resolve or cancel its payment before changing this cart.");
   }
-
-  assertOwnership({
-    context,
-    cartId: cart.id,
-    cartUserId: cart.user?.id,
-    mode,
-  });
-
   return cart;
 }
-
-export async function assertCanAccessCartItem(
-  context: Context,
-  cartItemId: string,
-  mode: CartAccessMode = "write"
-) {
-  const cartItem = await context.sudo().query.CartItem.findOne({
-    where: { id: cartItemId },
-    query: `
-      id
-      cart {
-        id
-        user {
-          id
-        }
-      }
-    `,
-  });
-
-  if (!cartItem?.cart?.id) {
-    throw new Error("Cart not found for this item");
+export async function assertCanAccessCartItem(context: Context, cartItemId: string, mode: CartAccessMode = "write") {
+  const bypass = canBypass(context, mode);
+  const proof = requestProof(context);
+  const proofCartId = cartIdFromProof(proof);
+  if (!bypass && !isSignedIn({ session: context.session })) {
+    if (!proofCartId || !verifyCartProof(proof, proofCartId)) throw new Error("Cart item not found");
+    await assertCanAccessCart(context, proofCartId, mode);
   }
-
-  assertOwnership({
-    context,
-    cartId: cartItem.cart.id,
-    cartUserId: cartItem.cart.user?.id,
-    mode,
-  });
-
-  return cartItem;
+  // This projection contains no customer, amount or provider data.
+  const item = await context.sudo().query.CartItem.findOne({ where: { id: cartItemId }, query: "id cart { id user { id } }" });
+  if (!item?.cart?.id) throw new Error("Cart item not found");
+  await assertCanAccessCart(context, item.cart.id, mode);
+  return item;
 }

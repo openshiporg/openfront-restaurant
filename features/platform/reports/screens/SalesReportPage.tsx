@@ -86,7 +86,7 @@ export async function SalesReportPage({ searchParams }: PageProps) {
 
     const statsData = [
       {
-        name: "Total Revenue",
+        name: "Net Collected (Completed Checks)",
         value: formatCurrency(salesMetrics.totalRevenue, currencyConfig),
         previous: formatCurrency(salesMetrics.previousRevenue, currencyConfig),
         change: salesMetrics.previousRevenue > 0
@@ -154,7 +154,7 @@ export async function SalesReportPage({ searchParams }: PageProps) {
           <div>
             <h1 className="text-2xl font-semibold tracking-tight">Sales Report</h1>
             <p className="text-sm text-muted-foreground mt-0.5">
-              Revenue performance and key transaction metrics.
+              Net collected on completed checks after refunds. Tax and tips show original check charges; cash-close reports attribute money to its actual processing period.
             </p>
           </div>
           <div className="flex items-center gap-2">

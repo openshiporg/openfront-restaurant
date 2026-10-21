@@ -1,3 +1,4 @@
+import { stockQuantity } from "../../lib/stock-units";
 import { list, graphql } from "@keystone-6/core";
 import {
   text,
@@ -14,10 +15,10 @@ import { trackingFields } from "./trackingFields";
 export const Recipe = list({
   access: {
     operation: {
-      query: () => true, // Public read for storefront
-      create: permissions.canManageProducts,
-      update: permissions.canManageProducts,
-      delete: permissions.canManageProducts,
+      query: (args) => permissions.canReadProducts(args) || permissions.canManageProducts(args) || permissions.canReadInventory(args) || permissions.canManageInventory(args),
+      create: (args) => permissions.canManageProducts(args) || permissions.canManageInventory(args),
+      update: (args) => permissions.canManageProducts(args) || permissions.canManageInventory(args),
+      delete: (args) => permissions.canManageProducts(args) || permissions.canManageInventory(args),
     },
   },
   ui: {
@@ -64,10 +65,10 @@ export const Recipe = list({
             if (!ri.ingredientId) continue;
             const ingredient = await context.sudo().query.Ingredient.findOne({
               where: { id: ri.ingredientId },
-              query: 'costPerUnit'
+              query: 'costPerUnit unit'
             });
             if (ingredient?.costPerUnit) {
-              total += parseFloat(ingredient.costPerUnit) * (ri.quantity || 0);
+              total += parseFloat(ingredient.costPerUnit) * stockQuantity(ri.quantity, ri.unit, ingredient.unit || ri.unit || "each");
             }
           }
           return total;
@@ -86,10 +87,10 @@ export const Recipe = list({
             if (!ri.ingredientId) continue;
             const ingredient = await context.sudo().query.Ingredient.findOne({
               where: { id: ri.ingredientId },
-              query: 'costPerUnit'
+              query: 'costPerUnit unit'
             });
             if (ingredient?.costPerUnit) {
-              total += parseFloat(ingredient.costPerUnit) * (ri.quantity || 0);
+              total += parseFloat(ingredient.costPerUnit) * stockQuantity(ri.quantity, ri.unit, ingredient.unit || ri.unit || "each");
             }
           }
           return total / ((item as any).yield || 1);
@@ -115,14 +116,17 @@ export const Recipe = list({
             if (!ri.ingredientId) continue;
             const ingredient = await context.sudo().query.Ingredient.findOne({
               where: { id: ri.ingredientId },
-              query: 'costPerUnit'
+              query: 'costPerUnit unit'
             });
             if (ingredient?.costPerUnit) {
-              total += parseFloat(ingredient.costPerUnit) * (ri.quantity || 0);
+              total += parseFloat(ingredient.costPerUnit) * stockQuantity(ri.quantity, ri.unit, ingredient.unit || ri.unit || "each");
             }
           }
           const costPerServing = total / (item.yield || 1);
-          return (costPerServing / parseFloat(menuItem.price)) * 100;
+          const settings = await context.sudo().query.StoreSettings.findOne({ where: { id: "1" }, query: "currencyCode" });
+          const digits = new Intl.NumberFormat("en", { style: "currency", currency: settings?.currencyCode || "USD" }).resolvedOptions().maximumFractionDigits;
+          const menuPriceMajor = Number(menuItem.price) / 10 ** (digits ?? 2);
+          return (costPerServing / menuPriceMajor) * 100;
         }
       })
     }),

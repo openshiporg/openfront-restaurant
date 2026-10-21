@@ -29,6 +29,7 @@ interface RestaurantOrder {
   deliveryCountryCode?: string;
   createdAt: string;
   updatedAt: string;
+  checkAllocation?: { sourceOrderNumber: string; ordinal: number; guestCount: number; allocatedTotals: { total: number } } | null;
   orderItems: any[];
   payments?: any[];
 }
@@ -78,6 +79,7 @@ export default function OrderDetailsTemplate({ order }: OrderDetailsTemplateProp
 
           <div className="space-y-6">
             <div className="storefront-surface bg-background p-6">
+              {order.checkAllocation && <p className="border rounded p-3 mb-3">Independent check {order.checkAllocation.ordinal} of {order.checkAllocation.guestCount} from service {order.checkAllocation.sourceOrderNumber}. Your allocated charge is shown in the total. Any food details below describe the original service and are not charged again in full.</p>}
               <OrderItemsList items={order.orderItems} />
             </div>
             <div className="storefront-surface bg-background p-6">

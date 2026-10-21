@@ -10,12 +10,15 @@ type Density = 'comfortable' | 'compact'
 type ViewMode = 'tickets' | 'all-day'
 
 type TicketItem = {
+  modifiers?: Array<{ name?: string; label?: string; value?: string }>;
+  seatNumber?: number | null;
+  courseNumber?: number | null;
   id: string
   name: string
   quantity: number
   notes?: string | null
   station: string
-  status: 'new' | 'in_progress' | 'fulfilled'
+  status: 'new' | 'in_progress' | 'fulfilled' | 'cancelled'
   fulfilledAt?: string | null
 }
 
@@ -405,9 +408,11 @@ function TicketCard({
       <div className={density === 'compact' ? 'space-y-1.5 mb-2' : 'space-y-2 mb-3'}>
         {(ticket.items || []).map((item) => {
           const done = item.status === 'fulfilled'
+          const cancelled = item.status === 'cancelled'
           return (
             <button
               key={item.id}
+              disabled={cancelled || ticket.status === 'served' || ticket.status === 'cancelled'}
               onClick={() => onToggleItem(ticket.id, item.id, !done)}
               className={`w-full text-left rounded border px-3 py-2 transition-colors ${
                 done
@@ -420,10 +425,12 @@ function TicketCard({
                   {item.quantity}x {item.name}
                 </div>
                 <div className={`text-[11px] uppercase ${done ? 'text-emerald-700' : 'text-muted-foreground'}`}>
-                  {done ? 'Fulfilled' : 'Mark Done'}
+                  {cancelled ? 'Cancelled' : done ? 'Fulfilled' : 'Mark Done'}
                 </div>
               </div>
-              {item.notes && density === 'comfortable' && <div className="text-xs italic text-muted-foreground mt-1">{item.notes}</div>}
+              {(item.seatNumber || item.courseNumber) && <div className="text-xs font-semibold">{item.seatNumber ? `Seat ${item.seatNumber} · ` : ''}Course {item.courseNumber || 1}</div>}
+              {item.modifiers?.map((modifier, index) => <div key={index} className="text-sm font-semibold">+ {modifier.name || modifier.label || modifier.value}</div>)}
+              {item.notes && <div className="text-xs italic text-muted-foreground mt-1">{item.notes}</div>}
             </button>
           )
         })}

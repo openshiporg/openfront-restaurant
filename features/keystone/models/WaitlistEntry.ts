@@ -14,9 +14,9 @@ export const WaitlistEntry = list({
   access: {
     operation: {
       query: permissions.canReadKitchen,
-      create: permissions.canManageKitchen,
-      update: permissions.canManageKitchen,
-      delete: permissions.canManageKitchen,
+      create: () => false,
+      update: () => false,
+      delete: () => false,
     },
   },
   ui: {
@@ -53,6 +53,7 @@ export const WaitlistEntry = list({
     status: select({
       type: "string",
       options: [
+        { label: "Completed", value: "completed" },
         { label: "Waiting", value: "waiting" },
         { label: "Notified", value: "notified" },
         { label: "Seated", value: "seated" },

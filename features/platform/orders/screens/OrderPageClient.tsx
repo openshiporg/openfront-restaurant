@@ -1,5 +1,6 @@
 "use client";
 
+import { CheckAllocationNotice } from "@/features/platform/payments/components/CheckAllocationNotice";
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import {
@@ -40,6 +41,7 @@ const NEXT_STATUS: Record<string, string | null> = {
   sent_to_kitchen: "in_progress",
   in_progress: "ready",
   ready: "served",
+  dispatched: "served",
   served: "completed",
   completed: null,
   cancelled: null,
@@ -55,7 +57,10 @@ export function OrderPageClient({ order, currencyCode = "USD", locale = "en-US" 
 
   const handleStatusChange = (newStatus: string) => {
     startTransition(async () => {
-      const result = await updateOrderStatus(order.id, newStatus);
+      const reason = order.orderType === "delivery" && (["dispatched", "served"].includes(newStatus) || currentStatus === "dispatched")
+        ? window.prompt(newStatus === "dispatched" ? "Courier name / handoff reference" : newStatus === "ready" ? "Failed delivery / return-to-restaurant reference" : "Delivery confirmation reference / recipient acknowledgement")?.trim() : undefined;
+      if (order.orderType === "delivery" && (["dispatched", "served"].includes(newStatus) || currentStatus === "dispatched") && !reason) return;
+      const result = await updateOrderStatus(order.id, newStatus, reason);
       if (result.success) {
         setCurrentStatus(newStatus);
         toast.success(`Order updated to ${prettyStatus(newStatus)}`);
@@ -73,16 +78,17 @@ export function OrderPageClient({ order, currencyCode = "USD", locale = "en-US" 
   const activeStatus =
     statusConfig[currentStatus as keyof typeof statusConfig] || statusConfig.open;
 
-  const suggestedNextStatus = NEXT_STATUS[currentStatus] || null;
+  const suggestedNextStatus = currentStatus === "ready" && order.orderType === "delivery" ? "dispatched" : NEXT_STATUS[currentStatus] || null;
 
   const nextActionLabel = useMemo(() => {
     if (!suggestedNextStatus) return null;
     if (suggestedNextStatus === "sent_to_kitchen") return "Send to kitchen";
     if (suggestedNextStatus === "in_progress") return "Mark preparing";
     if (suggestedNextStatus === "ready") return "Mark ready";
+    if (suggestedNextStatus === "dispatched") return "Mark dispatched";
     if (suggestedNextStatus === "served") {
       if (order.orderType === "takeout") return "Mark handed off";
-      if (order.orderType === "delivery") return "Mark dispatched";
+      if (order.orderType === "delivery") return "Confirm delivered";
       return "Mark served";
     }
     if (suggestedNextStatus === "completed") return "Close order";
@@ -101,6 +107,7 @@ export function OrderPageClient({ order, currencyCode = "USD", locale = "en-US" 
 
   return (
     <div className="flex flex-col h-full bg-background">
+      <CheckAllocationNotice orderId={order.id} />
       {/* Header */}
       <div className="px-4 md:px-6 py-4 border-b border-border flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">

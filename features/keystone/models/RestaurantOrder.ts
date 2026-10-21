@@ -1,3 +1,4 @@
+import { physicalGuestsForOrder } from "../utils/physicalParties";
 import { list, graphql } from "@keystone-6/core";
 import { allOperations } from "@keystone-6/core/access";
 import {
@@ -16,6 +17,7 @@ import { isSignedIn, permissions } from "../access";
 import { trackingFields } from "./trackingFields";
 import { isKitchenActiveOrderStatus, syncKitchenTicketsForOrder } from "../utils/kitchenTicketSync";
 import { depleteInventoryForCompletedOrder } from "../utils/inventoryLedger";
+import { reconcileClosedOrderTables } from "../utils/tableOccupancy";
 
 export const RestaurantOrder = list({
   access: {
@@ -53,15 +55,7 @@ export const RestaurantOrder = list({
       // Table management: mark tables as cleaning on order complete/cancel
       if (operation === 'update' && item && (item as any).orderType === 'dine_in') {
         if ((item as any).status === 'completed' || (item as any).status === 'cancelled') {
-          const orderWithTables = await sudo.query.RestaurantOrder.findOne({
-            where: { id: (item as any).id },
-            query: 'tables { id }'
-          });
-          if (orderWithTables?.tables?.length) {
-            await Promise.all(orderWithTables.tables.map((table: any) =>
-              sudo.db.Table.updateOne({ where: { id: table.id }, data: { status: 'cleaning' } })
-            ));
-          }
+          await reconcileClosedOrderTables(String(item.id), context as any);
         }
       }
 
@@ -108,6 +102,7 @@ export const RestaurantOrder = list({
     orderSource: select({
       type: "string",
       options: [
+        { label: "Gift value issuance", value: "gift_card" },
         { label: "POS", value: "pos" },
         { label: "Online", value: "online" },
         { label: "Kiosk", value: "kiosk" },
@@ -122,13 +117,17 @@ export const RestaurantOrder = list({
         { label: "Sent to Kitchen", value: "sent_to_kitchen" },
         { label: "In Progress", value: "in_progress" },
         { label: "Ready", value: "ready" },
-        { label: "Served", value: "served" },
+        { label: "Dispatched", value: "dispatched" },
+        { label: "Served / Delivered", value: "served" },
         { label: "Completed", value: "completed" },
         { label: "Cancelled", value: "cancelled" },
       ],
       defaultValue: "open",
     }),
     guestCount: integer({ defaultValue: 1, validation: { min: 1 } }),
+    physicalGuestCount: virtual({
+      field: graphql.field({ type: graphql.Int, resolve: async (item, _args, context) => physicalGuestsForOrder(context.prisma, item) }),
+    }),
     specialInstructions: text({ ui: { displayMode: "textarea" } }),
     onHold: checkbox({ defaultValue: false }),
     holdReason: text(),

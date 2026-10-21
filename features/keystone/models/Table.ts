@@ -10,7 +10,7 @@ export const Table = list({
       query: permissions.canReadTables,
       create: permissions.canManageTables,
       update: permissions.canManageTables,
-      delete: permissions.canManageTables,
+      delete: () => false,
     },
   },
   ui: {
@@ -25,11 +25,13 @@ export const Table = list({
     }),
 
     capacity: integer({
+      access: { update: () => false },
       validation: { isRequired: true, min: 1 },
       defaultValue: 4,
     }),
 
     status: select({
+      access: { create: () => false, update: () => false },
       type: "string",
       options: [
         { label: "Available", value: "available" },
@@ -94,6 +96,7 @@ export const Table = list({
     }),
 
     orders: relationship({
+      access: { create: () => false, update: () => false },
       ref: "RestaurantOrder.tables",
       many: true,
       ui: {

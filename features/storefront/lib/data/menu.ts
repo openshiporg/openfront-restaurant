@@ -2,9 +2,17 @@
 import { gql } from "graphql-request"
 import { openfrontClient } from "../config"
 import { cache } from "react"
+import { mealAvailable } from "@/features/lib/restaurant-hours"
 import type { StorefrontPaymentConfig } from "../store-data"
 
-export const getStoreSettings = cache(async function () {
+export class StorefrontDataUnavailableError extends Error {
+  constructor(resource: string) {
+    super(`${resource} could not be loaded`);
+    this.name = "StorefrontDataUnavailableError";
+  }
+}
+
+export const getStoreSettings = cache(async function (strict = false) {
   const GET_STORE_SETTINGS_QUERY = gql`
     query GetStoreSettings {
       storeSettings {
@@ -44,11 +52,12 @@ export const getStoreSettings = cache(async function () {
     return data?.storeSettings || null;
   } catch (error) {
     console.error('Error fetching store settings:', error);
+    if (strict) throw new StorefrontDataUnavailableError("Store settings");
     return null;
   }
 });
 
-export const getMenuCategories = cache(async function () {
+export const getMenuCategories = cache(async function (strict = false) {
   const GET_MENU_CATEGORIES_QUERY = gql`
     query GetMenuCategories {
       menuCategories(orderBy: [{ sortOrder: asc }]) {
@@ -67,11 +76,12 @@ export const getMenuCategories = cache(async function () {
     return data?.menuCategories || [];
   } catch (error) {
     console.error('Error fetching menu categories:', error);
+    if (strict) throw new StorefrontDataUnavailableError("Menu categories");
     return [];
   }
 });
 
-export const getMenuItems = cache(async function (categoryId?: string) {
+export const getMenuItems = cache(async function (categoryId?: string, strict = false) {
   const GET_MENU_ITEMS_QUERY = gql`
     query GetMenuItems($where: MenuItemWhereInput) {
       menuItems(
@@ -97,6 +107,7 @@ export const getMenuItems = cache(async function (categoryId?: string) {
         category {
           id
           name
+          mealPeriods
         }
         modifiers {
           id
@@ -121,9 +132,14 @@ export const getMenuItems = cache(async function (categoryId?: string) {
 
   try {
     const data = await openfrontClient.request(GET_MENU_ITEMS_QUERY, { where });
-    return data?.menuItems || [];
+    const settings = await getStoreSettings(strict);
+    return (data?.menuItems || []).filter((item: any) => mealAvailable(item.mealPeriods, settings?.hours, settings?.timezone || 'UTC') && mealAvailable(item.category?.mealPeriods, settings?.hours, settings?.timezone || 'UTC'));
   } catch (error) {
     console.error('Error fetching menu items:', error);
+    if (strict) {
+      if (error instanceof StorefrontDataUnavailableError) throw error;
+      throw new StorefrontDataUnavailableError("Menu items");
+    }
     return [];
   }
 });
@@ -190,6 +206,7 @@ export const getMenuItem = cache(async function (id: string) {
         category {
           id
           name
+          mealPeriods
         }
         modifiers {
           id

@@ -17,7 +17,6 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { AiConfigProvider } from '../hooks/use-ai-config'
 import { QueryProvider } from '../providers/QueryProvider'
-import { StoreSettingsProvider } from '@/features/platform/context/StoreSettingsProvider'
 import OnboardingDialog from '@/features/platform/onboarding/components/OnboardingDialog'
 
 // Shared Message type
@@ -55,7 +54,6 @@ interface DashboardLayoutProps {
   children: React.ReactNode
   adminMeta?: any
   authenticatedItem?: any
-  storeSettings?: any
 }
 
 function FloatingChatButton() {
@@ -128,7 +126,7 @@ function ChatModeProvider({ children, user }: { children: React.ReactNode; user?
   )
 }
 
-export function DashboardLayout({ children, adminMeta, authenticatedItem, storeSettings }: DashboardLayoutProps) {
+export function DashboardLayout({ children, adminMeta, authenticatedItem }: DashboardLayoutProps) {
   return (
     <ErrorBoundary>
       <QueryProvider>
@@ -136,13 +134,11 @@ export function DashboardLayout({ children, adminMeta, authenticatedItem, storeS
           <AdminMetaProvider initialData={adminMeta}>
             <AiConfigProvider>
               <ChatModeProvider user={authenticatedItem}>
-                <StoreSettingsProvider initialSettings={storeSettings}>
-                  <SidebarProvider defaultOpenRight={false}>
-                    <DashboardLayoutContent adminMeta={adminMeta} authenticatedItem={authenticatedItem}>
-                      {children}
-                    </DashboardLayoutContent>
-                  </SidebarProvider>
-                </StoreSettingsProvider>
+                <SidebarProvider defaultOpenRight={false}>
+                  <DashboardLayoutContent adminMeta={adminMeta} authenticatedItem={authenticatedItem}>
+                    {children}
+                  </DashboardLayoutContent>
+                </SidebarProvider>
               </ChatModeProvider>
             </AiConfigProvider>
           </AdminMetaProvider>

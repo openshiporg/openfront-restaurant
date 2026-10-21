@@ -20,7 +20,7 @@ export async function getBaseUrl(): Promise<string> {
       // Try x-forwarded-host first (common in production deployments)
       const host = headersList.get('x-forwarded-host') || headersList.get('host');
       const protocol = headersList.get('x-forwarded-proto') || 'https';
-
+      
       if (host) {
         return `${protocol}://${host}`;
       }

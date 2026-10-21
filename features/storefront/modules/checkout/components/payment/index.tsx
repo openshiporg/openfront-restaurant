@@ -19,7 +19,7 @@ import { useCallback, useContext, useEffect, useMemo, useState, useTransition } 
 import { RiLoader2Fill } from "@remixicon/react";
 import { cn } from "@/lib/utils";
 import { setCheckoutTip } from "@/features/storefront/lib/data/cart";
-import { calculateRestaurantTotals } from "@/features/lib/restaurant-order-pricing";
+import { checkoutDisplayPricing, checkoutSessionMatchesPricing, selectedCheckoutQuote } from "@/features/storefront/lib/checkout-quote-display";
 import { formatCurrency } from "@/features/storefront/lib/currency";
 import { useCheckoutPaymentState } from "../checkout-state";
 
@@ -35,6 +35,7 @@ interface PaymentProps {
         isSelected: boolean;
         amount: number;
         status?: string;
+        data?: any;
         paymentProvider: {
           code: string;
         };
@@ -76,41 +77,19 @@ const Payment = ({ cart, availablePaymentMethods, storeSettings }: PaymentProps)
   const stripeReady = useContext(StripeContext);
 
   const isSandboxMode = isStripeSandbox() || isPayPalSandbox();
+  const checkoutQuote = selectedCheckoutQuote(cart);
   const currencyConfig = {
-    currencyCode: storeSettings?.currencyCode || "USD",
+    currencyCode: checkoutQuote?.currencyCode || storeSettings?.currencyCode || "USD",
     locale: storeSettings?.locale || "en-US",
   };
   const deliveryPricing = useMemo(
-    () =>
-      calculateRestaurantTotals({
-        subtotal: Number(cart?.subtotal || 0),
-        orderType: cart?.orderType,
-        tipPercent: Number(cart?.tipPercent || 0),
-        deliveryFee: storeSettings?.deliveryFee,
-        deliveryMinimum: storeSettings?.deliveryMinimum,
-        pickupDiscountPercent: Number(storeSettings?.pickupDiscount || 0),
-        taxRate: Number(storeSettings?.taxRate || 0),
-        currencyCode: currencyConfig.currencyCode,
-      }),
-    [
-      cart?.subtotal,
-      cart?.orderType,
-      cart?.tipPercent,
-      storeSettings?.deliveryFee,
-      storeSettings?.deliveryMinimum,
-      storeSettings?.pickupDiscount,
-      storeSettings?.taxRate,
-      currencyConfig.currencyCode,
-    ]
+    () => checkoutDisplayPricing(cart, storeSettings),
+    [cart, storeSettings]
   );
   const deliveryMinimumNotMet =
     cart?.orderType === "delivery" && deliveryPricing.deliveryMinimumNotMet;
 
-  const activeSessionMatchesTotal = Boolean(
-    activeSession &&
-      activeSession.amount === deliveryPricing.total &&
-      activeSession.status !== "error"
-  );
+  const activeSessionMatchesTotal = checkoutSessionMatchesPricing(activeSession, deliveryPricing);
   const selectedSessionMatchesTotal =
     activeSessionMatchesTotal && activeSession?.paymentProvider?.code === selectedPaymentMethod;
   const paymentReady = selectedSessionMatchesTotal;
@@ -179,8 +158,8 @@ const Payment = ({ cart, availablePaymentMethods, storeSettings }: PaymentProps)
     }
   };
 
-  const subtotal = Number(cart?.subtotal || 0);
-  const tipPercent = String(cart?.tipPercent || "0");
+  const subtotal = Number(checkoutQuote?.pricing?.subtotal ?? cart?.subtotal ?? 0);
+  const tipPercent = String(checkoutQuote?.cart?.tipPercent ?? cart?.tipPercent ?? "0");
 
   const handleTipChange = (nextTipPercent: string) => {
     if (nextTipPercent === tipPercent || isTipPending) {

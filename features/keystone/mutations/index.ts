@@ -1,11 +1,24 @@
+import { previewRestaurantCampaign, createRestaurantCampaign, dispatchRestaurantCampaign } from "./restaurantCampaigns";
+import { restaurantPurchaseEvidence, recordRestaurantPurchaseInvoice, recordRestaurantPurchaseCredit, restaurantIngredientLots, setRestaurantLotHold } from "./purchaseEvidence";
+import { restaurantCheckAllocation } from "./checkAllocation";
+import { transferRestaurantStock } from "./stockTransfer";
+import { restaurantOperationsRecovery, retryRestaurantOperations, reviewLegacyRestaurantRecipes } from "./operationsRecovery";
+import { restaurantAttendance, recordRestaurantAttendance, requestRestaurantTimeCorrection, approveRestaurantTimeCorrection } from "./attendance";
+import { exportMyRestaurantData, recordMyRestaurantPrivacy, restaurantPrivacyRequests, resolveRestaurantPrivacyRequest } from "./customerPrivacy";
+import { restaurantNotifications, sendRestaurantNotification, acknowledgeRestaurantNotification } from "./restaurantNotifications";
+import { ensureRestaurantOnboardingRecord } from "./ensureOnboardingRecord";
+import { transitionPurchaseOrder, receivePurchaseOrder, countIngredientStock } from "./purchasing";
+import { issueGiftCard } from "./issueGiftCard";
+import { recoverCheckoutPayment, cancelCheckoutPaymentSession, unplacedCheckoutAttempts } from "./checkoutRecovery";
+import { restaurantBusinessDays, restaurantBusinessDay, openRestaurantBusinessDay, recordRestaurantCashMovement, closeRestaurantBusinessDay, recordRestaurantSettlement } from "./businessDay";
 import { mergeSchemas } from "@graphql-tools/schema";
 import type { GraphQLSchema } from 'graphql';
 import redirectToInit from "./redirectToInit";
 import updateActiveUser from "./updateActiveUser";
 import processPayment, { capturePaymentMutation, getPaymentStatus, reconcilePaymentMutation } from "./processPayment";
 import redeemGiftCard, { lookupGiftCard } from "./redeemGiftCard";
-import refundPayment from "./refundPayment";
-import { splitCheckByItem, splitCheckByGuest } from "./splitCheck";
+import refundPayment, { reconcileRefundMutation } from "./refundPayment";
+import { splitCheckByItem, splitCheckByGuest, splitCheckBySeat, recombineEqualChecks, mergeChecks } from "./splitCheck";
 import { voidOrderItem, compOrderItem, voidOrder } from "./voidComp";
 import initiatePaymentSession from "./initiatePaymentSession";
 import completeActiveCart from "./completeActiveCart";
@@ -18,10 +31,11 @@ import removeCartItem from "./removeCartItem";
 import getCustomerOrder from "./getCustomerOrder";
 import getCustomerOrders from "./getCustomerOrders";
 import activeCartPaymentProviders from "../queries/activeCartPaymentProviders";
-import { transferTable, combineTables } from "./tableManagement";
+import { transferTable, combineTables, deleteUnusedRestaurantTable, setRestaurantTableCapacity } from "./tableManagement";
 import { fireCourse, recallCourse } from "./courseManagement";
 import { syncKitchenTickets, updateKitchenTicketStatus, fulfillKitchenTicketItem } from "./kdsTickets";
 import handlePaymentProviderWebhook from "./handlePaymentProviderWebhook";
+import retryVerifiedRefundWebhook from "./retryVerifiedRefundWebhook";
 import createPOSOrder from "./createPOSOrder";
 import addServiceFloorItem from "./addServiceFloorItem";
 import updateServiceFloorItem from "./updateServiceFloorItem";
@@ -29,7 +43,7 @@ import { updateServiceFloorCheckStatus, updateServiceFloorTableStatus } from "./
 import { createWaitlistEntry, updateWaitlistStatus } from "./waitlistManagement";
 import { updateReservationStatus, upsertReservation } from "./reservationManagement";
 import { updateShiftStatus, upsertShift } from "./shiftManagement";
-import { createTipPoolLedger, updateTipPoolStatus } from "./tipManagement";
+import { previewRestaurantTipPool, createTipPoolLedger, updateTipPoolStatus } from "./tipManagement";
 import { adjustInventory, recordWaste, reverseWaste } from "./wasteManagement";
 import reconcileOrderInventory from "./reconcileOrderInventory";
 import transitionRestaurantOrder from "./transitionRestaurantOrder";
@@ -42,6 +56,7 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
   return mergeSchemas({
     schemas: [baseSchema],
     typeDefs: graphql`
+      extend type Cart { accessProof: String }
       input UserUpdateProfileInput {
         email: String
         name: String
@@ -72,17 +87,65 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
         specialInstructions: String
       }
 
+      type CheckoutCancellationResult { success: Boolean!, error: String }
+      type UnplacedCheckoutAttempt { id: ID!, cartId: ID!, customerName: String!, amount: Int!, createdAt: DateTime!, state: String!, providerCode: String!, canRecover: Boolean!, requiresManualReview: Boolean!, canCancel: Boolean! }
+      type UnplacedCheckoutAttemptPage { items: [UnplacedCheckoutAttempt!]!, totalCount: Int!, skip: Int!, take: Int!, hasMore: Boolean!, activeReservations: Int!, activeOnlineOrders: Int!, capacityUsed: Int!, capacityLimit: Int!, capacityLimitConfigured: Boolean!, capacityLimitValid: Boolean!, capacityAtLimit: Boolean! }
       type Query {
+        previewRestaurantCampaign: JSON!
+        restaurantPurchaseEvidence(id: ID!): JSON!
+        restaurantIngredientLots(ingredientId: ID!): JSON!
+        restaurantCheckAllocation(orderId: ID!): JSON
+        restaurantOperationsRecovery: JSON!
+        restaurantAttendance(fromDate: String, toDate: String, skip: Int, take: Int): JSON!
+        previewRestaurantTipPool(date: String!, tipPoolType: String!, cashTips: String!, creditTips: String!, individualStaffId: ID): JSON!
+        exportMyRestaurantData: JSON!
+        restaurantPrivacyRequests: JSON!
+        restaurantNotifications(status: String, limit: Int, cursor: String): RestaurantNotificationPage!
+        restaurantBusinessDays: JSON
+        restaurantBusinessDay(id: String!): JSON
         redirectToInit: Boolean
         getPaymentStatus(paymentIntentId: String!): GetPaymentStatusResult
         activeCart(cartId: ID!): JSON
         activeCartPaymentProviders: [PaymentProvider!]
         getCustomerOrder(orderId: ID!, secretKey: String): JSON
         getCustomerOrders(limit: Int, offset: Int): JSON
+        unplacedCheckoutAttempts(skip: Int, take: Int): UnplacedCheckoutAttemptPage!
         lookupGiftCard(code: String!): JSON
       }
 
+      type RestaurantNotification { id: ID!, recipient: String, subject: String, entityId: ID, status: String!, error: String }
+      type RestaurantNotificationPage { items: [RestaurantNotification!]!, status: String!, limit: Int!, hasMore: Boolean!, nextCursor: String }
+      type RestaurantNotificationResult { id: ID!, status: String!, error: String }
       type Mutation {
+        createRestaurantCampaign(requestKey: String!, subject: String!, text: String!, customerIds: [ID!]!): JSON!
+        dispatchRestaurantCampaign(campaignId: ID!): JSON!
+        recordRestaurantPurchaseInvoice(id: ID!, reference: String!, currencyCode: String!, lines: JSON!, varianceReason: String, idempotencyKey: String!): JSON!
+        recordRestaurantPurchaseCredit(id: ID!, invoiceId: ID!, reference: String!, lines: JSON!, reason: String!, idempotencyKey: String!): JSON!
+        setRestaurantLotHold(receiptId: ID!, onHold: Boolean!, reason: String!, idempotencyKey: String!): JSON!
+        transferRestaurantStock(fromId: ID!, toId: ID!, quantity: Float!, reason: String!, idempotencyKey: String!): JSON!
+        retryRestaurantOperations(orderId: ID!): JSON!
+        reviewLegacyRestaurantRecipes(orderId: ID!, reason: String!): JSON!
+        recordRestaurantAttendance(action: String!, entryId: ID, shiftId: ID, idempotencyKey: String!, paidBreak: Boolean): JSON!
+        requestRestaurantTimeCorrection(entryId: ID!, clockIn: String!, clockOut: String!, breakMinutes: Int!, reason: String!, idempotencyKey: String!): JSON!
+        approveRestaurantTimeCorrection(requestId: ID!, idempotencyKey: String!): JSON!
+        setRestaurantTableCapacity(tableId: ID!, capacity: Int!): TableManagementResult
+        deleteUnusedRestaurantTable(tableId: ID!): TableManagementResult
+        reconcileRefund(refundId: ID!): RefundPaymentResult
+        recordMyRestaurantPrivacy(action: String!, reason: String, idempotencyKey: String!): JSON!
+        resolveRestaurantPrivacyRequest(requestId: ID!, outcome: String!, reason: String!): JSON!
+        cancelCheckoutPaymentSession(cartId: ID!, paymentSessionId: ID!): CheckoutCancellationResult
+        sendRestaurantNotification(notificationId: ID!, retryUnknown: Boolean): RestaurantNotificationResult
+        acknowledgeRestaurantNotification(notificationId: ID!, reason: String!): RestaurantNotificationResult
+        ensureRestaurantOnboardingRecord(entity: String!, data: JSON!): JSON!
+        issueGiftCard(code: String!, amount: Int!, idempotencyKey: String!): GiftCard
+        transitionPurchaseOrder(id: ID!, status: String!): PurchaseOrder
+        receivePurchaseOrder(id: ID!, lines: JSON!, reference: String!, idempotencyKey: String!, currencyCode: String): JSON
+        countIngredientStock(ingredientId: ID!, counted: Float!, expectedStock: Float!, reason: String!, idempotencyKey: String!): JSON
+        recoverCheckoutPayment(paymentSessionId: ID!): RestaurantOrder
+        openRestaurantBusinessDay(openingFloat: Int!, cutoffMinutes: Int, idempotencyKey: String!): String
+        recordRestaurantCashMovement(id: String!, direction: String!, amount: Int!, reason: String!, idempotencyKey: String!): JSON
+        closeRestaurantBusinessDay(id: String!, countedCash: Int!, reason: String!): JSON
+        recordRestaurantSettlement(id: String!, reference: String!, method: String!, gross: Int!, fees: Int!, net: Int!, reason: String!): JSON
         updateActiveUser(data: UserUpdateProfileInput!): User
         createActiveCart(orderType: String): Cart
         addActiveCartItem(cartId: ID!, input: ActiveCartItemInput!): Cart
@@ -122,14 +185,18 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
 
         reconcilePayment(paymentId: ID!): CapturePaymentResult
 
+        mergeChecks(orderId: ID!, sourceOrderId: ID!): SplitCheckResult
         splitCheckByItem(
           orderId: String!
           itemIds: [String!]!
         ): SplitCheckResult
 
+        splitCheckBySeat(orderId: ID!, idempotencyKey: String!): SplitCheckResult
+        recombineEqualChecks(orderId: ID!): SplitCheckResult
         splitCheckByGuest(
           orderId: String!
           guestCount: Int!
+          idempotencyKey: String!
         ): SplitCheckResult
 
         voidOrderItem(
@@ -186,6 +253,7 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
         ): RestaurantOrder
 
         createPOSOrder(
+          idempotencyKey: String!
           orderType: String!
           guestCount: Int
           tableIds: [ID!]
@@ -195,6 +263,7 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
         ): RestaurantOrder
 
         addServiceFloorItem(
+          idempotencyKey: String!
           orderId: ID
           tableId: ID!
           menuItemId: ID!
@@ -234,6 +303,7 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
         ): WaitlistMutationResult
 
         updateWaitlistStatus(
+          contactConfirmed: Boolean
           entryId: ID!
           action: String!
           tableId: ID
@@ -277,11 +347,14 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
           tipPoolType: String!
           cashTips: String!
           creditTips: String!
+          sourceNote: String!
+          individualStaffId: ID
         ): TipPoolMutationResult
 
         updateTipPoolStatus(
           tipPoolId: ID!
           action: String!
+          payoutReference: String
         ): TipPoolMutationResult
 
         adjustInventory(
@@ -345,6 +418,7 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
           headers: JSON!
           rawBody: String
         ): HandleWebhookResult
+        retryVerifiedRefundWebhookEvent(eventId: ID!): JSON!
       }
 
       type ProcessPaymentResult {
@@ -485,15 +559,37 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
     `,
     resolvers: {
       Query: {
+        previewRestaurantCampaign, restaurantPurchaseEvidence, restaurantIngredientLots,
+        restaurantCheckAllocation,
+        restaurantOperationsRecovery,
+        restaurantAttendance, previewRestaurantTipPool,
+        exportMyRestaurantData, restaurantPrivacyRequests,
+        restaurantNotifications,
+        restaurantBusinessDays, restaurantBusinessDay,
         redirectToInit,
         getPaymentStatus,
         activeCart,
         activeCartPaymentProviders,
         getCustomerOrder,
         getCustomerOrders,
+        unplacedCheckoutAttempts,
         lookupGiftCard,
       },
       Mutation: {
+        createRestaurantCampaign, dispatchRestaurantCampaign, recordRestaurantPurchaseInvoice, recordRestaurantPurchaseCredit, setRestaurantLotHold,
+        transferRestaurantStock,
+        retryRestaurantOperations, reviewLegacyRestaurantRecipes,
+        recordRestaurantAttendance, requestRestaurantTimeCorrection, approveRestaurantTimeCorrection,
+        setRestaurantTableCapacity,
+        deleteUnusedRestaurantTable,
+        reconcileRefund: reconcileRefundMutation,
+        recordMyRestaurantPrivacy, resolveRestaurantPrivacyRequest,
+        cancelCheckoutPaymentSession,
+        sendRestaurantNotification, acknowledgeRestaurantNotification,
+        ensureRestaurantOnboardingRecord,
+        issueGiftCard, transitionPurchaseOrder, receivePurchaseOrder, countIngredientStock,
+        recoverCheckoutPayment,
+        openRestaurantBusinessDay, recordRestaurantCashMovement, closeRestaurantBusinessDay, recordRestaurantSettlement,
         updateActiveUser,
         createActiveCart,
         addActiveCartItem,
@@ -508,8 +604,9 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
         approveManagerApproval,
         capturePayment: capturePaymentMutation,
         reconcilePayment: reconcilePaymentMutation,
+        mergeChecks,
         splitCheckByItem,
-        splitCheckByGuest,
+        splitCheckByGuest, splitCheckBySeat, recombineEqualChecks,
         voidOrderItem,
         compOrderItem,
         voidOrder,
@@ -541,6 +638,7 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
         updateKitchenTicketStatus,
         fulfillKitchenTicketItem,
         handlePaymentProviderWebhook,
+        retryVerifiedRefundWebhookEvent: retryVerifiedRefundWebhook,
       },
     },
   });

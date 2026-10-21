@@ -1,8 +1,9 @@
+import { cartMutationTransaction, touchMutableCart } from "../utils/cartMutationTransaction";
 import { Context } from ".keystone/types";
 import { assertCanAccessCartItem } from "../utils/cartAccess";
 import { normalizeCartQuantity } from "../utils/cartItemValidation";
 
-export default async function updateCartItemQuantity(
+async function updateCartItemQuantity(
   root: any, 
   { cartItemId, quantity }: { cartItemId: string, quantity: number }, 
   context: Context
@@ -14,6 +15,7 @@ export default async function updateCartItemQuantity(
     query: "id order { id }",
   });
   if (cart?.order?.id) throw new Error("Completed carts cannot be changed");
+  await touchMutableCart(context, cartItem.cart.id);
 
   await sudoContext.db.CartItem.updateOne({
     where: { id: cartItemId },
@@ -24,4 +26,8 @@ export default async function updateCartItemQuantity(
   return await sudoContext.db.Cart.findOne({
     where: { id: cartItem.cart.id }
   });
+}
+
+export default function updateCartItemQuantityTransactional(...args: Parameters<typeof updateCartItemQuantity>) {
+  return cartMutationTransaction(args[2], (tx) => updateCartItemQuantity(args[0], args[1], tx));
 }

@@ -1,9 +1,16 @@
+import { transferPhysicalPartyOnCancellation } from "../utils/physicalParties";
 import crypto from "crypto";
 import type { Context } from ".keystone/types";
 import { calculateRestaurantTotals } from "../../lib/restaurant-order-pricing";
+import { getOrderPricingPolicy, recordedDeliveryCharge } from "../utils/orderPricingPolicy";
+import { reconcileCompletedOrderOperations } from "../utils/orderCompletion";
+import { assertCorrectedBalanceCoversCapturedPayments, assertServiceItemCorrectionAllowed } from "../utils/serviceOrderState";
+import { assertNoActiveCheckAllocation } from "../utils/checkAllocations";
+import { reservedTenderValue } from "../utils/paymentState";
 import { permissions } from "../access";
 import { getStoreDeliverySettings } from "../utils/deliveryValidation";
 import { appendAuditEventWithClient } from "../utils/audit";
+import { issueReceiptWithClient } from "../utils/receipt";
 import { getOrderItemsSubtotal } from "../utils/orderItemFinancials";
 import { syncKitchenTicketsForOrder } from "../utils/kitchenTicketSync";
 import { getOrCreateIdempotencyAttempt, updateIdempotencyAttempt } from "../utils/idempotency";
@@ -78,8 +85,9 @@ async function adjustOrderItem(
       }
       const item = await tx.orderItem.findUnique({ where: { id: args.orderItemId } });
       if (!item?.orderId) throw new Error("Order item not found");
-      const order = await tx.restaurantOrder.findUnique({ where: { id: item.orderId } });
-      if (!order) throw new Error("Order not found");
+      const order = await tx.restaurantOrder.findUnique({ where: { id: item.orderId }, include: { payments: true } });
+      const isPostServiceComp = assertServiceItemCorrectionAllowed(order, type);
+      await assertNoActiveCheckAllocation(tx, order.id);
       if (["completed", "cancelled"].includes(order.status || "")) {
         throw new Error("Closed checks require a refund/correction receipt instead of an item edit");
       }
@@ -137,14 +145,28 @@ async function adjustOrderItem(
       });
       const items = await tx.orderItem.findMany({ where: { orderId: order.id } });
       const subtotal = getOrderItemsSubtotal(items);
+      const pricingPolicy = await getOrderPricingPolicy(tx, order.id, settings);
       const { tax } = calculateRestaurantTotals({
         subtotal,
         orderType: order.orderType,
-        taxRate: settings?.taxRate,
-        currencyCode: settings?.currencyCode || order.currencyCode || "USD",
+        taxRate: pricingPolicy.taxRate,
+        currencyCode: pricingPolicy.currencyCode,
       });
-      const total = Math.max(0, subtotal + tax + Number(order.tip || 0) - Number(order.discount || 0));
+      const total = Math.max(0, subtotal + tax + Number(order.tip || 0) - Number(order.discount || 0) + recordedDeliveryCharge(order));
+      if (isPostServiceComp) assertCorrectedBalanceCoversCapturedPayments(order, total);
       await tx.restaurantOrder.update({ where: { id: order.id }, data: { subtotal, tax, total } });
+      if (isPostServiceComp) {
+        const priorSaleReceipt = await tx.receipt.findFirst({ where: { orderId: order.id, kind: "sale" }, orderBy: { issuedAt: "desc" } });
+        await issueReceiptWithClient(tx, context.session?.itemId, {
+          kind: "correction",
+          entityId: adjustment.id,
+          orderId: order.id,
+          amount: total - Number(order.total || 0),
+          currencyCode: order.currencyCode || settings?.currencyCode || "USD",
+          correctsReceiptId: priorSaleReceipt?.id || null,
+          snapshot: { type: "post_service_comp", itemId: item.id, reason: args.reason.trim(), approvedAdjustment: amount, balanceBefore: Number(order.total || 0), balanceAfter: total, preparedProductionPreserved: true },
+        });
+      }
       await appendAuditEventWithClient(tx, context.session?.itemId, {
         eventKey: `order-adjustment:${adjustment.id}`,
         eventType: `order_item.${type}`,
@@ -221,10 +243,11 @@ export async function voidOrder(
         }
         return { adjustment: existing, replay: true };
       }
-      const order = await tx.restaurantOrder.findUnique({ where: { id: args.orderId } });
+      const order = await tx.restaurantOrder.findUnique({ where: { id: args.orderId }, include: { payments: true } });
       if (!order) throw new Error("Order not found");
-      const successfulPayments = await tx.payment.count({ where: { orderId: order.id, status: "succeeded" } });
-      if (successfulPayments > 0) throw new Error("Paid orders must be refunded before cancellation");
+      if (["completed", "cancelled"].includes(order.status)) throw new Error("Terminal orders require the correction/refund workflow");
+      await assertNoActiveCheckAllocation(tx, order.id);
+      if (order.payments.some((payment: any) => ["processing", "authorized", "unknown"].includes(payment.status) || (["succeeded", "partially_refunded", "refunded"].includes(payment.status) && reservedTenderValue(payment) > 0))) throw new Error("Resolve reserved tenders and refund remaining captured value before cancellation");
       const items = await tx.orderItem.findMany({ where: { orderId: order.id } });
       const amount = getOrderItemsSubtotal(items);
       const adjustment = await tx.orderAdjustment.create({
@@ -271,6 +294,7 @@ export async function voidOrder(
         where: { id: adjustment.id },
         data: { approvedById: approval.approvedById },
       });
+      await transferPhysicalPartyOnCancellation(tx, order, context.session?.itemId);
       await tx.restaurantOrder.update({ where: { id: order.id }, data: { status: "cancelled" } });
       await appendAuditEventWithClient(tx, context.session?.itemId, {
         eventKey: `order-adjustment:${adjustment.id}`,
@@ -285,7 +309,7 @@ export async function voidOrder(
       return { adjustment: approvedAdjustment, replay: false };
     }, { isolationLevel: "Serializable" });
 
-    if (!result.replay) await syncKitchenTicketsForOrder(args.orderId, context);
+    await reconcileCompletedOrderOperations(args.orderId, context);
     await updateIdempotencyAttempt(prisma, attempt.id, "completed", {
       adjustmentId: result.adjustment.id,
       orderId: args.orderId,

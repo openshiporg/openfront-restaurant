@@ -1,3 +1,4 @@
+import { AccountPrivacy } from "../components/account-privacy"
 import React from "react"
 import AccountNav from "../components/account-nav"
 
@@ -20,7 +21,7 @@ export default function AccountLayout({
         ) : (
           <div className="grid gap-6 lg:grid-cols-[280px_minmax(0,1fr)] lg:gap-8">
             <AccountNav user={user} />
-            <div className="storefront-surface bg-card p-6 sm:p-8">{children}</div>
+            <div className="storefront-surface bg-card p-6 sm:p-8"><AccountPrivacy />{children}</div>
           </div>
         )}
       </div>

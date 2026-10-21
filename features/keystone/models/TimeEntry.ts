@@ -14,11 +14,12 @@ import { trackingFields } from "./trackingFields";
 export const TimeEntry = list({
   access: {
     operation: {
-      query: permissions.canReadStaff,
-      create: permissions.canManageStaff,
-      update: permissions.canManageStaff,
-      delete: permissions.canManageStaff,
+      query: isSignedIn,
+      create: () => false,
+      update: () => false,
+      delete: () => false,
     },
+    filter: { query: (args) => permissions.canReadStaff(args) || permissions.canManageStaff(args) ? true : { staff: { id: { equals: args.session?.itemId } } } },
   },
   ui: {
     listView: {

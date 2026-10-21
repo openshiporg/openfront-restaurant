@@ -1,8 +1,10 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { reserveServiceItemAttempt, clearServiceItemAttempt } from '@/features/lib/service-item-attempt'
 import { gql, request } from 'graphql-request'
 import Link from 'next/link'
+import { CorrectionActions, ManagerApprovalQueue } from '@/features/platform/payments/components/CorrectionActions'
 import { useRouter } from 'next/navigation'
 import {
   RefreshCw,
@@ -86,6 +88,7 @@ interface ActiveOrder {
     amount: number
     status: string
     paymentMethod?: string | null
+    refundedAmount?: number | null
   }[]
 }
 
@@ -111,6 +114,7 @@ interface MenuItem {
 
 const GET_SERVICE_FLOOR = gql`
   query GetServiceFloor {
+    authenticatedItem { ... on User { id } }
     tables(orderBy: { tableNumber: asc }) {
       id tableNumber capacity status
     }
@@ -129,7 +133,7 @@ const GET_SERVICE_FLOOR = gql`
         itemNameSnapshot modifiersSnapshot isVoided adjustmentTotal
         menuItem { id name }
       }
-      payments { id amount status paymentMethod }
+      payments { id amount status paymentMethod refundedAmount }
     }
     menuItems(where: { available: { equals: true } }, orderBy: { name: asc }) {
       id name price available
@@ -150,6 +154,7 @@ const UPDATE_TABLE_STATUS = gql`
 
 const ADD_SERVICE_FLOOR_ITEM = gql`
   mutation AddServiceFloorItem(
+    $idempotencyKey: String!
     $orderId: ID
     $tableId: ID!
     $menuItemId: ID!
@@ -160,6 +165,7 @@ const ADD_SERVICE_FLOOR_ITEM = gql`
     $modifierIds: [ID!]
   ) {
     addServiceFloorItem(
+      idempotencyKey: $idempotencyKey
       orderId: $orderId
       tableId: $tableId
       menuItemId: $menuItemId
@@ -187,6 +193,7 @@ const UPDATE_SERVICE_FLOOR_ITEM = gql`
     $seatNumber: Int
     $specialInstructions: String
     $voidReason: String
+    $managerApprovalId: ID
   ) {
     updateServiceFloorItem(
       orderItemId: $orderItemId
@@ -195,6 +202,7 @@ const UPDATE_SERVICE_FLOOR_ITEM = gql`
       seatNumber: $seatNumber
       specialInstructions: $specialInstructions
       voidReason: $voidReason
+      managerApprovalId: $managerApprovalId
     ) {
       id
       orderNumber
@@ -209,12 +217,6 @@ const UPDATE_SERVICE_FLOOR_ITEM = gql`
 const UPDATE_CHECK_STATUS = gql`
   mutation UpdateServiceFloorCheckStatus($orderId: ID!, $action: String!) {
     updateServiceFloorCheckStatus(orderId: $orderId, action: $action) { success error }
-  }
-`
-
-const SPLIT_CHECK_BY_GUEST = gql`
-  mutation SplitCheckByGuest($orderId: String!, $guestCount: Int!) {
-    splitCheckByGuest(orderId: $orderId, guestCount: $guestCount) { success newOrderIds error }
   }
 `
 
@@ -277,8 +279,8 @@ function formatStatusLabel(value: string) {
 
 function getPaidAmount(order?: ActiveOrder | null) {
   return (order?.payments || [])
-    .filter(payment => payment.status === 'succeeded')
-    .reduce((sum, payment) => sum + Number(payment.amount || 0), 0)
+    .filter(payment => ['succeeded', 'partially_refunded', 'refunded'].includes(payment.status))
+    .reduce((sum, payment) => sum + Math.max(0, Number(payment.amount || 0) - Number(payment.refundedAmount || 0)), 0)
 }
 
 function getBalanceDue(order?: ActiveOrder | null) {
@@ -289,6 +291,7 @@ function getBalanceDue(order?: ActiveOrder | null) {
 export function ServiceFloorClient() {
   const router = useRouter()
   const [loading, setLoading] = useState(true)
+  const [actorId, setActorId] = useState('')
   const [tables, setTables] = useState<Table[]>([])
   const [orders, setOrders] = useState<ActiveOrder[]>([])
   const [menuItems, setMenuItems] = useState<MenuItem[]>([])
@@ -299,6 +302,8 @@ export function ServiceFloorClient() {
 
   const [openSheet, setOpenSheet] = useState(false)
   const [selectedTable, setSelectedTable] = useState<Table | null>(null)
+  const [selectedCheckId, setSelectedCheckId] = useState('')
+  const [checkAllocation, setCheckAllocation] = useState<any>(null)
   const [selectedMenuItemId, setSelectedMenuItemId] = useState<string>('')
   const [quantity, setQuantity] = useState<number>(1)
   const [courseNumber, setCourseNumber] = useState<number>(1)
@@ -323,6 +328,7 @@ export function ServiceFloorClient() {
   const fetchData = async () => {
     try {
       const res: any = await request('/api/graphql', GET_SERVICE_FLOOR)
+      setActorId(res.authenticatedItem?.id || '')
       setTables(res.tables || [])
       setOrders(res.restaurantOrders || [])
       setMenuItems(res.menuItems || [])
@@ -359,7 +365,17 @@ export function ServiceFloorClient() {
     activeChecks: orders.length,
   }), [tables, orders])
 
-  const selectedOrder = selectedTable ? orderByTable[selectedTable.id] : null
+  const tableChecks = selectedTable ? orders.filter(order => order.tables.some(table => table.id === selectedTable.id)) : []
+  const selectedOrder = tableChecks.find(order => order.id === selectedCheckId) || (selectedTable ? orderByTable[selectedTable.id] : null)
+  useEffect(() => { setSelectedCheckId('') }, [selectedTable?.id])
+  useEffect(() => {
+    let current = true
+    setCheckAllocation(null)
+    if (selectedOrder) request('/api/graphql', `query($orderId:ID!){restaurantCheckAllocation(orderId:$orderId)}`, { orderId: selectedOrder.id })
+      .then((result: any) => { if (current) setCheckAllocation(result.restaurantCheckAllocation) })
+      .catch((error: any) => { if (current) setSheetError(error.message) })
+    return () => { current = false }
+  }, [selectedOrder?.id, selectedOrder?.total])
 
   useEffect(() => {
     setSelectedSplitItemIds([])
@@ -458,20 +474,17 @@ export function ServiceFloorClient() {
 
       const orderId = selectedOrder?.id || null
 
-      const res: any = await request('/api/graphql', ADD_SERVICE_FLOOR_ITEM, {
-        orderId,
-        tableId: selectedTable.id,
-        menuItemId: selectedMenuItemId,
-        quantity,
-        courseNumber,
-        seatNumber,
-        specialInstructions: itemNotes.trim() || null,
-        modifierIds: selectedModifierIds,
-      })
+      const input = {
+        orderId, tableId: selectedTable.id, menuItemId: selectedMenuItemId, quantity,
+        courseNumber, seatNumber, specialInstructions: itemNotes.trim() || null, modifierIds: selectedModifierIds,
+      }
+      const attempt = await reserveServiceItemAttempt(localStorage, actorId, input)
+      const res: any = await request('/api/graphql', ADD_SERVICE_FLOOR_ITEM, { ...input, ...attempt })
 
       if (!res?.addServiceFloorItem?.id) {
         throw new Error('Unable to add item to this check')
       }
+      clearServiceItemAttempt(localStorage, actorId, selectedTable.id)
       await fetchData()
       setQuantity(1)
       setCourseNumber(1)
@@ -510,24 +523,6 @@ export function ServiceFloorClient() {
     })
   }
 
-  const voidEditItem = async () => {
-    if (!editingItem) return
-    const reason = voidReason.trim()
-    if (!reason) {
-      setSheetError('Void reason is required')
-      return
-    }
-    await withAction(`void-item:${editingItem.id}`, async () => {
-      const res: any = await request('/api/graphql', UPDATE_SERVICE_FLOOR_ITEM, {
-        orderItemId: editingItem.id,
-        voidReason: reason,
-      })
-      if (!res?.updateServiceFloorItem?.id) throw new Error('Unable to void item')
-      await fetchData()
-      setEditingItem(null)
-      setSheetSuccess('Item voided from check')
-    })
-  }
 
   const updateCheckStatus = async (orderId: string, action: 'send_to_kitchen' | 'mark_served' | 'close_check' | 'cancel_check') => {
     await withAction(`check:${action}`, async () => {
@@ -548,15 +543,23 @@ export function ServiceFloorClient() {
 
   const sendOrderToKitchen = async (orderId: string) => updateCheckStatus(orderId, 'send_to_kitchen')
 
-  const splitByGuests = async () => {
-    if (!selectedOrder) return
-    await withAction('split-guests', async () => {
-      const res: any = await request('/api/graphql', SPLIT_CHECK_BY_GUEST, {
-        orderId: selectedOrder.id, guestCount: Math.max(2, splitGuests),
-      })
-      if (!res?.splitCheckByGuest?.success) throw new Error(res?.splitCheckByGuest?.error || 'Failed to split by guests')
+  const splitIndependentChecks = async (mode: 'guests' | 'seats') => {
+    if (!selectedOrder || !actorId) return
+    await withAction(`split-${mode}`, async () => {
+      const storageKey = `restaurant-check-split-v1:${actorId}:${selectedOrder.id}:${mode}:${mode === 'guests' ? splitGuests : ''}`
+      const saved = localStorage.getItem(storageKey)
+      if (saved && !/^[a-f0-9-]{36}$/.test(saved)) throw new Error('Saved split request is invalid; review this check before retrying')
+      const idempotencyKey = saved || crypto.randomUUID()
+      localStorage.setItem(storageKey, idempotencyKey)
+      const operation = mode === 'guests' ? 'splitCheckByGuest' : 'splitCheckBySeat'
+      const query = mode === 'guests'
+        ? `mutation($orderId:String!,$guestCount:Int!,$idempotencyKey:String!){splitCheckByGuest(orderId:$orderId,guestCount:$guestCount,idempotencyKey:$idempotencyKey){success error newOrderIds}}`
+        : `mutation($orderId:ID!,$idempotencyKey:String!){splitCheckBySeat(orderId:$orderId,idempotencyKey:$idempotencyKey){success error newOrderIds}}`
+      const result: any = await request('/api/graphql', query, { orderId: selectedOrder.id, guestCount: splitGuests, idempotencyKey })
+      if (!result[operation]?.success) throw new Error(result[operation]?.error || 'Unable to split checks')
+      localStorage.removeItem(storageKey)
       await fetchData()
-      setSheetSuccess(`Check split into ${Math.max(2, splitGuests)} guests`)
+      setSheetSuccess(`${result[operation].newOrderIds.length} independent checks are available in the check selector. Food production was preserved.`)
     })
   }
 
@@ -765,6 +768,8 @@ export function ServiceFloorClient() {
 
           {selectedTable && (
             <div className="mt-5 space-y-5 pb-8">
+              {tableChecks.length > 1 && <div className="space-y-2"><p className="text-xs font-semibold">Checks at this table</p><Select value={selectedOrder?.id || ''} onValueChange={setSelectedCheckId}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{tableChecks.map(check => <SelectItem key={check.id} value={check.id}>#{check.orderNumber} · {formatCurrency(check.total, currencyConfig)}</SelectItem>)}</SelectContent></Select></div>}
+              {checkAllocation && <div className="rounded border p-3 text-sm space-y-2"><p className="font-semibold">Independent check {checkAllocation.ordinal} of {checkAllocation.guestCount}</p><p>This check has its own payment balance. Original food production belongs to #{checkAllocation.sourceOrderNumber}; the food reference is shared across these checks.</p><ul>{(checkAllocation.sourceItems || []).map((item: any) => <li key={item.id}>{item.quantity}× {item.name || 'Item'}{item.isVoided ? ' (voided)' : ''}</li>)}</ul></div>}
               {/* Active check summary */}
               {selectedOrder ? (
                 <div className="rounded-lg border border-border bg-card p-3">
@@ -900,12 +905,19 @@ export function ServiceFloorClient() {
                 <Button
                   size="sm"
                   onClick={addItemToTable}
-                  disabled={!selectedMenuItemId || addingItem}
+                  disabled={!selectedMenuItemId || addingItem || !actorId}
                   className="h-8 w-full text-xs"
                 >
                   <Plus size={12} className="mr-1" />
                   {addingItem ? 'Adding item…' : selectedOrder ? 'Add to check' : 'Start check with item'}
                 </Button>
+                <Button type="button" variant="ghost" size="sm" disabled={addingItem || !actorId || !selectedTable}
+                  onClick={() => {
+                    if (!selectedTable || !window.confirm('Review the current check for the earlier item addition first. Clearing the saved retry allows a new addition; it does not undo an item already added. Continue?')) return
+                    clearServiceItemAttempt(localStorage, actorId, selectedTable.id)
+                    setSheetError(null)
+                    setSheetSuccess('Saved retry cleared after reviewing the check. No item was submitted.')
+                  }}>Clear saved retry after reviewing check</Button>
               </div>
 
               {/* Check items */}
@@ -1053,23 +1065,31 @@ export function ServiceFloorClient() {
                   <p className="text-[11px] uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
                     <Split size={12} /> Split Check
                   </p>
+                  <Button variant="outline" size="sm" onClick={async () => {
+                    const sourceOrderId = window.prompt('Enter the other active check ID to merge into this check')?.trim()
+                    if (!sourceOrderId) return
+                    await withAction('merge-checks', async () => {
+                      const result: any = await request('/api/graphql', `mutation($orderId:ID!,$sourceOrderId:ID!){mergeChecks(orderId:$orderId,sourceOrderId:$sourceOrderId){success error}}`, { orderId: selectedOrder.id, sourceOrderId })
+                      if (!result.mergeChecks.success) throw new Error(result.mergeChecks.error)
+                      await fetchData()
+                      setSheetSuccess('Checks merged; existing kitchen production preserved')
+                    })
+                  }}>Merge another check</Button>
                   <div className="flex items-center gap-2">
-                    <Input
-                      type="number"
-                      min={2}
-                      value={splitGuests}
-                      onChange={e => setSplitGuests(Math.max(2, parseInt(e.target.value || '2', 10)))}
-                      className="w-20 h-8 text-xs"
-                    />
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="h-8 text-xs"
-                      onClick={splitByGuests}
-                      disabled={processingAction === 'split-guests'}
-                    >
-                      By Guests
-                    </Button>
+                    <Input aria-label="Number of independent equal checks" type="number" min={2} max={20} value={splitGuests} onChange={event => setSplitGuests(Number(event.target.value))} className="w-20" />
+                    <Button size="sm" variant="outline" onClick={() => splitIndependentChecks('guests')} disabled={processingAction === 'split-guests'}>Create equal checks</Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">Equal checks are available after service is complete and before payment. Each check has its own balance and receipt; kitchen production remains on the original check.</p>
+                  <div className="flex flex-wrap gap-2">
+                    <Button size="sm" variant="outline" onClick={() => splitIndependentChecks('seats')} disabled={processingAction === 'split-seats'}>Split by assigned seats</Button>
+                    <Button size="sm" variant="outline" onClick={async () => {
+                      await withAction('recombine-equal', async () => {
+                        const result: any = await request('/api/graphql', `mutation($orderId:ID!){recombineEqualChecks(orderId:$orderId){success error newOrderIds}}`, { orderId: selectedOrder.id })
+                        if (!result.recombineEqualChecks.success) throw new Error(result.recombineEqualChecks.error)
+                        setSelectedCheckId(result.recombineEqualChecks.newOrderIds[0]); await fetchData(); setSheetSuccess('Equal checks recombined; original food production preserved')
+                      })
+                    }}>Recombine equal checks</Button>
+                    <Button size="sm" variant="ghost" onClick={() => router.push(`/dashboard/platform/pos/${selectedOrder.id}/payment`)}>Plan tenders on this check</Button>
                   </div>
                   <div className="space-y-1.5 max-h-36 overflow-y-auto rounded border border-border p-2 bg-background">
                     {(selectedOrder.orderItems || []).map(item => (
@@ -1176,18 +1196,13 @@ export function ServiceFloorClient() {
                   <Button className="h-9 text-xs" variant="outline" disabled>Close Paid Check</Button>
                 )}
 
-                {selectedOrder ? (
-                  <Button
-                    className="h-9 text-xs"
-                    variant="destructive"
-                    onClick={() => updateCheckStatus(selectedOrder.id, 'cancel_check')}
-                    disabled={['completed', 'cancelled'].includes(selectedOrder.status) || processingAction === 'check:cancel_check'}
-                  >
-                    Cancel Check
-                  </Button>
-                ) : (
-                  <Button className="h-9 text-xs" variant="destructive" disabled>Cancel Check</Button>
-                )}
+                {selectedOrder && <CorrectionActions key={`order-void:${selectedOrder.id}`} actionType="void_order" targetId={selectedOrder.id}
+                  onExecute={async (managerApprovalId, reason, idempotencyKey) => {
+                    const result: any = await request('/api/graphql', `mutation($orderId:String!,$reason:String!,$idempotencyKey:String!,$managerApprovalId:ID!){voidOrder(orderId:$orderId,reason:$reason,idempotencyKey:$idempotencyKey,managerApprovalId:$managerApprovalId){success error}}`, { orderId: selectedOrder.id, reason, idempotencyKey, managerApprovalId })
+                    if (!result.voidOrder.success) throw new Error(result.voidOrder.error)
+                    await fetchData()
+                  }} />}
+
               </div>
             </div>
           )}
@@ -1248,26 +1263,17 @@ export function ServiceFloorClient() {
                 placeholder="Item notes, allergies, timing…"
                 className="min-h-20 text-xs"
               />
-              <div className="rounded-md border border-destructive/20 bg-destructive/5 p-3 space-y-2">
-                <p className="text-[10px] uppercase tracking-wider text-destructive">Void item</p>
-                <Input
-                  value={voidReason}
-                  onChange={e => setVoidReason(e.target.value)}
-                  placeholder="Reason required to void"
-                  className="h-8 text-xs"
-                />
-              </div>
+              <CorrectionActions key={editingItem.id} actionType="void_item" targetId={editingItem.id}
+                onExecute={async (managerApprovalId, reason) => {
+                  const result: any = await request('/api/graphql', UPDATE_SERVICE_FLOOR_ITEM, { orderItemId: editingItem.id, voidReason: reason, managerApprovalId })
+                  if (!result?.updateServiceFloorItem?.id) throw new Error('Unable to void item')
+                  await fetchData()
+                  setSheetSuccess('Approved item void recorded')
+                }} />
+              <ManagerApprovalQueue />
             </div>
           ) : null}
           <DialogFooter className="gap-2 sm:justify-between">
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={voidEditItem}
-              disabled={!editingItem || !voidReason.trim() || processingAction === `void-item:${editingItem?.id}`}
-            >
-              <Trash2 size={13} className="mr-1" /> Void
-            </Button>
             <div className="flex gap-2">
               <Button variant="outline" size="sm" onClick={() => setEditingItem(null)}>Cancel</Button>
               <Button

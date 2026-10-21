@@ -44,6 +44,7 @@ import { useOnboardingState } from '../hooks/useOnboardingState';
 import { useOnboardingApi } from '../hooks/useOnboardingApi';
 import { getItemsFromJsonData } from '../utils/dataUtils';
 import { RESTAURANT_TEMPLATES, SECTION_DEFINITIONS } from '../config/templates';
+import { SetupReadinessChecklist } from './SetupReadinessChecklist';
 
 // Payment provider environment variable mapping adapted for restaurant
 const PAYMENT_METHOD_ENV_VARS: Record<string, string[]> = {
@@ -124,6 +125,7 @@ const OnboardingDialog: React.FC<OnboardingDialogProps> = ({
     loadingItems,
     completedItems,
     error,
+    settingsReview,
     itemErrors,
     isLoading,
     setStep,
@@ -135,6 +137,7 @@ const OnboardingDialog: React.FC<OnboardingDialogProps> = ({
     setItemCompleted,
     setItemError,
     setError,
+    setSettingsReview,
     setIsLoading,
     resetOnboardingState,
   } = onboardingState;
@@ -149,6 +152,7 @@ const OnboardingDialog: React.FC<OnboardingDialogProps> = ({
     setItemError,
     setStep,
     setError,
+    setSettingsReview,
     setIsLoading,
     resetOnboardingState,
   });
@@ -196,7 +200,7 @@ const OnboardingDialog: React.FC<OnboardingDialogProps> = ({
                     </h3>
                     <p className="text-sm text-muted-foreground">
                       {step === 'done'
-                        ? 'Your restaurant is ready'
+                        ? 'Your setup records are saved'
                         : 'Configure your restaurant menu'}
                     </p>
                   </div>
@@ -206,45 +210,45 @@ const OnboardingDialog: React.FC<OnboardingDialogProps> = ({
                 {step === 'done' ? (
                   <>
                     <h4 className="text-sm font-medium text-foreground mb-2">
-                      Setup Complete
+                      Setup saved
                     </h4>
                     <p className="text-sm text-muted-foreground mb-4">
-                      Your {selectedTemplate === 'minimal' ? 'basic' : 'complete'} restaurant setup is ready to use.
+                      Your {selectedTemplate === 'minimal' ? 'basic' : 'complete'} setup records are saved. Operational readiness is still unverified; complete the checklist before accepting orders.
                     </p>
-                    <div className="flex items-center space-x-2 text-sm text-emerald-600 dark:text-emerald-500 mb-4">
-                      <CircleCheck className="h-4 w-4 fill-emerald-500 text-background" />
-                      <span>Setup complete</span>
+                    <div className="flex items-center space-x-2 text-sm text-amber-700 dark:text-amber-300 mb-4">
+                      <InfoIcon className="h-4 w-4" />
+                      <span>Setup saved · readiness unverified</span>
                     </div>
 
                     <div className="space-y-3 text-sm">
                       <div className="flex items-center space-x-2 text-muted-foreground">
                         <CircleCheck className="h-4 w-4 fill-muted-foreground text-background" />
                         <span className="font-medium">
-                          {displayNames.categories.length} category{displayNames.categories.length === 1 ? '' : 'ies'} created
+                          {displayNames.categories.length} category{displayNames.categories.length === 1 ? '' : 'ies'} saved
                         </span>
                       </div>
                       <div className="flex items-center space-x-2 text-muted-foreground">
                         <CircleCheck className="h-4 w-4 fill-muted-foreground text-background" />
                         <span className="font-medium">
-                          {displayNames.menuItems.length} menu item{displayNames.menuItems.length === 1 ? '' : 's'} created
+                          {displayNames.menuItems.length} menu item{displayNames.menuItems.length === 1 ? '' : 's'} saved
                         </span>
                       </div>
                       <div className="flex items-center space-x-2 text-muted-foreground">
                         <CircleCheck className="h-4 w-4 fill-muted-foreground text-background" />
                         <span className="font-medium">
-                          {displayNames.modifiers.length} modifier{displayNames.modifiers.length === 1 ? '' : 's'} created
+                          {displayNames.modifiers.length} modifier{displayNames.modifiers.length === 1 ? '' : 's'} saved
                         </span>
                       </div>
                       <div className="flex items-center space-x-2 text-muted-foreground">
                         <CircleCheck className="h-4 w-4 fill-muted-foreground text-background" />
                         <span className="font-medium">
-                          {displayNames.tables.length} table{displayNames.tables.length === 1 ? '' : 's'} created
+                          {displayNames.tables.length} table{displayNames.tables.length === 1 ? '' : 's'} saved
                         </span>
                       </div>
                       <div className="flex items-center space-x-2 text-muted-foreground">
                         <CircleCheck className="h-4 w-4 fill-muted-foreground text-background" />
                         <span className="font-medium">
-                          {displayNames.paymentMethods.length} payment method{displayNames.paymentMethods.length === 1 ? '' : 's'} created
+                          {displayNames.paymentMethods.length} payment method{displayNames.paymentMethods.length === 1 ? '' : 's'} saved
                         </span>
                         <PaymentMethodEnvDisplay
                           createdMethods={
@@ -440,8 +444,7 @@ const OnboardingDialog: React.FC<OnboardingDialogProps> = ({
                 >
                   <AlertCircle className="size-4 sm:size-7" />
                   <span className="text-xs sm:text-sm">
-                    Error: Please ensure you're using a fresh installation
-                    without existing data.
+                    {error} Saved records will be reused when you retry.
                   </span>
                 </Badge>
               )}
@@ -481,7 +484,7 @@ const OnboardingDialog: React.FC<OnboardingDialogProps> = ({
                       </Button>
                     ) : (
                       <Button onClick={runOnboarding} className="w-full sm:w-auto">
-                        Confirm
+                        {error ? 'Retry setup' : 'Confirm'}
                       </Button>
                     )}
                   </div>
@@ -491,7 +494,9 @@ const OnboardingDialog: React.FC<OnboardingDialogProps> = ({
           </div>
 
           <div className="order-2 min-h-0 flex-1 overflow-y-auto p-4 sm:p-6 lg:order-none">
-            {selectedTemplate === 'custom' && step === 'template' && !customJsonApplied ? (
+            {step === 'done' ? (
+              <SetupReadinessChecklist settingsReview={settingsReview} />
+            ) : selectedTemplate === 'custom' && !customJsonApplied ? (
               /* Custom Setup Steps */
               <CustomSetupSteps
                 currentJson={currentJsonData}
@@ -528,8 +533,7 @@ const OnboardingDialog: React.FC<OnboardingDialogProps> = ({
             >
               <AlertCircle className="size-4 sm:size-7" />
               <span className="text-xs sm:text-sm">
-                Error: Please ensure you're using a fresh installation
-                without existing data.
+                {error} Saved records will be reused when you retry.
               </span>
             </Badge>
           )}
@@ -569,7 +573,7 @@ const OnboardingDialog: React.FC<OnboardingDialogProps> = ({
                   </Button>
                 ) : (
                   <Button onClick={runOnboarding} className="flex-1">
-                    Confirm
+                    {error ? 'Retry setup' : 'Confirm'}
                   </Button>
                 )}
               </div>

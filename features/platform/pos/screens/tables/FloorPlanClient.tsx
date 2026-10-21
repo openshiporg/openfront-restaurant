@@ -113,15 +113,12 @@ const GET_TABLE_ORDER = gql`
 
 const UPDATE_TABLE_STATUS = gql`
   mutation UpdateTableStatus($id: ID!, $status: String!) {
-    updateTable(where: { id: $id }, data: { status: $status }) {
-      id
-      status
-    }
+    updateServiceFloorTableStatus(tableId: $id, status: $status) { success error }
   }
 `
 
 const UPDATE_TABLE_POSITION = gql`
-  mutation UpdateTablePosition($id: ID!, $x: Int!, $y: Int!) {
+  mutation UpdateTablePosition($id: ID!, $x: Float!, $y: Float!) {
     updateTable(where: { id: $id }, data: { positionX: $x, positionY: $y }) {
       id
       positionX
@@ -253,10 +250,11 @@ export function FloorPlanClient() {
     if (!selectedTable) return
 
     try {
-      await request('/api/graphql', UPDATE_TABLE_STATUS, {
+      const result: any = await request('/api/graphql', UPDATE_TABLE_STATUS, {
         id: selectedTable.id,
         status,
       })
+      if (!result.updateServiceFloorTableStatus.success) throw new Error(result.updateServiceFloorTableStatus.error)
       await fetchTables()
       setDialogOpen(false)
     } catch (err) {

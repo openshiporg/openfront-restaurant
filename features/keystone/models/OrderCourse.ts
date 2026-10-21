@@ -15,10 +15,10 @@ import { trackingFields } from "./trackingFields";
 export const OrderCourse = list({
   access: {
     operation: {
-      query: permissions.canReadKitchen,
-      create: permissions.canManageKitchen,
-      update: permissions.canManageKitchen,
-      delete: permissions.canManageKitchen,
+      query: ({ session }) => permissions.canReadKitchen({ session }) || permissions.canReadOrders({ session }),
+      create: () => false,
+      update: () => false,
+      delete: () => false,
     },
   },
   ui: {

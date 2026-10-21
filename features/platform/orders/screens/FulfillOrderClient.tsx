@@ -16,6 +16,7 @@ const NEXT_STATUS: Record<string, string | null> = {
   sent_to_kitchen: "in_progress",
   in_progress: "ready",
   ready: "served",
+  dispatched: "served",
   served: "completed",
   completed: null,
   cancelled: null,
@@ -25,12 +26,13 @@ const NEXT_LABEL: Record<string, string> = {
   sent_to_kitchen: "Send order to kitchen",
   in_progress: "Mark as preparing",
   ready: "Mark as ready",
+  dispatched: "Mark dispatched",
   served: "Mark as served",
   completed: "Close order",
 };
 
 export function FulfillOrderClient({ order }: FulfillOrderClientProps) {
-  const nextStatus = NEXT_STATUS[order.status] || null;
+  const nextStatus = order.status === "ready" && order.orderType === "delivery" ? "dispatched" : NEXT_STATUS[order.status] || null;
 
   const handleAdvanceOrder = async () => {
     if (!nextStatus) {
@@ -38,7 +40,10 @@ export function FulfillOrderClient({ order }: FulfillOrderClientProps) {
       return;
     }
 
-    const result = await updateOrderStatus(order.id, nextStatus);
+    const reason = order.orderType === "delivery" && ["dispatched", "served"].includes(nextStatus)
+      ? window.prompt(nextStatus === "dispatched" ? "Courier name / handoff reference" : "Delivery confirmation reference / recipient acknowledgement")?.trim() : undefined;
+    if (order.orderType === "delivery" && ["dispatched", "served"].includes(nextStatus) && !reason) return;
+    const result = await updateOrderStatus(order.id, nextStatus, reason);
     if (result.success) {
       toast.success(`Order updated to ${nextStatus.replace(/_/g, " ")}`);
     } else {
@@ -62,7 +67,7 @@ export function FulfillOrderClient({ order }: FulfillOrderClientProps) {
             className="bg-orange-600 hover:bg-orange-700"
           >
             <ChefHat className="h-4 w-4 mr-2" />
-            {nextStatus ? NEXT_LABEL[nextStatus] || "Advance order" : "No next action"}
+            {nextStatus === "served" && order.orderType === "delivery" ? "Confirm delivered" : nextStatus ? NEXT_LABEL[nextStatus] || "Advance order" : "No next action"}
           </Button>
         </div>
       </div>

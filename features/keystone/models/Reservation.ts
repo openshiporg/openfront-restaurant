@@ -15,9 +15,9 @@ export const Reservation = list({
   access: {
     operation: {
       query: permissions.canReadTables,
-      create: permissions.canManageTables,
-      update: permissions.canManageTables,
-      delete: permissions.canManageTables,
+      create: () => false,
+      update: () => false,
+      delete: () => false,
     },
   },
   ui: {

@@ -8,8 +8,8 @@
     "locale": "en-US",
     "timezone": "America/New_York",
     "countryCode": "US",
-    "deliveryEnabled": true,
-    "deliveryPostalCodes": ["11201", "11205", "11215", "11217", "11231"],
+    "deliveryEnabled": false,
+    "deliveryPostalCodes": [],
     "hours": {
       "monday": "11:00 AM - 10:00 PM",
       "tuesday": "11:00 AM - 10:00 PM",
@@ -28,9 +28,7 @@
     "heroHeadline": "Fresh meals for pickup and delivery.",
     "heroSubheadline": "A modern ordering storefront with house favorites, quick pickup, and a menu built to customize.",
     "heroTagline": "Made fresh daily · Ready when you are",
-    "promoBanner": "Free pickup discount · 10% off all pickup orders",
-    "rating": 4.8,
-    "reviewCount": 2341
+    "promoBanner": "Free pickup discount · 10% off all pickup orders"
   },
   "kitchenStations": [
     {

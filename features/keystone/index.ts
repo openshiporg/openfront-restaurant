@@ -8,6 +8,7 @@ import { permissions } from "./access";
 import Iron from "@hapi/iron";
 import * as cookie from "cookie";
 import { getRuntimeConfig } from "./runtimeConfig";
+import { authenticateApiKey, refreshHumanSession } from "./utils/requestAuthentication";
 
 const runtimeConfig = getRuntimeConfig();
 const { databaseURL, sessionSecret } = runtimeConfig;
@@ -56,25 +57,20 @@ export function statelessSessions({
     async get({ context }: { context: any }) {
       if (!context?.req) return;
       
-      // Check for OAuth Bearer token authentication
       const authHeader = context.req.headers.authorization;
-      
-      if (authHeader?.startsWith("Bearer ")) {
-        const accessToken = authHeader.replace("Bearer ", "");
-        
-        // Try as regular session token
+      if (typeof authHeader === "string" && authHeader.startsWith("Bearer ")) {
+        const accessToken = authHeader.slice(7);
         try {
-          return await Iron.unseal(accessToken, secret, ironOptions);
-        } catch (err) {}
+          if (accessToken.startsWith("of_")) return await authenticateApiKey(context, accessToken);
+          return await refreshHumanSession(context, await Iron.unseal(accessToken, secret, ironOptions));
+        } catch { return undefined; }
       }
-      
-      // Check for session cookie
       const cookies = cookie.parse(context.req.headers.cookie || "");
       const token = cookies[cookieName];
       if (!token) return;
       try {
-        return await Iron.unseal(token, secret, ironOptions);
-      } catch (err) {}
+        return await refreshHumanSession(context, await Iron.unseal(token, secret, ironOptions));
+      } catch { return undefined; }
     },
     async end({ context }: { context: any }) {
       if (!context?.res) return;
@@ -171,6 +167,7 @@ const { withAuth } = createAuth({
   },
   sessionData: `
     id
+    isActive
     name
     email
     role {

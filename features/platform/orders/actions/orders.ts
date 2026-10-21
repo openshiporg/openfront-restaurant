@@ -133,10 +133,10 @@ export async function getOrder(orderId: string) {
   return response;
 }
 
-export async function updateOrderStatus(id: string, status: string) {
+export async function updateOrderStatus(id: string, status: string, reason?: string) {
   const query = `
-    mutation TransitionRestaurantOrder($id: ID!, $status: String!) {
-      transitionRestaurantOrder(orderId: $id, status: $status) {
+    mutation TransitionRestaurantOrder($id: ID!, $status: String!, $reason: String) {
+      transitionRestaurantOrder(orderId: $id, status: $status, reason: $reason) {
         id
         status
       }
@@ -145,7 +145,8 @@ export async function updateOrderStatus(id: string, status: string) {
 
   const response = await keystoneClient(query, {
     id,
-    status
+    status,
+    reason
   });
 
   if (response.success) {
@@ -163,6 +164,7 @@ export async function getOrderStatusCounts() {
       sent_to_kitchen: restaurantOrdersCount(where: { status: { equals: "sent_to_kitchen" } })
       in_progress: restaurantOrdersCount(where: { status: { equals: "in_progress" } })
       ready: restaurantOrdersCount(where: { status: { equals: "ready" } })
+      dispatched: restaurantOrdersCount(where: { status: { equals: "dispatched" } })
       served: restaurantOrdersCount(where: { status: { equals: "served" } })
       completed: restaurantOrdersCount(where: { status: { equals: "completed" } })
       cancelled: restaurantOrdersCount(where: { status: { equals: "cancelled" } })

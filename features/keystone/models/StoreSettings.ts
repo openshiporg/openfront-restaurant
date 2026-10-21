@@ -10,6 +10,20 @@ import {
 } from "../../lib/store-logo";
 import { sanitizeStoreLogoSvg } from "../utils/storeLogo";
 import { getPublicPaymentProviderConfig } from "../utils/paymentProviderConfig";
+import { getDeliveryConfigurationError, normalizeDeliveryPostalCodeList } from "../../lib/delivery-zones";
+
+function effectiveDeliverySettings(input: any, existing: any = {}) {
+  return {
+    deliveryEnabled: input.deliveryEnabled === undefined ? existing.deliveryEnabled ?? true : input.deliveryEnabled,
+    countryCode: input.countryCode === undefined ? existing.countryCode ?? "US" : input.countryCode,
+    deliveryPostalCodes: input.deliveryPostalCodes === undefined ? existing.deliveryPostalCodes : input.deliveryPostalCodes,
+  };
+}
+
+function deliveryValidationError(settings: any) {
+  return getDeliveryConfigurationError(settings);
+}
+
 
 export const StoreSettings = list({
   access: {
@@ -18,6 +32,37 @@ export const StoreSettings = list({
       create: permissions.canManageSettings,
       update: permissions.canManageSettings,
       delete: permissions.canManageSettings,
+    },
+  },
+  hooks: {
+    resolveInput: {
+      create: ({ inputData, resolvedData }: any) => ({
+        ...resolvedData,
+        deliveryEnabled: inputData?.deliveryEnabled === undefined ? false : resolvedData.deliveryEnabled,
+        deliveryPostalCodes: inputData?.deliveryPostalCodes === undefined
+          ? []
+          : normalizeDeliveryPostalCodeList(resolvedData.deliveryPostalCodes),
+      }),
+      update: ({ resolvedData }: any) => resolvedData.deliveryPostalCodes === undefined
+        ? resolvedData
+        : { ...resolvedData, deliveryPostalCodes: normalizeDeliveryPostalCodeList(resolvedData.deliveryPostalCodes) },
+    },
+    validate: {
+      create: ({ inputData, resolvedData, addValidationError }: any) => {
+        const settings = effectiveDeliverySettings(resolvedData);
+        if (inputData?.deliveryPostalCodes !== undefined) settings.deliveryPostalCodes = inputData.deliveryPostalCodes;
+        const issue = deliveryValidationError(settings);
+        if (issue) addValidationError(issue);
+        if (settings.deliveryEnabled && (inputData?.countryCode === undefined || inputData?.deliveryPostalCodes === undefined)) {
+          addValidationError("Enabling delivery requires an explicitly submitted country and postal allowlist");
+        }
+      },
+      update: ({ inputData, item, resolvedData, addValidationError }: any) => {
+        const settings = effectiveDeliverySettings(resolvedData, item);
+        if (inputData?.deliveryPostalCodes !== undefined) settings.deliveryPostalCodes = inputData.deliveryPostalCodes;
+        const issue = deliveryValidationError(settings);
+        if (issue) addValidationError(issue);
+      },
     },
   },
   isSingleton: true,

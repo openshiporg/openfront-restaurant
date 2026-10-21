@@ -24,6 +24,7 @@ import { gql, request } from 'graphql-request'
 import { cn } from '@/lib/utils'
 import { PlatformDatePicker } from '@/features/platform/components/PlatformDatePicker'
 import { formatCurrency } from '@/features/storefront/lib/currency'
+import { PurchaseEvidenceDialog } from '../components/PurchaseEvidenceDialog'
 import { PageBreadcrumbs } from '@/features/dashboard/components/PageBreadcrumbs'
 
 interface PurchaseOrder {
@@ -65,6 +66,7 @@ const STATUS_CONFIG: Record<string, { dot: string; text: string; label: string }
   sent:      { dot: 'bg-blue-500',    text: 'text-blue-600',    label: 'Sent' },
   confirmed: { dot: 'bg-indigo-500',  text: 'text-indigo-600',  label: 'Confirmed' },
   shipped:   { dot: 'bg-purple-500',  text: 'text-purple-600',  label: 'Shipped' },
+  partially_received: { dot: 'bg-amber-500', text: 'text-amber-600', label: 'Partially received' },
   received:  { dot: 'bg-emerald-500', text: 'text-emerald-600', label: 'Received' },
   cancelled: { dot: 'bg-red-400',     text: 'text-red-500',     label: 'Cancelled' },
 }
@@ -105,6 +107,7 @@ function generatePONumber(): string {
 }
 
 export function PurchaseOrdersPage() {
+  const [evidenceOrderId, setEvidenceOrderId] = useState<string | null>(null)
   const [orders, setOrders] = useState<PurchaseOrder[]>([])
   const [vendors, setVendors] = useState<Vendor[]>([])
   const [ingredients, setIngredients] = useState<Ingredient[]>([])
@@ -149,6 +152,7 @@ export function PurchaseOrdersPage() {
   }
 
   const openDialog = (po?: PurchaseOrder) => {
+    if (po && po.status !== 'draft') { setEvidenceOrderId(po.id); return }
     if (po) {
       setEditingPO(po)
       setForm({
@@ -199,7 +203,6 @@ export function PurchaseOrdersPage() {
         await request('/api/graphql', UPDATE_PO, { id: editingPO.id, data })
       } else {
         data.poNumber = generatePONumber()
-        data.status = 'draft'
         await request('/api/graphql', CREATE_PO, { data })
       }
       setDialogOpen(false)
@@ -210,15 +213,14 @@ export function PurchaseOrdersPage() {
     }
   }
 
+  const [actionError, setActionError] = useState('')
   const updateStatus = async (id: string, status: string) => {
     try {
-      const data: any = { status }
-      if (status === 'received') data.receivedDate = new Date().toISOString()
-      await request('/api/graphql', UPDATE_PO, { id, data })
-      fetchData()
-    } catch (err) {
-      console.error('Error:', err)
-    }
+      if (status === 'received') {
+        setEvidenceOrderId(id); return
+      } else await request('/api/graphql', 'mutation($id:ID!,$status:String!){transitionPurchaseOrder(id:$id,status:$status){id status}}', { id, status })
+      setActionError(''); await fetchData()
+    } catch (err: any) { setActionError(err.message) }
   }
 
   const handleDelete = async (id: string) => {
@@ -431,10 +433,11 @@ export function PurchaseOrdersPage() {
                               </button>
                             </>
                           )}
-                          {po.status === 'shipped' && (
+                          {['sent', 'confirmed', 'shipped', 'partially_received'].includes(po.status) && (
+                            <><Button size="sm" variant="outline" className="h-7 text-xs px-2.5" onClick={() => { if (window.confirm('Cancel the unreceived remainder? Existing received stock and receipts remain recorded.')) updateStatus(po.id, 'cancelled') }}>Cancel remainder</Button>
                             <Button size="sm" className="h-7 text-xs px-2.5" onClick={() => updateStatus(po.id, 'received')}>
                               <Package size={11} className="mr-1" /> Receive
-                            </Button>
+                            </Button></>
                           )}
                         </div>
                         <ChevronRight size={14} className="text-muted-foreground/40 group-hover:text-muted-foreground transition-colors" />
@@ -448,6 +451,8 @@ export function PurchaseOrdersPage() {
         )}
       </ScrollArea>
 
+      {actionError && <p role="alert" className="text-destructive p-4">{actionError}</p>}
+      {evidenceOrderId && <PurchaseEvidenceDialog orderId={evidenceOrderId} currencyCode={currencyConfig.currencyCode} onClose={() => setEvidenceOrderId(null)} onChanged={fetchData} />}
       {/* Create/Edit Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">

@@ -1,10 +1,12 @@
+import { useRef } from "react";
+import { requestSeedRecord, runSeedPhases, seedTableFloor, validateRestaurantSeed } from "../utils/seedRecords";
 import { GraphQLClient, gql } from 'graphql-request';
 import { startOnboarding, completeOnboarding } from '../actions/onboarding';
-import { SECTION_DEFINITIONS } from '../config/templates';
-import { getItemsFromJsonData } from '../utils/dataUtils';
 import { TemplateType, OnboardingStep } from './useOnboardingState';
-import { inferDefaultDeliveryPostalCodes, normalizeCountryCode } from '@/features/lib/delivery-zones';
-import { DEFAULT_STORE_LOGO_COLOR, DEFAULT_STORE_LOGO_ICON } from '@/features/lib/store-logo';
+import { getUniqueDeliveryPostalCodes, normalizeCountryCode } from '@/features/lib/delivery-zones';
+import { DEFAULT_STORE_LOGO_COLOR, DEFAULT_STORE_LOGO_ICON, normalizeStoreLogoColor } from '@/features/lib/store-logo';
+import { majorToMinorUnits } from '@/features/lib/currency-units';
+import { findSavedSettingsMismatches } from '../utils/setupReadiness';
 
 const GRAPHQL_ENDPOINT = '/api/graphql';
 
@@ -18,6 +20,7 @@ interface OnboardingApiProps {
   setItemError: (type: string, item: string, errorMessage: string) => void;
   setStep: (step: OnboardingStep) => void;
   setError: (error: string | null) => void;
+  setSettingsReview: (review: { reused: boolean; checkedFields: string[]; mismatchedFields: string[] }) => void;
   setIsLoading: (loading: boolean) => void;
   resetOnboardingState: () => void;
 }
@@ -32,11 +35,15 @@ export function useOnboardingApi({
   setItemError,
   setStep,
   setError,
+  setSettingsReview,
   setIsLoading,
   resetOnboardingState,
 }: OnboardingApiProps) {
 
+  const running = useRef(false);
   const runOnboarding = async () => {
+    if (running.current) return;
+    running.current = true;
     setIsLoading(true);
     setError(null);
     resetOnboardingState();
@@ -44,43 +51,29 @@ export function useOnboardingApi({
     setProgress('Starting restaurant setup...');
 
     try {
-      await startOnboarding();
-    } catch (error) {
-      console.error('Error marking onboarding as started:', error);
-    }
-
-    try {
-      const client = new GraphQLClient(GRAPHQL_ENDPOINT, {
-        headers: { 'Content-Type': 'application/json' },
-      });
-
-      // Create store settings first
-      await createStoreSettings(client, currentJsonData);
-
-      // Create in dependency order
-      const createdCategories = await createCategories(client, currentJsonData);
-      const createdMenuItems = await createMenuItems(client, currentJsonData, createdCategories);
-      await createModifiers(client, currentJsonData, createdMenuItems);
-      await createPaymentMethods(client, currentJsonData);
-
-      // Create kitchen and seating infrastructure
-      await createKitchenStations(client, currentJsonData);
-      const createdFloors = await createFloors(client, currentJsonData);
-      const createdSections = await createSections(client, currentJsonData);
-      await createTables(client, currentJsonData, createdFloors, createdSections);
-
-      setProgress('Restaurant setup complete!');
-
-      try {
-        await completeOnboarding();
-      } catch (error) {
-        console.error('Error marking onboarding as completed:', error);
-      }
-
+      validateRestaurantSeed(currentJsonData);
+      const client = new GraphQLClient(GRAPHQL_ENDPOINT, { headers: { 'Content-Type': 'application/json' } });
+      let categories: Record<string, string> = {};
+      let menuItems: Record<string, string> = {};
+      let floors: Record<string, string> = {};
+      let sections: Record<string, string> = {};
+      await runSeedPhases(startOnboarding, [
+        () => createStoreSettings(client, currentJsonData),
+        async () => { categories = await createCategories(client, currentJsonData); },
+        async () => { menuItems = await createMenuItems(client, currentJsonData, categories, currentJsonData.storeInfo?.currencyCode || 'USD'); },
+        () => createModifiers(client, currentJsonData, menuItems, currentJsonData.storeInfo?.currencyCode || 'USD'),
+        () => createPaymentMethods(client, currentJsonData),
+        () => createKitchenStations(client, currentJsonData),
+        async () => { floors = await createFloors(client, currentJsonData); },
+        async () => { sections = await createSections(client, currentJsonData); },
+        () => createTables(client, currentJsonData, floors, sections),
+      ], completeOnboarding);
+      setProgress('Restaurant setup saved.');
       setStep('done');
     } catch (e: any) {
       handleOnboardingError(e);
     } finally {
+      running.current = false;
       setIsLoading(false);
     }
   };
@@ -103,12 +96,11 @@ export function useOnboardingApi({
         }
       `;
 
-      await client.request(mutation, {
-        data: {
+      const settingsInput = Object.fromEntries(Object.entries({
           name: storeInfo.name,
           tagline: storeInfo.tagline,
           logoIcon: storeInfo.logoIcon || DEFAULT_STORE_LOGO_ICON,
-          logoColor: storeInfo.logoColor || DEFAULT_STORE_LOGO_COLOR,
+          logoColor: normalizeStoreLogoColor(storeInfo.logoColor || DEFAULT_STORE_LOGO_COLOR),
           address: storeInfo.address,
           phone: storeInfo.phone,
           currencyCode: storeInfo.currencyCode || 'USD',
@@ -116,10 +108,7 @@ export function useOnboardingApi({
           timezone: storeInfo.timezone || 'America/New_York',
           countryCode: normalizeCountryCode(storeInfo.countryCode || 'US'),
           deliveryEnabled: storeInfo.deliveryEnabled ?? true,
-          deliveryPostalCodes: inferDefaultDeliveryPostalCodes({
-            deliveryPostalCodes: storeInfo.deliveryPostalCodes,
-            address: storeInfo.address,
-          }),
+          deliveryPostalCodes: getUniqueDeliveryPostalCodes(storeInfo.deliveryPostalCodes),
           hours: storeInfo.hours,
           deliveryFee: storeInfo.deliveryFee?.toString(),
           deliveryMinimum: storeInfo.deliveryMinimum?.toString(),
@@ -133,7 +122,13 @@ export function useOnboardingApi({
           promoBanner: storeInfo.promoBanner,
           rating: storeInfo.rating?.toString(),
           reviewCount: storeInfo.reviewCount,
-        },
+        }).filter(([, value]) => value !== undefined));
+      const result: any = await requestSeedRecord(client, mutation, { data: settingsInput });
+      const persisted = result.createStoreSettings;
+      setSettingsReview({
+        reused: Boolean(persisted.reused),
+        checkedFields: Object.keys(settingsInput),
+        mismatchedFields: findSavedSettingsMismatches(settingsInput, persisted.settingsReview),
       });
 
       setItemCompleted('storeInfo', storeName);
@@ -144,6 +139,7 @@ export function useOnboardingApi({
       }
       setItemError('storeInfo', storeName, errorMessage);
       console.error('Error creating store settings:', itemError);
+      throw itemError;
     }
   };
 
@@ -165,7 +161,7 @@ export function useOnboardingApi({
           }
         `;
 
-        const result = (await client.request(mutation, {
+        const result = (await requestSeedRecord(client, mutation, {
           data: {
             name: category.name,
             icon: category.icon,
@@ -183,6 +179,7 @@ export function useOnboardingApi({
         }
         setItemError('categories', categoryName, errorMessage);
         console.error(`Error creating category ${category.name}:`, itemError);
+        throw itemError;
       }
     }
 
@@ -192,7 +189,8 @@ export function useOnboardingApi({
   const createMenuItems = async (
     client: GraphQLClient,
     data: any,
-    createdCategories: Record<string, string>
+    createdCategories: Record<string, string>,
+    currencyCode: string
   ) => {
     setProgress('Creating menu items...');
     const slugify = (text: string) => text.toLowerCase().replace(/ /g, '-').replace(/[^\w-]+/g, '');
@@ -207,7 +205,8 @@ export function useOnboardingApi({
 
       try {
         const categoryId = createdCategories[item.category];
-        const priceInCents = Math.round(parseFloat(item.price) * 100);
+        if (!categoryId) throw new Error(`Missing category for ${item.name}`);
+        const priceInCents = majorToMinorUnits(item.price, currencyCode);
 
         const mutation = gql`
           mutation CreateMenuItem($data: MenuItemCreateInput!) {
@@ -218,7 +217,7 @@ export function useOnboardingApi({
           }
         `;
 
-        const result = (await client.request(mutation, {
+        const result = (await requestSeedRecord(client, mutation, {
           data: {
             name: item.name,
             price: priceInCents,
@@ -248,6 +247,7 @@ export function useOnboardingApi({
         }
         setItemError('menuItems', itemName, errorMessage);
         console.error(`Error creating menu item ${item.name}:`, itemError);
+        throw itemError;
       }
     }
 
@@ -257,7 +257,8 @@ export function useOnboardingApi({
   const createModifiers = async (
     client: GraphQLClient,
     data: any,
-    createdMenuItems: Record<string, string>
+    createdMenuItems: Record<string, string>,
+    currencyCode: string
   ) => {
     setProgress('Creating item modifiers...');
 
@@ -267,7 +268,8 @@ export function useOnboardingApi({
 
       try {
         const menuItemId = createdMenuItems[modifier.menuItemName];
-        const priceAdjustmentInCents = Math.round(parseFloat(modifier.priceAdjustment || '0.00') * 100);
+        if (!menuItemId) throw new Error(`Missing menu item for ${modifier.name}`);
+        const priceAdjustmentInCents = majorToMinorUnits(modifier.priceAdjustment || '0.00', currencyCode);
 
         const mutation = gql`
           mutation CreateMenuItemModifier($data: MenuItemModifierCreateInput!) {
@@ -278,7 +280,7 @@ export function useOnboardingApi({
           }
         `;
 
-        await client.request(mutation, {
+        await requestSeedRecord(client, mutation, {
           data: {
             name: modifier.name,
             modifierGroup: modifier.modifierGroup || 'addons',
@@ -300,6 +302,7 @@ export function useOnboardingApi({
         }
         setItemError('modifiers', modifierName, errorMessage);
         console.error(`Error creating modifier ${modifier.name}:`, itemError);
+        throw itemError;
       }
     }
   };
@@ -349,8 +352,8 @@ export function useOnboardingApi({
       }
     ].filter((provider) => selectedMethods.size === 0 || selectedMethods.has(provider.seedName));
 
-    for (const { seedName: _seedName, ...provider } of providers) {
-      setItemLoading('paymentMethods', provider.name);
+    for (const { seedName, ...provider } of providers) {
+      setItemLoading('paymentMethods', seedName);
 
       try {
         const mutation = gql`
@@ -362,24 +365,19 @@ export function useOnboardingApi({
           }
         `;
 
-        await client.request(mutation, {
+        await requestSeedRecord(client, mutation, {
           data: provider
         });
 
-        setItemCompleted('paymentMethods', provider.name);
+        setItemCompleted('paymentMethods', seedName);
       } catch (itemError: any) {
         let errorMessage = itemError.message || 'Unknown error';
         if (itemError.response?.errors) {
           errorMessage = itemError.response.errors.map((err: any) => err.message).join('\n');
         }
         
-        // If it's a unique constraint error (provider already exists), mark as completed anyway
-        if (errorMessage.includes('Unique constraint failed')) {
-          setItemCompleted('paymentMethods', provider.name);
-        } else {
-          setItemError('paymentMethods', provider.name, errorMessage);
-          console.error(`Error creating payment provider ${provider.name}:`, itemError);
-        }
+        setItemError('paymentMethods', seedName, errorMessage);
+        throw itemError;
       }
     }
   };
@@ -402,7 +400,7 @@ export function useOnboardingApi({
           }
         `;
 
-        const result = await client.request(mutation, {
+        const result = await requestSeedRecord(client, mutation, {
           data: {
             name: station.name,
             displayOrder: 0,
@@ -419,6 +417,7 @@ export function useOnboardingApi({
         }
         setItemError('kitchenStations', stationName, errorMessage);
         console.error(`Error creating kitchen station ${station.name}:`, itemError);
+        throw itemError;
       }
     }
 
@@ -443,7 +442,7 @@ export function useOnboardingApi({
           }
         `;
 
-        const result = await client.request(mutation, {
+        const result = await requestSeedRecord(client, mutation, {
           data: {
             name: floor.name,
             level: floor.level || 1,
@@ -460,6 +459,7 @@ export function useOnboardingApi({
         }
         setItemError('floors', floorName, errorMessage);
         console.error(`Error creating floor ${floor.name}:`, itemError);
+        throw itemError;
       }
     }
 
@@ -484,7 +484,7 @@ export function useOnboardingApi({
           }
         `;
 
-        const result = await client.request(mutation, {
+        const result = await requestSeedRecord(client, mutation, {
           data: {
             name: section.name,
           },
@@ -499,6 +499,7 @@ export function useOnboardingApi({
         }
         setItemError('sections', sectionName, errorMessage);
         console.error(`Error creating section ${section.name}:`, itemError);
+        throw itemError;
       }
     }
 
@@ -518,8 +519,9 @@ export function useOnboardingApi({
       setItemLoading('tables', tableName);
 
       try {
-        const floorId = createdFloors[table.floor];
+        const floorId = createdFloors[seedTableFloor(data, table)];
         const sectionId = createdSections[table.section];
+        if (!floorId || !sectionId) throw new Error(`Missing floor or section for ${tableName}`);
 
         const mutation = gql`
           mutation CreateTable($data: TableCreateInput!) {
@@ -530,11 +532,10 @@ export function useOnboardingApi({
           }
         `;
 
-        await client.request(mutation, {
+        await requestSeedRecord(client, mutation, {
           data: {
             tableNumber: table.tableNumber,
             capacity: table.capacity || 4,
-            status: 'available',
             shape: 'rectangle',
             positionX: table.positionX || 0,
             positionY: table.positionY || 0,
@@ -551,6 +552,7 @@ export function useOnboardingApi({
         }
         setItemError('tables', tableName, errorMessage);
         console.error(`Error creating table ${table.tableNumber}:`, itemError);
+        throw itemError;
       }
     }
   };
@@ -572,22 +574,7 @@ export function useOnboardingApi({
     setError(errorMessage);
     console.error('Error during onboarding:', e);
 
-    for (const section of SECTION_DEFINITIONS) {
-      const sectionType = section.type;
-      const sectionItems = currentJsonData 
-        ? getItemsFromJsonData(currentJsonData, sectionType)
-        : section.getItemsFn(selectedTemplate as 'full' | 'minimal' | 'custom');
-      const completedSectionItems = completedItems[sectionType] || [];
 
-      const failedItem = sectionItems.find(
-        (item) => !completedSectionItems.includes(item)
-      );
-
-      if (failedItem) {
-        setItemError(sectionType, failedItem, errorMessage);
-        break;
-      }
-    }
   };
 
   return { runOnboarding };

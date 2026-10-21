@@ -6,6 +6,12 @@ import seedData from '../lib/seed.json';
 export type OnboardingStep = 'template' | 'progress' | 'done';
 export type TemplateType = 'full' | 'minimal' | 'custom';
 
+export interface OnboardingSettingsReview {
+  reused: boolean;
+  checkedFields: string[];
+  mismatchedFields: string[];
+}
+
 export interface OnboardingState {
   step: OnboardingStep;
   selectedTemplate: TemplateType;
@@ -15,6 +21,7 @@ export interface OnboardingState {
   loadingItems: Record<string, string[]>;
   completedItems: Record<string, string[]>;
   error: string | null;
+  settingsReview: OnboardingSettingsReview | null;
   itemErrors: Record<string, Record<string, string | undefined>>;
   isLoading: boolean;
 }
@@ -41,6 +48,7 @@ export function useOnboardingState() {
     loadingItems: { ...initialItemsState },
     completedItems: { ...initialItemsState },
     error: null,
+    settingsReview: null,
     itemErrors: {},
     isLoading: false,
   });
@@ -89,6 +97,10 @@ export function useOnboardingState() {
     setState(prev => ({ ...prev, error }));
   };
 
+  const setSettingsReview = (settingsReview: OnboardingSettingsReview | null) => {
+    setState(prev => ({ ...prev, settingsReview }));
+  };
+
   const setProgressMessage = (message: string) => {
     setState(prev => ({ ...prev, progressMessage: message }));
   };
@@ -107,81 +119,8 @@ export function useOnboardingState() {
     };
   };
 
-  const setProgress = (message: string) => {
-    setProgressMessage(message);
-
-    // Get current display names for bulk completion logic
-    const displayNames = state.currentJsonData
-      ? getDisplayNamesFromData(state.currentJsonData)
-      : RESTAURANT_TEMPLATES[state.selectedTemplate].displayNames;
-
-    // Bulk completion logic matching OG Openfront exactly
-    if (message.includes('menu categories')) {
-      setState(prev => ({
-        ...prev,
-        completedItems: { ...prev.completedItems, storeInfo: [...displayNames.storeInfo] },
-        loadingItems: { ...prev.loadingItems, storeInfo: [] }
-      }));
-    } else if (message.includes('menu items')) {
-      setState(prev => ({
-        ...prev,
-        completedItems: { ...prev.completedItems, categories: [...displayNames.categories] },
-        loadingItems: { ...prev.loadingItems, categories: [] }
-      }));
-    } else if (message.includes('modifiers')) {
-      setState(prev => ({
-        ...prev,
-        completedItems: { ...prev.completedItems, menuItems: [...displayNames.menuItems] },
-        loadingItems: { ...prev.loadingItems, menuItems: [] }
-      }));
-    } else if (message.includes('payment methods')) {
-      setState(prev => ({
-        ...prev,
-        completedItems: { ...prev.completedItems, modifiers: [...displayNames.modifiers] },
-        loadingItems: { ...prev.loadingItems, modifiers: [] }
-      }));
-    } else if (message.includes('kitchen stations')) {
-      setState(prev => ({
-        ...prev,
-        completedItems: { ...prev.completedItems, paymentMethods: [...displayNames.paymentMethods] },
-        loadingItems: { ...prev.loadingItems, paymentMethods: [] }
-      }));
-    } else if (message.includes('floors')) {
-      setState(prev => ({
-        ...prev,
-        completedItems: { ...prev.completedItems, kitchenStations: [...displayNames.kitchenStations] },
-        loadingItems: { ...prev.loadingItems, kitchenStations: [] }
-      }));
-    } else if (message.includes('sections')) {
-      setState(prev => ({
-        ...prev,
-        completedItems: { ...prev.completedItems, floors: [...displayNames.floors] },
-        loadingItems: { ...prev.loadingItems, floors: [] }
-      }));
-    } else if (message.includes('tables')) {
-      setState(prev => ({
-        ...prev,
-        completedItems: { ...prev.completedItems, sections: [...displayNames.sections] },
-        loadingItems: { ...prev.loadingItems, sections: [] }
-      }));
-    } else if (message.includes('complete')) {
-      setState(prev => ({
-        ...prev,
-        loadingItems: { ...prev.loadingItems, tables: [] },
-        completedItems: {
-          storeInfo: [...displayNames.storeInfo],
-          categories: [...displayNames.categories],
-          menuItems: [...displayNames.menuItems],
-          modifiers: [...displayNames.modifiers],
-          paymentMethods: [...displayNames.paymentMethods],
-          kitchenStations: [...displayNames.kitchenStations],
-          floors: [...displayNames.floors],
-          sections: [...displayNames.sections],
-          tables: [...displayNames.tables],
-        }
-      }));
-    }
-  };
+  // Progress text is descriptive; only persisted record acknowledgements complete items.
+  const setProgress = (message: string) => setProgressMessage(message);
 
   const setLoadingItems = (items: Record<string, string[]>) => {
     setState(prev => ({ ...prev, loadingItems: items }));
@@ -221,7 +160,7 @@ export function useOnboardingState() {
       },
       completedItems: {
         ...prev.completedItems,
-        [type]: [...(prev.completedItems[type] || []), item],
+        [type]: Array.from(new Set([...(prev.completedItems[type] || []), item])),
       },
       itemErrors: {
         ...prev.itemErrors,
@@ -254,6 +193,7 @@ export function useOnboardingState() {
     setState(prev => ({
       ...prev,
       error: null,
+      settingsReview: null,
       itemErrors: {},
       loadingItems: { ...initialItemsState },
       completedItems: { ...initialItemsState },
@@ -268,6 +208,7 @@ export function useOnboardingState() {
     setCustomJsonApplied,
     setIsLoading,
     setError,
+    setSettingsReview,
     setProgress,
     setLoadingItems,
     setCompletedItems,

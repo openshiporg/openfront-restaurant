@@ -1,4 +1,5 @@
 import Stripe from "stripe";
+import { stripeRefundReference } from "../../keystone/utils/paymentState";
 
 const getStripeClient = () => {
   const stripeKey = process.env.STRIPE_SECRET_KEY;
@@ -30,25 +31,26 @@ export async function createPaymentFunction({ order, amount, currency, idempoten
   };
 }
 
-export async function capturePaymentFunction({ paymentId, amount }: { paymentId: string; amount: number }) {
+export async function capturePaymentFunction({ paymentId, amount, idempotencyKey }: { paymentId: string; amount?: number; idempotencyKey?: string }) {
   const stripe = getStripeClient();
 
   const paymentIntent = await stripe.paymentIntents.capture(paymentId, {
-    amount_to_capture: amount,
-  });
+    ...(amount == null ? {} : { amount_to_capture: amount }),
+  }, idempotencyKey ? { idempotencyKey } : undefined);
 
   return {
     status: paymentIntent.status,
-    amount: (paymentIntent as any).amount_captured,
+    amount: paymentIntent.amount_received,
+    currencyCode: paymentIntent.currency.toUpperCase(),
     data: paymentIntent,
   };
 }
 
-export async function refundPaymentFunction({ paymentId, amount, idempotencyKey }: { paymentId: string; amount: number; idempotencyKey?: string }) {
+export async function refundPaymentFunction({ paymentId, amount, idempotencyKey, refundId }: { paymentId: string; amount: number; idempotencyKey?: string; refundId?: string }) {
   const stripe = getStripeClient();
 
-  const refund = await stripe.refunds.create(
-    { payment_intent: paymentId, amount },
+  const refund = refundId ? await stripe.refunds.retrieve(refundId) : await stripe.refunds.create(
+    { ...stripeRefundReference(paymentId), amount, ...(idempotencyKey ? { metadata: { restaurantRefundKey: idempotencyKey } } : {}) },
     idempotencyKey ? { idempotencyKey } : undefined
   );
 
@@ -65,10 +67,18 @@ export async function getPaymentStatusFunction({ paymentId }: { paymentId: strin
   const stripe = getStripeClient();
 
   const paymentIntent = await stripe.paymentIntents.retrieve(paymentId);
+  const refunds: Stripe.Refund[] = [];
+  let refundsComplete = true;
+  for await (const refund of stripe.refunds.list({ payment_intent: paymentId, limit: 100 })) {
+    if (refunds.length >= 1000) { refundsComplete = false; break; }
+    refunds.push(refund);
+  }
 
   return {
     status: paymentIntent.status,
-    amount: paymentIntent.amount,
+    amount: paymentIntent.status === "succeeded" ? paymentIntent.amount_received : paymentIntent.amount,
+    currencyCode: paymentIntent.currency.toUpperCase(),
+    refunds, refundsComplete,
     data: paymentIntent,
   };
 }
@@ -102,4 +112,13 @@ export async function handleWebhookFunction({ event, headers, rawBody }: { event
   } catch (err: any) {
     throw new Error(`Webhook signature verification failed: ${err?.message || "Unknown error"}`);
   }
+}
+
+export async function cancelPaymentFunction({ paymentId, idempotencyKey }: { paymentId: string; idempotencyKey?: string }) {
+  const stripe = getStripeClient();
+  const current = await stripe.paymentIntents.retrieve(paymentId);
+  if (current.status === "canceled") return { status: "cancelled" };
+  if (current.status === "succeeded") return { status: "succeeded" };
+  const cancelled = await stripe.paymentIntents.cancel(paymentId, {}, idempotencyKey ? { idempotencyKey } : undefined);
+  return { status: cancelled.status === "canceled" ? "cancelled" : cancelled.status };
 }

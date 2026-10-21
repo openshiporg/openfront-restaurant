@@ -20,7 +20,7 @@ function normalizedRequest(input: ManagerApprovalRequest) {
   });
 }
 
-function canApproveAction(context: Context, actionType: ManagerApprovalAction) {
+function canRequestAction(context: Context, actionType: ManagerApprovalAction) {
   return actionType === "refund_payment"
     ? permissions.canManagePayments({ session: context.session })
     : permissions.canManageOrders({ session: context.session });
@@ -32,7 +32,7 @@ export async function requestManagerApproval(
   context: Context
 ) {
   const requesterId = context.session?.itemId;
-  if (!requesterId || !canApproveAction(context, input.actionType)) {
+  if (!requesterId || !canRequestAction(context, input.actionType)) {
     throw new Error("Not authorized to request this manager approval");
   }
   if (!input.targetId?.trim()) throw new Error("Approval target is required");
@@ -66,7 +66,7 @@ export async function approveManagerApproval(
   const outcome = await prisma.$transaction(async (tx: any) => {
     const approval = await tx.managerApproval.findUnique({ where: { id: approvalId } });
     if (!approval) throw new Error("Manager approval request not found");
-    if (!canApproveAction(context, approval.actionType)) {
+    if (!(canRequestAction(context, approval.actionType) && permissions.canManageStaff({ session: context.session }))) {
       throw new Error("Not authorized to approve this manager action");
     }
     if (approval.requestedById === approverId) {

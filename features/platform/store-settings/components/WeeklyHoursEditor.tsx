@@ -53,12 +53,11 @@ interface WeeklyHoursEditorProps {
 
 function to12Hour(time24: string, locale = 'en-US', timezone = 'UTC') {
   const [hour, minute] = time24.split(':').map((v) => Number.parseInt(v, 10))
-  const d = new Date()
-  d.setHours(hour, minute, 0, 0)
+  const d = new Date(Date.UTC(2000, 0, 1, hour, minute))
   return new Intl.DateTimeFormat(locale, {
     hour: 'numeric',
     minute: '2-digit',
-    timeZone: timezone,
+    timeZone: 'UTC',
   }).format(d)
 }
 
@@ -80,8 +79,7 @@ export function WeeklyHoursEditor({
   const activeDayData = days.find((d) => d.key === activeDay)!
 
   // Which key corresponds to today
-  const jsDay = new Date().getDay() // 0 = Sunday
-  const todayKey = days[jsDay === 0 ? 6 : jsDay - 1].key
+  const todayKey = new Intl.DateTimeFormat('en-US', { timeZone: timezone, weekday: 'long' }).format(new Date()).toLowerCase()
 
   return (
     <div className="rounded-lg border border-border bg-card overflow-hidden divide-y divide-border">

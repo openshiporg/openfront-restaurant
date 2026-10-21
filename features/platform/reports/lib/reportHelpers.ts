@@ -1,3 +1,4 @@
+import { businessDate, businessDayStart } from '@/features/lib/financial-ledger';
 import { startOfDay, endOfDay, subDays, subMonths, format, eachDayOfInterval, eachMonthOfInterval } from 'date-fns';
 
 export interface RestaurantOrder {
@@ -7,6 +8,7 @@ export interface RestaurantOrder {
   orderSource: string;
   status: string;
   guestCount: number;
+  physicalGuestCount?: number | null;
   subtotal: string;
   tax: string;
   tip: string;
@@ -16,6 +18,7 @@ export interface RestaurantOrder {
   table?: { id: string; tableNumber: string };
   server?: { id: string; name: string };
   orderItems?: OrderItem[];
+  payments?: { amount: string | number; status: string; refundedAmount?: number }[];
 }
 
 export interface OrderItem {
@@ -32,6 +35,7 @@ export interface OrderItem {
 export interface Payment {
   id: string;
   amount: string;
+  refundedAmount?: number;
   status: string;
   paymentMethod: string;
   tipAmount: string;
@@ -43,6 +47,9 @@ export const getDateRange = (period: string) => {
   let startDate: Date;
 
   switch (period) {
+    case 'today':
+      startDate = startOfDay(new Date());
+      break;
     case '7d':
       startDate = startOfDay(subDays(new Date(), 6));
       break;
@@ -132,16 +139,38 @@ export const parseDecimal = (value: string | number | null | undefined): number 
   return parseFloat(value) || 0;
 };
 
+export const orderNetCollected = (order: RestaurantOrder): number =>
+  (order.payments || []).filter(p => ['succeeded', 'partially_refunded', 'refunded'].includes(p.status))
+    .reduce((sum, p) => sum + Math.max(0, parseDecimal(p.amount) - parseDecimal(p.refundedAmount)), 0);
+
+/** Covers belong to the physical party, not to the number of financial checks. */
+export const orderPhysicalGuests = (order: Pick<RestaurantOrder, 'guestCount' | 'orderSource' | 'physicalGuestCount'>): number => {
+  if (order.orderSource === 'gift_card') return 0;
+  return order.physicalGuestCount != null ? Math.max(0, Number(order.physicalGuestCount)) : Math.max(1, Number(order.guestCount || 1));
+};
+export function venueTodayRange(timezone: string, now = new Date()) {
+  const date = businessDate(now, timezone, 0);
+  const next = new Date(`${date}T00:00:00Z`); next.setUTCDate(next.getUTCDate() + 1);
+  return { startDate: businessDayStart(date, timezone, 0).toISOString(), endDate: new Date(businessDayStart(next.toISOString().slice(0, 10), timezone, 0).getTime() - 1).toISOString() };
+}
+export function operationalDaySummary(orders: RestaurantOrder[], payments: any[], refunds: any[]) {
+  const completed = orders.filter(order => order.status === 'completed' && order.orderSource !== 'gift_card');
+  const settled = ['succeeded', 'partially_refunded', 'refunded'];
+  const gross = payments.filter(payment => settled.includes(payment.status) && payment.order?.orderSource !== 'gift_card').reduce((sum, payment) => sum + parseDecimal(payment.amount), 0);
+  const refunded = refunds.filter(refund => refund.status === 'succeeded' && refund.payment?.order?.orderSource !== 'gift_card').reduce((sum, refund) => sum + parseDecimal(refund.amount), 0);
+  return { netCollections: gross - refunded, completedChecks: completed.length, covers: completed.reduce((sum, order) => sum + orderPhysicalGuests(order), 0), dineInChecksWithGuests: completed.filter(order => order.orderType === 'dine_in' && orderPhysicalGuests(order) > 0).length };
+}
+
 export const calculateSalesMetrics = (orders: RestaurantOrder[], previousOrders?: RestaurantOrder[]) => {
   const totalOrders = orders.length;
-  const completedOrders = orders.filter(o => o.status === 'completed');
+  const completedOrders = orders.filter(o => o.status === 'completed' && o.orderSource !== 'gift_card');
   
-  const totalRevenue = completedOrders.reduce((sum, order) => sum + parseDecimal(order.total), 0);
+  const totalRevenue = completedOrders.reduce((sum, order) => sum + orderNetCollected(order), 0);
   const totalTax = completedOrders.reduce((sum, order) => sum + parseDecimal(order.tax), 0);
   const totalTips = completedOrders.reduce((sum, order) => sum + parseDecimal(order.tip), 0);
   const totalDiscounts = completedOrders.reduce((sum, order) => sum + parseDecimal(order.discount), 0);
   
-  const totalGuests = completedOrders.reduce((sum, order) => sum + (order.guestCount || 1), 0);
+  const totalGuests = completedOrders.reduce((sum, order) => sum + orderPhysicalGuests(order), 0);
   const averageCheckSize = completedOrders.length > 0 ? totalRevenue / completedOrders.length : 0;
   const revenuePerGuest = totalGuests > 0 ? totalRevenue / totalGuests : 0;
 
@@ -159,9 +188,9 @@ export const calculateSalesMetrics = (orders: RestaurantOrder[], previousOrders?
   };
 
   const revenueByType = {
-    dine_in: completedOrders.filter(o => o.orderType === 'dine_in').reduce((sum, o) => sum + parseDecimal(o.total), 0),
-    takeout: completedOrders.filter(o => o.orderType === 'takeout').reduce((sum, o) => sum + parseDecimal(o.total), 0),
-    delivery: completedOrders.filter(o => o.orderType === 'delivery').reduce((sum, o) => sum + parseDecimal(o.total), 0),
+    dine_in: completedOrders.filter(o => o.orderType === 'dine_in').reduce((sum, o) => sum + orderNetCollected(o), 0),
+    takeout: completedOrders.filter(o => o.orderType === 'takeout').reduce((sum, o) => sum + orderNetCollected(o), 0),
+    delivery: completedOrders.filter(o => o.orderType === 'delivery').reduce((sum, o) => sum + orderNetCollected(o), 0),
   };
 
   let previousRevenue = 0;
@@ -170,11 +199,11 @@ export const calculateSalesMetrics = (orders: RestaurantOrder[], previousOrders?
   let previousGuests = 0;
 
   if (previousOrders && previousOrders.length > 0) {
-    const prevCompleted = previousOrders.filter(o => o.status === 'completed');
+    const prevCompleted = previousOrders.filter(o => o.status === 'completed' && o.orderSource !== 'gift_card');
     previousOrdersCount = prevCompleted.length;
-    previousRevenue = prevCompleted.reduce((sum, order) => sum + parseDecimal(order.total), 0);
+    previousRevenue = prevCompleted.reduce((sum, order) => sum + orderNetCollected(order), 0);
     previousAverageCheck = previousOrdersCount > 0 ? previousRevenue / previousOrdersCount : 0;
-    previousGuests = prevCompleted.reduce((sum, order) => sum + (order.guestCount || 1), 0);
+    previousGuests = prevCompleted.reduce((sum, order) => sum + orderPhysicalGuests(order), 0);
   }
 
   return {
@@ -205,9 +234,9 @@ export const calculateDaypartMetrics = (orders: RestaurantOrder[]) => {
     lateNight: { orders: 0, revenue: 0, startHour: 22, endHour: 6 },
   };
 
-  orders.filter(o => o.status === 'completed').forEach(order => {
+  orders.filter(o => o.status === 'completed' && o.orderSource !== 'gift_card').forEach(order => {
     const hour = new Date(order.createdAt).getHours();
-    const revenue = parseDecimal(order.total);
+    const revenue = orderNetCollected(order);
     
     if (hour >= 6 && hour < 11) {
       dayparts.breakfast.orders++;
@@ -228,15 +257,19 @@ export const calculateDaypartMetrics = (orders: RestaurantOrder[]) => {
 };
 
 export const calculatePaymentMethodBreakdown = (payments: Payment[]) => {
-  const breakdown: Record<string, { count: number; total: number }> = {};
+  const breakdown: Record<string, { count: number; total: number; gross: number; refunds: number }> = {};
 
-  payments.filter(p => p.status === 'succeeded').forEach(payment => {
+  payments.filter(p => ['succeeded', 'partially_refunded', 'refunded'].includes(p.status)).forEach(payment => {
     const method = payment.paymentMethod || 'unknown';
     if (!breakdown[method]) {
-      breakdown[method] = { count: 0, total: 0 };
+      breakdown[method] = { count: 0, total: 0, gross: 0, refunds: 0 };
     }
     breakdown[method].count++;
-    breakdown[method].total += parseDecimal(payment.amount);
+    const gross = parseDecimal(payment.amount);
+    const refunded = Math.min(gross, Math.max(0, parseDecimal(payment.refundedAmount)));
+    breakdown[method].gross += gross;
+    breakdown[method].refunds += refunded;
+    breakdown[method].total += gross - refunded;
   });
 
   return breakdown;
@@ -260,9 +293,9 @@ export const generateTimeSeriesData = (
       acc[key] = { revenue: 0, orders: 0, guests: 0 };
     }
     
-    acc[key].revenue += parseDecimal(order.total);
+    acc[key].revenue += orderNetCollected(order);
     acc[key].orders += 1;
-    acc[key].guests += order.guestCount || 1;
+    acc[key].guests += orderPhysicalGuests(order);
     return acc;
   }, {} as Record<string, { revenue: number; orders: number; guests: number }>);
 
@@ -337,11 +370,12 @@ export const calculateMenuItemPerformance = (orderItems: any[]): MenuItemPerform
   }>();
 
   orderItems.forEach(item => {
-    if (!item.menuItem) return;
+    if (item.isVoided) return;
+    if (!item.menuItem && !item.itemNameSnapshot) return;
     
-    const id = item.menuItem.id;
+    const id = item.menuItem?.id || item.menuItemIdSnapshot || item.itemNameSnapshot;
     const existing = itemMap.get(id);
-    const itemRevenue = parseDecimal(item.price) * (item.quantity || 1);
+    const itemRevenue = Math.max(0, parseDecimal(item.price) * (item.quantity || 1) - parseDecimal(item.adjustmentTotal));
     
     if (existing) {
       existing.quantitySold += item.quantity || 1;
@@ -349,8 +383,8 @@ export const calculateMenuItemPerformance = (orderItems: any[]): MenuItemPerform
     } else {
       itemMap.set(id, {
         id,
-        name: item.menuItem.name || 'Unknown',
-        categoryName: item.menuItem.category?.name || 'Uncategorized',
+        name: item.itemNameSnapshot || item.menuItem?.name || 'Unknown',
+        categoryName: item.menuItem?.category?.name || 'Uncategorized',
         quantitySold: item.quantity || 1,
         revenue: itemRevenue,
       });
@@ -378,12 +412,12 @@ export const calculateCategoryPerformance = (orderItems: any[]): CategoryPerform
   }>();
 
   orderItems.forEach(item => {
-    if (!item.menuItem?.category) return;
+    if (item.isVoided || !item.menuItem?.category) return;
     
     const categoryId = item.menuItem.category.id;
     const categoryName = item.menuItem.category.name;
     const existing = categoryMap.get(categoryId);
-    const itemRevenue = parseDecimal(item.price) * (item.quantity || 1);
+    const itemRevenue = Math.max(0, parseDecimal(item.price) * (item.quantity || 1) - parseDecimal(item.adjustmentTotal));
     
     if (existing) {
       existing.itemsSold += item.quantity || 1;
@@ -416,3 +450,8 @@ export const calculateCategoryPerformance = (orderItems: any[]): CategoryPerform
     }))
     .sort((a, b) => b.revenue - a.revenue);
 };
+
+export function recordedOrderVoidCount(adjustments: any[]) {
+  if (adjustments.length > 10000) throw new Error('Void evidence exceeds this dashboard window');
+  return new Set(adjustments.filter(row => row.metadata?.wholeOrder === true && row.order?.id).map(row => row.order.id)).size;
+}

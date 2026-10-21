@@ -95,7 +95,7 @@ const UPDATE_TABLE = gql`
 
 const DELETE_TABLE = gql`
   mutation DeleteTable($id: ID!) {
-    deleteTable(where: { id: $id }) { id }
+    deleteUnusedRestaurantTable(tableId: $id) { success error }
   }
 `
 
@@ -138,6 +138,7 @@ export function TablesPage() {
       setFloors(res.floors || [])
     } catch (err) {
       console.error(err)
+      window.alert(err instanceof Error ? err.message : "Unable to save table changes")
     } finally {
       setLoading(false)
     }
@@ -170,8 +171,7 @@ export function TablesPage() {
     try {
       const data: any = {
         tableNumber: form.tableNumber.trim(),
-        capacity: parseInt(form.capacity) || 4,
-        status: form.status,
+        ...(editingId ? {} : { capacity: parseInt(form.capacity) || 4 }),
         shape: form.shape,
       }
       if (form.sectionId && form.sectionId !== '__none__') {
@@ -185,15 +185,22 @@ export function TablesPage() {
         data.floor = { disconnect: true }
       }
 
+      let tableId = editingId
       if (editingId) {
+        const capacityResult: any = await request('/api/graphql', `mutation($tableId:ID!,$capacity:Int!){setRestaurantTableCapacity(tableId:$tableId,capacity:$capacity){success error}}`, { tableId: editingId, capacity: parseInt(form.capacity) || 4 })
+        if (!capacityResult.setRestaurantTableCapacity.success) throw new Error(capacityResult.setRestaurantTableCapacity.error)
         await request('/api/graphql', UPDATE_TABLE, { id: editingId, data })
       } else {
-        await request('/api/graphql', CREATE_TABLE, { data })
+        const created: any = await request('/api/graphql', CREATE_TABLE, { data })
+        tableId = created.createTable.id
       }
+      const statusResult: any = await request('/api/graphql', `mutation($tableId:ID!,$status:String!){updateServiceFloorTableStatus(tableId:$tableId,status:$status){success error}}`, { tableId, status: form.status })
+      if (!statusResult.updateServiceFloorTableStatus.success) throw new Error(statusResult.updateServiceFloorTableStatus.error)
       setDialogOpen(false)
       await fetchData()
     } catch (err) {
       console.error(err)
+      window.alert(err instanceof Error ? err.message : "Unable to save table changes")
     } finally {
       setIsSaving(false)
     }
@@ -203,10 +210,12 @@ export function TablesPage() {
     if (!confirm('Delete this table?')) return
     setDeletingId(id)
     try {
-      await request('/api/graphql', DELETE_TABLE, { id })
+      const result: any = await request('/api/graphql', DELETE_TABLE, { id })
+      if (!result.deleteUnusedRestaurantTable.success) throw new Error(result.deleteUnusedRestaurantTable.error)
       await fetchData()
     } catch (err) {
       console.error(err)
+      window.alert(err instanceof Error ? err.message : "Unable to save table changes")
     } finally {
       setDeletingId(null)
     }
@@ -222,6 +231,7 @@ export function TablesPage() {
       await fetchData()
     } catch (err) {
       console.error(err)
+      window.alert(err instanceof Error ? err.message : "Unable to save table changes")
     } finally {
       setIsSaving(false)
     }

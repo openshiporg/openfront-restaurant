@@ -158,7 +158,7 @@ export async function getFilteredGiftCards(
 export async function getGiftCard(id: string) {
   const query = `
     query GetGiftCard($id: ID!) {
-      giftcard(where: { id: $id }) {
+      giftcard: giftCard(where: { id: $id }) {
         id code value balance isDisabled endsAt createdAt updatedAt
       }
     }

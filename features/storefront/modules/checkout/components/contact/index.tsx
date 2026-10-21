@@ -1,5 +1,6 @@
 "use client"
 
+import { isDeliveryConfigured } from "@/features/lib/delivery-zones"
 import { CircleCheck, Loader2, ShoppingBag, Truck, User } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -23,7 +24,7 @@ const Contact = ({
   storeSettings: any
 }) => {
   const user = customer
-  const deliveryEnabled = storeSettings?.deliveryEnabled ?? true
+  const deliveryEnabled = isDeliveryConfigured(storeSettings)
   const searchParams = useSearchParams()
   const router = useRouter()
   const pathname = usePathname()

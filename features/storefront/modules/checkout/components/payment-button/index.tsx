@@ -1,6 +1,7 @@
 "use client"
 
 import { isManual, isStripe, isPaypal } from "@/features/storefront/lib/constants"
+import { cancelCheckoutPayment } from "@/features/storefront/lib/data/checkout-cancellation"
 import { placeOrder } from "@/features/storefront/lib/data/cart"
 import { Button } from "@/components/ui/button"
 import { useElements, useStripe, CardElement } from "@stripe/react-stripe-js"
@@ -33,6 +34,7 @@ interface PaymentButtonProps {
       }[]
     }
   }
+  allowPlacement?: boolean
   billingAddress?: {
     address1?: string | null
     address2?: string | null
@@ -58,22 +60,29 @@ const ErrorMessage = ({ error, "data-testid": dataTestId }: { error?: string | n
 const PaymentButton: React.FC<PaymentButtonProps> = ({
   cart,
   billingAddress,
+  allowPlacement = true,
   "data-testid": dataTestId,
 }) => {
   const paymentSession = cart.paymentCollection?.paymentSessions?.find(
     (s) => s.isSelected
   )
 
-  switch (true) {
-    case isStripe(paymentSession?.paymentProvider?.code):
-      return <StripePaymentButton cart={cart} billingAddress={billingAddress} data-testid={dataTestId} />
-    case isPaypal(paymentSession?.paymentProvider?.code):
-      return <PayPalPaymentButton cart={cart} billingAddress={billingAddress} data-testid={dataTestId} />
-    case isManual(paymentSession?.paymentProvider?.code):
-      return <ManualPaymentButton cart={cart} billingAddress={billingAddress} data-testid={dataTestId} />
-    default:
-      return <Button disabled size="lg" variant="ghost" className="h-12 w-full rounded-full border border-border px-6 text-sm font-medium text-foreground">Select a payment method</Button>
-  }
+  const providerButton = !allowPlacement
+    ? <Button disabled data-testid={dataTestId}>Payment attempt needs cancellation or reconciliation</Button>
+    : isStripe(paymentSession?.paymentProvider?.code)
+      ? <StripePaymentButton cart={cart} billingAddress={billingAddress} data-testid={dataTestId} />
+      : isPaypal(paymentSession?.paymentProvider?.code)
+        ? <PayPalPaymentButton cart={cart} billingAddress={billingAddress} data-testid={dataTestId} />
+        : isManual(paymentSession?.paymentProvider?.code)
+          ? <ManualPaymentButton cart={cart} billingAddress={billingAddress} data-testid={dataTestId} />
+          : <Button disabled>Select a payment method</Button>
+  return <div className="space-y-2">{providerButton}{paymentSession && <CancelCheckoutButton cartId={cart.id} sessionId={paymentSession.id} />}</div>
+}
+function CancelCheckoutButton({ cartId, sessionId }: { cartId: string; sessionId: string }) {
+  const [busy, setBusy] = useState(false); const [error, setError] = useState(""); const router = useRouter();
+  const cancel = async () => { setBusy(true); try { const result = await cancelCheckoutPayment(cartId, sessionId); if (!result.success) throw new Error(result.error); router.refresh(); } catch (error) { setError(error instanceof Error ? error.message : "Unable to cancel checkout"); } finally { setBusy(false); } };
+  return <><Button variant="outline" disabled={busy} onClick={cancel}>Cancel unpaid checkout to change order</Button><ErrorMessage error={error} /></>
+
 }
 
 const StripePaymentButton: React.FC<PaymentButtonProps> = ({

@@ -187,6 +187,7 @@ async function getOrSetCart(orderType: string = "pickup") {
           createActiveCart(orderType: $orderType) {
             id
             orderType
+            accessProof
           }
         }
       `,
@@ -195,7 +196,7 @@ async function getOrSetCart(orderType: string = "pickup") {
     );
 
     cart = newCart;
-    await setCartId(cart.id);
+    await setCartId(cart.id, cart.accessProof);
     updateTag("cart");
   }
 
@@ -207,6 +208,7 @@ export async function createCart(orderType: string = "pickup") {
     mutation CreateActiveCart($orderType: String) {
       createActiveCart(orderType: $orderType) {
         id
+        accessProof
       }
     }
   `;

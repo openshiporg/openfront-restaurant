@@ -10,7 +10,7 @@ export const Discount = list({
       query: permissions.canReadDiscounts,
       create: permissions.canManageDiscounts,
       update: permissions.canManageDiscounts,
-      delete: isSignedIn,
+      delete: permissions.canManageDiscounts,
     },
   },
   ui: {

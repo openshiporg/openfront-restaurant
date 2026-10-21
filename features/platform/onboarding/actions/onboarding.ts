@@ -20,8 +20,8 @@ export async function updateOnboardingStatus(status: OnboardingStatus) {
       data: { onboardingStatus: status }
     });
 
-    if (!response.success) {
-      return { success: false, error: response.error };
+    if (!response.success || !response.data?.updateActiveUser?.id || response.data.updateActiveUser.onboardingStatus !== status) {
+      return { success: false, error: response.error || "Setup status was not saved" };
     }
 
     // Revalidate dashboard pages to reflect the change

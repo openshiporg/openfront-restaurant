@@ -12,7 +12,7 @@ interface OperationalMetricsProps {
   targetTicketTime: number;
   ordersInKitchen: number;
   ordersReady: number;
-  voidRate: number;
+  voidCount: number;
   serverCount: number;
   revenuePerLaborHour?: number;
   currencyCode?: string;
@@ -26,13 +26,12 @@ export function OperationalMetrics({
   targetTicketTime,
   ordersInKitchen,
   ordersReady,
-  voidRate,
+  voidCount,
   serverCount,
 }: OperationalMetricsProps) {
   const occupancyPercent = totalTables > 0 ? (tableOccupancy / totalTables) * 100 : 0;
   const hasTicketTime = averageTicketTime > 0;
   const ticketOk = !hasTicketTime || averageTicketTime <= targetTicketTime;
-  const voidOk = voidRate <= 2;
 
   return (
     <div className="rounded-lg border border-border bg-card overflow-hidden">
@@ -101,14 +100,12 @@ export function OperationalMetrics({
         <div className="px-5 py-4">
           <div className="flex items-center gap-1.5 text-muted-foreground mb-2">
             <AlertTriangle size={13} />
-            <p className="text-[11px] uppercase tracking-wider">Void Rate</p>
+            <p className="text-[11px] uppercase tracking-wider">Recorded Order Voids</p>
           </div>
           <div className="flex items-baseline gap-1.5">
-            <p className={cn("text-xl font-semibold", voidOk ? "" : "text-red-600")}>{formatPercentage(voidRate, 1)}</p>
+            <p className="text-xl font-semibold">{formatNumber(voidCount)}</p>
           </div>
-          <p className={cn("text-xs mt-1 font-medium", voidOk ? "text-emerald-600" : "text-red-600")}>
-            {voidOk ? "Normal" : "High"} · target &lt;2%
-          </p>
+          <p className="text-xs mt-1 text-muted-foreground">Whole-order correction records today; excludes check merges.</p>
         </div>
       </div>
 

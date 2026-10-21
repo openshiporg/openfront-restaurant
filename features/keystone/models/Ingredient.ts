@@ -16,7 +16,7 @@ export const Ingredient = list({
       query: permissions.canReadInventory,
       create: permissions.canManageInventory,
       update: permissions.canManageInventory,
-      delete: permissions.canManageInventory,
+      delete: () => false,
     },
   },
   ui: {
@@ -33,8 +33,11 @@ export const Ingredient = list({
     }),
 
     unit: select({
+      access: { update: () => false },
       type: "string",
       options: [
+        { label: "Gram", value: "g" },
+        { label: "Milliliter", value: "ml" },
         { label: "Kilogram", value: "kg" },
         { label: "Pound", value: "lb" },
         { label: "Ounce", value: "oz" },
@@ -47,7 +50,7 @@ export const Ingredient = list({
       defaultValue: "lb",
       validation: { isRequired: true },
       ui: {
-        description: "Unit of measurement",
+        description: "Stocking unit is immutable after creation. Create a correctly denominated stock record and use controlled transfers for conversion.",
       },
     }),
 
@@ -141,6 +144,7 @@ export const Ingredient = list({
     }),
 
     stockMovements: relationship({
+      access: { create: () => false, update: () => false },
       ref: "StockMovement.ingredient",
       many: true,
     }),

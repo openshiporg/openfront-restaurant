@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -130,19 +130,23 @@ export function WastePage() {
 
   useEffect(() => { fetchData() }, [fetchData])
 
+  const wasteAttempt = useRef<{ signature: string; key: string } | null>(null)
   const handleCreate = async () => {
     if (!form.ingredientId || !form.quantity) return
+    const signature = JSON.stringify(form)
+    if (wasteAttempt.current?.signature !== signature) wasteAttempt.current = { signature, key: crypto.randomUUID() }
     try {
       const result: any = await request('/api/graphql', RECORD_WASTE, {
         ingredientId: form.ingredientId,
         quantity: form.quantity,
         reason: form.reason,
         notes: form.notes || null,
-        idempotencyKey: crypto.randomUUID(),
+        idempotencyKey: wasteAttempt.current.key,
       })
       if (!result?.recordWaste?.success) {
         throw new Error(result?.recordWaste?.error || 'Unable to record waste')
       }
+      wasteAttempt.current = null
       setDialogOpen(false)
       setForm({ ingredientId: '', quantity: '', reason: 'spoilage', notes: '' })
       fetchData()
