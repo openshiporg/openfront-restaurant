@@ -40,6 +40,7 @@ import { Home, ChevronRight, Package } from 'lucide-react'
 import { Logo, LogoIcon } from '@/features/dashboard/components/Logo'
 import { UserProfileClient } from './UserProfileClient'
 import { useDashboard } from '../context/DashboardProvider'
+import { visiblePlatformItems, visibleSidebarLists } from '../lib/sidebarAccess'
 import { OnboardingCards } from '@/features/platform/onboarding/components/OnboardingCards'
 import { dismissOnboarding } from '@/features/platform/onboarding/actions/onboarding'
 import {
@@ -54,6 +55,7 @@ interface User {
   name?: string;
   onboardingStatus?: string;
   role?: {
+    canAccessDashboard?: boolean;
     canManageOnboarding?: boolean;
   };
 }
@@ -98,12 +100,16 @@ export function Sidebar({ adminMeta, user, onOpenDialog }: SidebarProps) {
   const listsArray = Object.values(lists)
 
   // Convert lists to sidebar links format
-  const modelLinks = listsArray.map((list: any) => ({
+  const modelLinks = visibleSidebarLists(listsArray as any[], user).map((list: any) => ({
     title: list.label,
     href: `/dashboard/${list.path}`
   }))
 
-  const platformItemsWithBasePath = getPlatformNavItemsWithBasePath(basePath)
+  const platformItemsWithBasePath = visiblePlatformItems(
+    getPlatformNavItemsWithBasePath(basePath),
+    listsArray as any[],
+    user
+  )
   const platformItems = platformNavGroups.map((group) => ({
     title: group.title,
     items: platformItemsWithBasePath
@@ -117,9 +123,9 @@ export function Sidebar({ adminMeta, user, onOpenDialog }: SidebarProps) {
       .filter((item) => item.group === group.id)
       .some((item) => isLinkActive(item.href)),
     icon: group.icon,
-  }))
+  })).filter((group) => group.items.length > 0)
 
-  const standaloneItemsWithBasePath = platformStandaloneItems.map((item) => ({
+  const standaloneItemsWithBasePath = visiblePlatformItems(platformStandaloneItems, listsArray as any[], user).map((item) => ({
     ...item,
     href: `${basePath}${item.href}`,
   }))
