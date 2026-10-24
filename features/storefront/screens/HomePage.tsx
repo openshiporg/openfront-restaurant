@@ -3,8 +3,8 @@ import {
   getMenuCategories,
   getMenuItems,
   getStoreSettings,
-  StorefrontDataUnavailableError,
 } from "@/features/storefront/lib/data/menu"
+import { StorefrontDataUnavailableError } from "@/features/storefront/lib/data/errors"
 import {
   type MenuCategory,
   type MenuItem,

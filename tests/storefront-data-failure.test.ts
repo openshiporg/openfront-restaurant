@@ -2,7 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { getMenuCategories, getMenuItems, getStoreSettings, StorefrontDataUnavailableError } from "../features/storefront/lib/data/menu";
+import { getMenuCategories, getMenuItems, getStoreSettings } from "../features/storefront/lib/data/menu";
+import { StorefrontDataUnavailableError } from "../features/storefront/lib/data/errors";
 import { openfrontClient } from "../features/storefront/lib/config";
 import { StorefrontUnavailable } from "../features/storefront/components/StorefrontUnavailable";
 

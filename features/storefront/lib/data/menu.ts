@@ -4,13 +4,8 @@ import { openfrontClient } from "../config"
 import { cache } from "react"
 import { mealAvailable } from "@/features/lib/restaurant-hours"
 import type { StorefrontPaymentConfig } from "../store-data"
+import { StorefrontDataUnavailableError } from "./errors"
 
-export class StorefrontDataUnavailableError extends Error {
-  constructor(resource: string) {
-    super(`${resource} could not be loaded`);
-    this.name = "StorefrontDataUnavailableError";
-  }
-}
 
 export const getStoreSettings = cache(async function (strict = false) {
   const GET_STORE_SETTINGS_QUERY = gql`
