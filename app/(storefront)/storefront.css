@@ -188,6 +188,7 @@
   .storefront-sheet :is(h1, h2, h3).font-serif,
   .storefront-ui .font-serif,
   .storefront-sheet .font-serif,
+  .storefront-heading,
   .font-display {
     font-family: var(--font-serif);
     font-stretch: 68%;
