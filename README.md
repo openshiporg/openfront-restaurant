@@ -13,8 +13,8 @@ https://github.com/user-attachments/assets/e3a061fb-3c03-4b89-81f0-4aa973c26556
 
 | | |
 |---|---|
-| **Storefront** | [craft-burgers.openship.org](https://craft-burgers.openship.org) |
-| **Dashboard** | [craft-burgers.openship.org/dashboard](https://craft-burgers.openship.org/dashboard) |
+| **Storefront** | [restaurant.openship.org](https://restaurant.openship.org) |
+| **Dashboard** | [restaurant.openship.org/dashboard](https://restaurant.openship.org/dashboard) |
 | **User** | `craft@openship.org` |
 | **Password** | `xZZ8nqW&!KT1^S6b45c^gwmv51Y50y!y@a*` |
 
