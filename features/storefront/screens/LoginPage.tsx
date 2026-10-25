@@ -14,9 +14,8 @@ export default function LoginPage() {
   const [signupError, signupAction, isSignupPending] = useActionState(signUp, null)
 
   return (
-    <div className="grid w-full max-w-5xl overflow-hidden border border-border bg-card lg:grid-cols-[0.9fr_1.1fr]">
+    <div className="grid w-full max-w-5xl overflow-hidden bg-card lg:grid-cols-[0.9fr_1.1fr]">
       <div className="bg-muted p-8 sm:p-10 lg:p-12">
-        <span className="storefront-kicker">Your account</span>
         <h1 className="mt-4 text-balance font-serif text-4xl font-semibold text-foreground">
           {view === "signin" ? "Welcome back." : "Create your account."}
         </h1>
@@ -26,7 +25,7 @@ export default function LoginPage() {
             : "Save your profile for faster checkout, order history, and easier address management."}
         </p>
 
-        <div className="mt-8 space-y-3 border-t border-border pt-6 text-sm text-muted-foreground">
+        <div className="mt-8 space-y-3 pt-6 text-sm text-muted-foreground">
           <p>• View current and past orders</p>
           <p>• Save delivery and billing addresses</p>
           <p>• Move through checkout faster next time</p>
@@ -47,7 +46,7 @@ export default function LoginPage() {
           </div>
           <Link
             href="/"
-            className="inline-flex items-center gap-2 rounded-full border border-border bg-background px-4 py-2 text-sm text-muted-foreground transition-colors hover:border-primary/30 hover:text-primary"
+            className="inline-flex items-center gap-2 rounded-full bg-background px-4 py-2 text-sm text-muted-foreground transition-colors hover:border-primary/30 hover:text-primary"
           >
             <ArrowLeft className="size-4" />
             <span className="hidden sm:inline">Back to menu</span>
@@ -96,7 +95,7 @@ export default function LoginPage() {
           </form>
         )}
 
-        <div className="mt-8 border-t border-border pt-6 text-sm text-muted-foreground">
+        <div className="mt-8 pt-6 text-sm text-muted-foreground">
           {view === "signin" ? (
             <>
               Don&apos;t have an account?{" "}

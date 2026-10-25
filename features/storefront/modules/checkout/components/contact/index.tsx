@@ -129,7 +129,7 @@ const Contact = ({
             data-testid="edit-contact-button"
             variant="ghost"
             size="sm"
-            className="text-[13px] font-medium text-muted-foreground hover:text-foreground"
+            className="text-sm font-medium text-muted-foreground hover:text-foreground"
           >
             Edit
           </Button>
@@ -149,7 +149,7 @@ const Contact = ({
                 <RadioGroupItem value="pickup" id="order-pickup" className="peer sr-only" />
                 <Label
                   htmlFor="order-pickup"
-                  className="flex cursor-pointer flex-col gap-2 border border-border bg-muted/35 p-4 transition-colors hover:border-primary/30 peer-data-[state=checked]:border-primary/50 peer-data-[state=checked]:bg-muted"
+                  className="flex cursor-pointer flex-col gap-2 bg-muted/35 p-4 transition-colors hover:border-primary/30 peer-data-[state=checked]:border-primary/50 peer-data-[state=checked]:bg-muted"
                 >
                   <div className="flex items-center gap-2 text-foreground">
                     <ShoppingBag className="size-4" />
@@ -167,7 +167,7 @@ const Contact = ({
                   <RadioGroupItem value="delivery" id="order-delivery" className="peer sr-only" />
                   <Label
                     htmlFor="order-delivery"
-                    className="flex cursor-pointer flex-col gap-2 border border-border bg-muted/35 p-4 transition-colors hover:border-primary/30 peer-data-[state=checked]:border-primary/50 peer-data-[state=checked]:bg-muted"
+                    className="flex cursor-pointer flex-col gap-2 bg-muted/35 p-4 transition-colors hover:border-primary/30 peer-data-[state=checked]:border-primary/50 peer-data-[state=checked]:bg-muted"
                   >
                     <div className="flex items-center gap-2 text-foreground">
                       <Truck className="size-4" />
@@ -262,7 +262,7 @@ const Contact = ({
       ) : isComplete ? (
         <div className="space-y-4 pl-11" data-testid="contact-summary">
           <div>
-            <p className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+            <p className="mb-1 text-[0.95rem] font-semibold text-ink-soft">
               Contact
             </p>
             <p className="text-sm text-foreground">
@@ -272,7 +272,7 @@ const Contact = ({
             <p className="text-sm text-muted-foreground">{customerInfo.phone}</p>
           </div>
           <div data-testid="order-type-summary">
-            <p className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+            <p className="mb-1 text-[0.95rem] font-semibold text-ink-soft">
               Order Type
             </p>
             <p className="text-sm capitalize text-foreground">{orderType}</p>

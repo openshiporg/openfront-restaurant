@@ -1,8 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { Minus, Plus, ShoppingBag } from "lucide-react"
-import { Button } from "@/components/ui/button"
+import { Minus, Plus } from "lucide-react"
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
 import { useRouter } from "next/navigation"
@@ -36,6 +35,7 @@ export function MenuItemPurchaseForm({
   const [selectedModifiers, setSelectedModifiers] = useState<SelectedModifier[]>([])
   const [specialInstructions, setSpecialInstructions] = useState("")
   const [isAdding, setIsAdding] = useState(false)
+  const [addError, setAddError] = useState<string | null>(null)
 
   const modifierGroups = useMemo(() => {
     if (!item.modifiers || item.modifiers.length === 0) return []
@@ -149,6 +149,7 @@ export function MenuItemPurchaseForm({
     if (item.available === false) return
 
     setIsAdding(true)
+    setAddError(null)
 
     try {
       await addToCart({
@@ -163,33 +164,37 @@ export function MenuItemPurchaseForm({
       onAdded?.()
     } catch (error) {
       console.error("Error adding to cart:", error)
+      const message = error instanceof Error ? error.message : ""
+      // Ordering rules the guest can act on are shown as written; anything else is a retry.
+      setAddError(/closed|service period|unavailable|sold out|minimum|limit/i.test(message)
+        ? message
+        : "This item couldn't be added to your order. Try again.")
     }
 
     setIsAdding(false)
   }
 
-  return (
-    <div className={cn("space-y-6 px-5 py-5 sm:px-6", className)}>
-      {modifierGroups.length > 0 ? (
-        <div className="space-y-6">
-          {modifierGroups.map((group) => (
-            <div key={group.id} className="space-y-3">
-              <div className="space-y-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <h3 className="text-base font-medium text-foreground">{group.name}</h3>
-                  {group.required ? (
-                    <span className="border border-border bg-background px-2 py-0.5 text-xs font-medium text-primary">
-                      Required
-                    </span>
-                  ) : null}
-                </div>
-                <p className="text-sm text-muted-foreground">
-                  {group.required ? "Choose an option" : "Optional"}
-                  {group.max > 1 ? ` · up to ${group.max}` : ""}
-                </p>
-              </div>
+  const ticketLines = selectedModifiers.map((modifier) => ({
+    key: `${modifier.groupId}-${modifier.modifierId}`,
+    name: modifier.name,
+    price: modifier.price,
+  }))
 
-              <div className="space-y-2">
+  return (
+    <div className={cn("space-y-8 px-5 py-5 sm:px-6", className)}>
+      {modifierGroups.length > 0 ? (
+        <div className="space-y-8">
+          {modifierGroups.map((group) => (
+            <fieldset key={group.id}>
+              <legend className="flex w-full items-baseline justify-between gap-3">
+                <span className="font-serif text-2xl font-extrabold">{group.name}</span>
+                <span className={cn("text-[0.95rem]", group.required ? "font-semibold text-ink" : "text-ink-soft")}>
+                  {group.required ? "Required" : "Optional"}
+                  {group.max > 1 ? `, up to ${group.max}` : ""}
+                </span>
+              </legend>
+
+              <div className="mt-3 space-y-1">
                 {group.modifiers.map((modifier) => {
                   const isSelected = isModifierSelected(group.id, modifier.id)
                   const allowsMultiple = group.max > 1
@@ -198,81 +203,91 @@ export function MenuItemPurchaseForm({
                     <button
                       key={modifier.id}
                       type="button"
+                      role={allowsMultiple ? "checkbox" : "radio"}
+                      aria-checked={isSelected}
                       onClick={() => toggleModifier(group, modifier.id)}
                       className={cn(
-                        "w-full border px-4 py-3 text-left transition-colors",
-                        isSelected
-                          ? "border-primary bg-primary/8"
-                          : "border-border bg-background hover:border-primary/25"
+                        "flex w-full items-center justify-between gap-4 px-3 py-3 text-left transition-colors duration-150 active:scale-[0.99]",
+                        isSelected ? "bg-ink text-paper" : "bg-steel/45 text-ink hover:bg-steel",
                       )}
                     >
-                      <div className="flex items-center justify-between gap-4">
-                        <div className="flex items-center gap-3">
-                          <span
-                            className={cn(
-                              "flex size-4 items-center justify-center border",
-                              allowsMultiple ? "rounded-sm" : "rounded-full",
-                              isSelected ? "border-primary" : "border-border"
-                            )}
-                          >
-                            {isSelected ? (
-                              <span
-                                className={cn(
-                                  "size-2 bg-primary",
-                                  allowsMultiple ? "rounded-[2px]" : "rounded-full"
-                                )}
-                              />
-                            ) : null}
-                          </span>
-                          <span className="text-sm font-medium text-foreground">{modifier.name}</span>
-                        </div>
-
-                        <div className="text-right text-xs text-muted-foreground">
-                          {modifier.calories ? <p>{modifier.calories} cal</p> : null}
-                          {modifier.price > 0 ? (
-                            <p className="font-medium text-foreground">
-                              +{formatCurrency(modifier.price, { currencyCode, locale })}
-                            </p>
+                      <span className="flex items-center gap-3">
+                        <span
+                          aria-hidden="true"
+                          className={cn(
+                            "flex size-5 shrink-0 items-center justify-center",
+                            allowsMultiple ? "" : "rounded-full",
+                            isSelected ? "bg-paper" : "bg-paper ring-1 ring-inset ring-steel-deep",
+                          )}
+                        >
+                          {isSelected ? (
+                            <span className={cn("size-2.5 bg-ink", allowsMultiple ? "" : "rounded-full")} />
                           ) : null}
-                        </div>
-                      </div>
+                        </span>
+                        <span className="text-base font-medium">{modifier.name}</span>
+                      </span>
+
+                      <span className={cn("shrink-0 text-right text-[0.95rem]", isSelected ? "text-paper/80" : "text-ink-soft")}>
+                        {modifier.price > 0 ? (
+                          <span className={cn("font-semibold", isSelected ? "text-paper" : "text-ink")}>
+                            +{formatCurrency(modifier.price, { currencyCode, locale })}
+                          </span>
+                        ) : null}
+                        {modifier.calories ? <span className="block">{modifier.calories} cal</span> : null}
+                      </span>
                     </button>
                   )
                 })}
               </div>
-            </div>
+            </fieldset>
           ))}
         </div>
       ) : null}
 
-      <div className="space-y-2">
-        <h3 className="text-base font-medium text-foreground">Special instructions</h3>
+      <div>
+        <label htmlFor={`instructions-${item.id}`} className="font-serif text-2xl font-extrabold">
+          Note for the kitchen
+        </label>
         <Textarea
-          placeholder="Add any preparation notes for the kitchen."
+          id={`instructions-${item.id}`}
+          placeholder="Optional"
           value={specialInstructions}
           onChange={(event) => setSpecialInstructions(event.target.value)}
-          className="min-h-24 resize-none border-border bg-background text-sm text-foreground"
-          rows={3}
+          className="mt-3 min-h-20 resize-none rounded-none border-0 bg-steel/45 text-base text-ink shadow-none placeholder:text-ink-soft focus-visible:ring-2 focus-visible:ring-ring"
+          rows={2}
         />
       </div>
 
-      <div className="flex flex-col gap-3 border-t border-border pt-5 sm:flex-row sm:items-center">
-        <div className="inline-flex self-start items-center border border-border bg-background">
+      {ticketLines.length > 0 || specialInstructions ? (
+        <div className="text-base" aria-live="polite">
+          <p className="font-semibold">{quantity} × {item.name}</p>
+          {ticketLines.map((line) => (
+            <p key={line.key} className="flex justify-between gap-4 text-ink-soft">
+              <span>+ {line.name}</span>
+              {line.price > 0 ? <span>{formatCurrency(line.price * quantity, { currencyCode, locale })}</span> : null}
+            </p>
+          ))}
+          {specialInstructions ? <p className="text-ink-soft">Note: {specialInstructions}</p> : null}
+        </div>
+      ) : null}
+
+      <div className="flex items-stretch gap-3">
+        <div className="inline-flex shrink-0 items-center bg-steel">
           <button
             type="button"
-            className="flex size-11 items-center justify-center text-muted-foreground transition-colors hover:bg-muted disabled:opacity-40"
+            className="flex h-12 w-10 items-center justify-center text-ink transition-colors hover:bg-steel-shade disabled:opacity-40"
             onClick={() => setQuantity(Math.max(1, quantity - 1))}
             disabled={quantity <= 1}
             aria-label="Decrease quantity"
           >
             <Minus className="size-4" />
           </button>
-          <span className="w-12 text-center text-base font-semibold tabular-nums text-foreground">
+          <span className="w-8 text-center text-lg font-semibold tabular-nums text-ink" aria-live="polite">
             {quantity}
           </span>
           <button
             type="button"
-            className="flex size-11 items-center justify-center text-muted-foreground transition-colors hover:bg-muted"
+            className="flex h-12 w-10 items-center justify-center text-ink transition-colors hover:bg-steel-shade"
             onClick={() => setQuantity(quantity + 1)}
             aria-label="Increase quantity"
           >
@@ -280,20 +295,28 @@ export function MenuItemPurchaseForm({
           </button>
         </div>
 
-        <Button
-          variant="ghost"
-          className="h-12 flex-1 rounded-full bg-primary px-6 text-sm font-medium text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground"
+        <button
+          type="button"
+          className="pass-action min-w-0 flex-1 justify-between gap-3 whitespace-nowrap px-4 sm:px-5"
           onClick={handleAddToCart}
           disabled={isAdding || item.available === false}
         >
-          <ShoppingBag className="size-4" />
-          {item.available === false
-            ? "Currently unavailable"
-            : isAdding
-              ? "Adding to order..."
-              : `Add to order — ${formatCurrency(itemTotal, { currencyCode, locale })}`}
-        </Button>
+          {item.available === false ? (
+            <span>Sold out</span>
+          ) : (
+            <>
+              <span>{isAdding ? "Adding…" : "Add to order"}</span>
+              <span>{formatCurrency(itemTotal, { currencyCode, locale })}</span>
+            </>
+          )}
+        </button>
       </div>
+
+      {addError ? (
+        <p role="alert" className="text-base font-medium text-destructive">
+          {addError}
+        </p>
+      ) : null}
     </div>
   )
 }

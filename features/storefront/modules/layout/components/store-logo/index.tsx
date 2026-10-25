@@ -26,9 +26,9 @@ interface StoreBrandProps {
  * Keeping the complete markup here prevents either location from drifting in
  * SVG source, hue treatment, typography, sizing, or link behavior.
  */
-export function StoreBrand({ name, logoIcon, logoColor }: StoreBrandProps) {
+export function StoreBrand({ name, logoIcon, logoColor, className }: StoreBrandProps & { className?: string }) {
   return (
-    <Link href="/" className="flex min-w-0 items-center gap-2.5 py-1">
+    <Link href="/" className={`flex min-w-0 items-center gap-2.5 py-1 ${className || ""}`}>
       {logoIcon ? (
         <span
           className="block size-7 shrink-0 overflow-hidden [&>svg]:block [&>svg]:size-full"
@@ -37,7 +37,7 @@ export function StoreBrand({ name, logoIcon, logoColor }: StoreBrandProps) {
           aria-hidden="true"
         />
       ) : null}
-      <span className="block truncate whitespace-nowrap font-serif text-[1.4rem] font-bold leading-[1.05] tracking-tight text-primary sm:text-[1.6rem]">
+      <span className="block truncate whitespace-nowrap font-serif text-[1.55rem] font-extrabold leading-none sm:text-[1.6rem]">
         {name}
       </span>
     </Link>

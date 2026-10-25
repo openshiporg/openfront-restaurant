@@ -1,13 +1,13 @@
-"use client"
-
 import { isDeliveryConfigured } from "@/features/lib/delivery-zones"
 import Image from "next/image"
 import Link from "next/link"
-import { ArrowRight, Clock3, MapPin, Star, Truck } from "lucide-react"
 import { StorefrontSectionLink } from "@/features/storefront/components/StorefrontSectionLink"
+import { ServiceLamp, ServiceStatusText } from "@/features/storefront/components/ServiceLamp"
 import { formatCurrency } from "@/features/storefront/lib/currency"
 import { getMenuItemHref } from "@/features/storefront/lib/menu-item-utils"
+import { type ServiceStatus } from "@/features/storefront/lib/store-hours-display"
 import { type StoreInfo } from "@/features/storefront/lib/store-data"
+import { cn } from "@/lib/utils"
 
 type HeroItem = {
   id: string
@@ -20,189 +20,132 @@ type HeroItem = {
 
 interface HeroBannerProps {
   menuHref: string
-  popularHref?: string
   storeInfo: StoreInfo
   heroItems: HeroItem[]
+  status: ServiceStatus
 }
 
-function HeroImage({ item, priority = false }: { item: HeroItem; priority?: boolean }) {
-  if (!item.imagePath) {
-    return (
-      <div className="flex size-full items-center justify-center p-8 text-center">
-        <div>
-          <p className="font-serif text-2xl font-semibold text-foreground">{item.name}</p>
-          <p className="mt-2 text-sm text-muted-foreground">Prepared fresh to order.</p>
-        </div>
-      </div>
-    )
-  }
+// The name is the title, set as large as its length allows on two lines.
+function nameSize(name: string) {
+  if (name.length <= 10) return "text-[clamp(4rem,19vw,6rem)] lg:text-[clamp(5.5rem,7.6vw,8.5rem)]"
+  if (name.length <= 16) return "text-[clamp(3rem,13.5vw,5.5rem)] lg:text-[clamp(4.5rem,6.4vw,7.5rem)]"
+  if (name.length <= 26) return "text-[clamp(2.8rem,12vw,4.4rem)] lg:text-[clamp(3.6rem,4.8vw,5.6rem)]"
+  return "text-[clamp(2.2rem,9.5vw,3.4rem)] lg:text-[clamp(2.8rem,3.6vw,4.2rem)]"
+}
 
+function Fact({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <Image
-      src={item.imagePath}
-      alt={item.name}
-      fill
-      priority={priority}
-      className="object-cover"
-      sizes="(max-width: 1024px) 100vw, 34vw"
-    />
+    <div className="grid grid-cols-[5.5rem_minmax(0,1fr)] gap-3 py-0.5 sm:grid-cols-[7.5rem_minmax(0,1fr)] sm:py-1.5">
+      <dt className="text-ink-soft">{label}</dt>
+      <dd className="text-ink">{children}</dd>
+    </div>
   )
 }
 
-export function HeroBanner({ menuHref, storeInfo, heroItems }: HeroBannerProps) {
-  const featuredItems = heroItems.slice(0, 4)
-  const heroItem = featuredItems[0]
+export function HeroBanner({ menuHref, storeInfo, heroItems, status }: HeroBannerProps) {
+  const plate = heroItems.find((item) => item.imagePath) || null
+  const currency = { currencyCode: storeInfo.currencyCode, locale: storeInfo.locale }
+  const delivery = isDeliveryConfigured(storeInfo)
+  const headline = storeInfo.heroHeadline && storeInfo.heroHeadline !== storeInfo.name
+    ? storeInfo.heroHeadline
+    : storeInfo.tagline
 
   return (
     <section
       id="home"
-      className="relative flex-1 border-b border-border/70 bg-gradient-to-b from-muted/35 via-background to-background py-10 sm:py-14 lg:py-16"
+      className={cn(
+        "relative overflow-hidden bg-steel text-ink",
+        plate ? "lg:min-h-[min(calc(100svh-4rem),58rem)]" : "",
+      )}
     >
-      <div className="storefront-shell flex flex-col gap-8 lg:gap-10">
-        <div className="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)] lg:items-center lg:gap-12">
-          <div className="space-y-6">
-            <div className="space-y-4">
-              <span className="storefront-kicker">{storeInfo.heroTagline || storeInfo.name}</span>
-              <h1 className="max-w-3xl text-balance font-serif text-4xl font-semibold leading-[1.04] sm:text-5xl lg:text-[3.7rem]">
-                {storeInfo.heroHeadline || storeInfo.name}
-              </h1>
-              <p className="max-w-2xl text-pretty text-lg leading-8 text-muted-foreground sm:text-[1.15rem]">
-                {storeInfo.heroSubheadline || storeInfo.tagline}
-              </p>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-3 pt-1">
-              <StorefrontSectionLink
-                href={menuHref}
-                prefetch={false}
-                className="inline-flex items-center gap-2 rounded-full bg-primary px-6 py-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-              >
-                Start order
-                <ArrowRight className="size-4" />
-              </StorefrontSectionLink>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              {storeInfo.estimatedPickup ? (
-                <div className="storefront-surface-soft px-4 py-3">
-                  <div className="flex items-center gap-2 text-primary">
-                    <Clock3 className="size-4" />
-                    <span className="text-xs font-medium uppercase tracking-[0.12em] text-foreground/80">Pickup</span>
-                  </div>
-                  <p className="mt-2 text-sm text-muted-foreground">{storeInfo.estimatedPickup}</p>
-                </div>
-              ) : null}
-
-              {isDeliveryConfigured(storeInfo) ? (
-                <div className="storefront-surface-soft px-4 py-3">
-                  <div className="flex items-center gap-2 text-primary">
-                    <Truck className="size-4" />
-                    <span className="text-xs font-medium uppercase tracking-[0.12em] text-foreground/80">Delivery</span>
-                  </div>
-                  <p className="mt-2 text-sm text-muted-foreground">
-                    {formatCurrency(storeInfo.deliveryFee, {
-                      currencyCode: storeInfo.currencyCode,
-                      locale: storeInfo.locale,
-                    }, { inputIsCents: false })}
-                    {" · "}
-                    Min {formatCurrency(storeInfo.deliveryMinimum, {
-                      currencyCode: storeInfo.currencyCode,
-                      locale: storeInfo.locale,
-                    }, { inputIsCents: false })}
-                  </p>
-                </div>
-              ) : null}
-
-              {storeInfo.address ? (
-                <div className="storefront-surface-soft px-4 py-3 sm:col-span-2 xl:col-span-1">
-                  <div className="flex items-center gap-2 text-primary">
-                    <MapPin className="size-4" />
-                    <span className="text-xs font-medium uppercase tracking-[0.12em] text-foreground/80">Location</span>
-                  </div>
-                  <p className="mt-2 line-clamp-2 text-sm text-muted-foreground">{storeInfo.address}</p>
-                </div>
-              ) : null}
-
-              {storeInfo.rating ? (
-                <div className="storefront-surface-soft px-4 py-3">
-                  <div className="flex items-center gap-2 text-primary">
-                    <Star className="size-4 fill-primary" />
-                    <span className="text-xs font-medium uppercase tracking-[0.12em] text-foreground/80">Rating</span>
-                  </div>
-                  <p className="mt-2 text-sm text-muted-foreground">
-                    {storeInfo.rating}
-                    {storeInfo.reviewCount ? ` · ${storeInfo.reviewCount.toLocaleString()} reviews` : ""}
-                  </p>
-                </div>
-              ) : null}
+      {plate ? (
+        <div className="relative h-[38svh] min-h-[15rem] w-full overflow-hidden sm:h-[50svh] lg:absolute lg:inset-y-0 lg:left-0 lg:h-auto lg:w-[58%]">
+          <div className="pass-shutter absolute inset-0">
+            <div className="absolute left-1/2 top-1/2 aspect-square w-[128%] -translate-x-1/2 -translate-y-[48%] lg:left-auto lg:right-0 lg:h-[116%] lg:w-auto lg:translate-x-0 lg:-translate-y-1/2">
+              <Image
+                src={plate.imagePath!}
+                alt={plate.name}
+                fill
+                priority
+                className="object-cover"
+                sizes="(max-width: 1024px) 150vw, 80vw"
+              />
             </div>
           </div>
 
-          {heroItem ? (
-            <Link href={getMenuItemHref(heroItem.id)} prefetch={false} className="group block">
-              <article className="storefront-surface overflow-hidden bg-card p-3 sm:p-4">
-                <div className="relative aspect-[5/4] overflow-hidden rounded-[1.75rem] bg-muted/35">
-                  <HeroImage item={heroItem} priority={true} />
-                </div>
-                <div className="flex flex-col gap-3 p-3 pb-1 pt-5 sm:p-4 sm:pb-2">
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      {heroItem.categoryName ? (
-                        <p className="text-sm font-medium text-primary">{heroItem.categoryName}</p>
-                      ) : null}
-                      <h2 className="mt-1 font-serif text-2xl font-semibold text-foreground transition-colors group-hover:text-primary">
-                        {heroItem.name}
-                      </h2>
-                    </div>
-                    <span className="text-base font-medium tabular-nums text-foreground">
-                      {formatCurrency(heroItem.price, {
-                        currencyCode: storeInfo.currencyCode,
-                        locale: storeInfo.locale,
-                      })}
-                    </span>
-                  </div>
-                  <p className="line-clamp-2 text-sm leading-6 text-muted-foreground">
-                    {heroItem.description || "Prepared fresh to order."}
-                  </p>
-                </div>
-              </article>
-            </Link>
-          ) : null}
+          <Link
+            href={getMenuItemHref(plate.id)}
+            prefetch={false}
+            className="ticket group absolute left-4 top-0 z-10 block w-[min(19rem,calc(100%-2rem))] px-4 pt-3 transition-transform duration-150 active:scale-[0.98] sm:left-6 lg:bottom-10 lg:left-10 lg:top-auto"
+          >
+            <span className="flex items-baseline justify-between gap-4">
+              <span className="font-serif text-2xl font-extrabold leading-tight">{plate.name}</span>
+              <span className="font-serif text-2xl font-extrabold">{formatCurrency(plate.price, currency)}</span>
+            </span>
+            <span className="mt-1 block pb-1 text-[0.95rem] font-semibold text-primary group-hover:underline">
+              Order this
+            </span>
+          </Link>
         </div>
+      ) : null}
 
-        {featuredItems.length > 1 ? (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-sm font-medium text-primary">Featured items</p>
-                <h2 className="font-serif text-2xl font-semibold text-foreground">Start with the house favorites</h2>
-              </div>
-            </div>
+      <div className="storefront-shell relative lg:grid lg:min-h-[inherit] lg:grid-cols-12">
+        <div
+          className={cn(
+            "flex flex-col justify-center pb-5 pt-6 sm:py-12",
+            plate ? "lg:col-span-5 lg:col-start-8 lg:py-16 lg:pl-8 xl:pl-4" : "lg:col-span-9 lg:py-24",
+          )}
+        >
+          <h1 className={cn("text-balance font-serif font-black", nameSize(storeInfo.name), "leading-[0.86]")}>
+            {storeInfo.name}
+            <ServiceLamp
+              hours={storeInfo.hours}
+              timezone={storeInfo.timezone}
+              locale={storeInfo.locale}
+              initial={status}
+            />
+          </h1>
 
-            <div className="grid min-w-0 gap-4 md:grid-cols-2 xl:grid-cols-4">
-              {featuredItems.map((item, index) => (
-                <Link key={item.id} href={getMenuItemHref(item.id)} prefetch={false} className="group block min-w-0 h-full">
-                  <article className="storefront-surface-soft flex h-full min-w-0 items-center gap-3 overflow-hidden px-3 py-4 transition-colors hover:border-primary/30 hover:bg-card sm:gap-4 sm:px-4 xl:flex-col xl:items-start">
-                    <div className="relative size-20 shrink-0 overflow-hidden rounded-2xl bg-muted/40 xl:size-full xl:aspect-square">
-                      <HeroImage item={item} priority={index < 2} />
-                    </div>
-                    <div className="min-w-0 flex-1 xl:w-full">
-                      {item.categoryName ? <p className="truncate text-xs font-medium text-primary">{item.categoryName}</p> : null}
-                      <h3 className="truncate font-medium text-foreground transition-colors group-hover:text-primary">{item.name}</h3>
-                      <p className="mt-1 truncate text-sm text-muted-foreground">{item.description || "Prepared fresh to order."}</p>
-                    </div>
-                    <span className="shrink-0 whitespace-nowrap text-sm font-medium tabular-nums text-foreground xl:self-end">
-                      {formatCurrency(item.price, {
-                        currencyCode: storeInfo.currencyCode,
-                        locale: storeInfo.locale,
-                      })}
-                    </span>
-                  </article>
-                </Link>
-              ))}
-            </div>
+          {headline ? (
+            <p className="mt-3 max-w-[30ch] text-pretty text-lg leading-snug text-ink sm:mt-5 sm:text-2xl">
+              {headline}
+            </p>
+          ) : null}
+
+          <dl className="mt-4 text-base sm:mt-7">
+            <Fact label="Today">
+              <ServiceStatusText
+                hours={storeInfo.hours}
+                timezone={storeInfo.timezone}
+                locale={storeInfo.locale}
+                initial={status}
+              />
+            </Fact>
+            {storeInfo.estimatedPickup ? <Fact label="Pickup">Ready in {storeInfo.estimatedPickup}</Fact> : null}
+            {delivery ? (
+              <Fact label="Delivery">
+                {storeInfo.estimatedDelivery ? `${storeInfo.estimatedDelivery}, ` : ""}
+                {formatCurrency(storeInfo.deliveryFee, currency, { inputIsCents: false })} fee
+                {storeInfo.deliveryMinimum > 0
+                  ? `, ${formatCurrency(storeInfo.deliveryMinimum, currency, { inputIsCents: false })} minimum`
+                  : ""}
+              </Fact>
+            ) : null}
+            {storeInfo.address ? <Fact label="Address">{storeInfo.address}</Fact> : null}
+            {storeInfo.rating ? (
+              <Fact label="Rating">
+                {storeInfo.rating} out of 5
+                {storeInfo.reviewCount ? `, ${storeInfo.reviewCount.toLocaleString(storeInfo.locale)} reviews` : ""}
+              </Fact>
+            ) : null}
+          </dl>
+
+          <div className="mt-8 hidden sm:block">
+            <StorefrontSectionLink href={menuHref} prefetch={false} className="pass-action w-full sm:w-auto sm:min-w-[14rem]">
+              See the menu
+            </StorefrontSectionLink>
           </div>
-        ) : null}
+        </div>
       </div>
     </section>
   )

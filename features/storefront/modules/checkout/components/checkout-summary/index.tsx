@@ -54,7 +54,7 @@ const CheckoutSummary = ({
   return (
     <aside className="lg:sticky lg:top-24 lg:self-start">
       <div className="storefront-surface bg-card p-6">
-        <div className="border-b border-border pb-4">
+        <div className=" pb-4">
           <p className="text-sm font-medium text-primary">Order summary</p>
           <h2 className="mt-1 font-serif text-2xl font-semibold text-foreground">{items.length} item{items.length !== 1 ? "s" : ""}</h2>
         </div>
@@ -70,7 +70,7 @@ const CheckoutSummary = ({
           ))}
         </div>
 
-        <div className="mt-4 border-t border-border pt-4 space-y-2 text-sm">
+        <div className="mt-4 pt-4 space-y-2 text-sm">
           <div className="flex items-center justify-between">
             <span className="text-muted-foreground">Subtotal</span>
             <span className="font-medium tabular-nums text-foreground">
@@ -112,7 +112,7 @@ const CheckoutSummary = ({
             </div>
           )}
 
-          <div className="flex items-center justify-between border-t border-border pt-4 text-base">
+          <div className="flex items-center justify-between pt-4 text-base">
             <span className="font-medium text-foreground">Total</span>
             <span className="font-semibold tabular-nums text-foreground">
               {formatCurrency(total, currencyConfig)}
@@ -121,7 +121,7 @@ const CheckoutSummary = ({
         </div>
 
         {canShowPaymentControls ? (
-          <div className="mt-5 border-t border-border pt-5 space-y-3">
+          <div className="mt-5 pt-5 space-y-3">
             <p className="text-sm leading-6 text-muted-foreground">
               By placing your order, you agree to our terms and acknowledge our privacy policy.
             </p>
@@ -136,9 +136,9 @@ const CheckoutSummary = ({
             />
           </div>
         ) : (
-          <div className="mt-5 border-t border-border pt-5">
+          <div className="mt-5 pt-5">
             <p className="text-sm leading-6 text-muted-foreground">
-              Complete the steps on the left to unlock order placement.
+              Finish contact, pickup or delivery, and payment to place your order.
             </p>
           </div>
         )}

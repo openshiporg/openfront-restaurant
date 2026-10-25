@@ -9,9 +9,8 @@ import {
 import { StorefrontSectionLink } from "@/features/storefront/components/StorefrontSectionLink"
 
 const primaryLinks = [
-  { href: "/#popular-dishes", label: "Popular" },
   { href: "/#menu", label: "Menu" },
-  { href: "/#visit-us", label: "Visit us" },
+  { href: "/#visit-us", label: "Hours & location" },
 ]
 
 interface NavProps {
@@ -30,39 +29,36 @@ export default function Nav({ storeSettings, cart, brandHue }: NavProps) {
   return (
     <div className="sticky top-0 z-50">
       {storeSettings?.promoBanner ? (
-        <div className="border-b border-primary/20 bg-primary text-primary-foreground">
-          <div className="storefront-shell py-2">
-            <p className="text-center text-xs font-medium tracking-[0.18em] text-primary-foreground/90 uppercase">
-              {storeSettings.promoBanner}
-            </p>
-          </div>
+        <div className="bg-ink text-paper">
+          <p className="storefront-shell truncate py-2 text-center text-[0.95rem] font-medium">
+            {storeSettings.promoBanner}
+          </p>
         </div>
       ) : null}
 
-      <header className="border-b border-border bg-background/95 backdrop-blur">
-        <div className="storefront-shell flex h-16 items-center justify-between gap-6">
+      <header className="bg-steel text-ink">
+        <div className="storefront-shell flex h-16 items-center justify-between gap-4">
           <StoreBrand
             name={storeName}
             logoIcon={storeSettings?.logoIcon}
             logoColor={storeSettings?.logoColor}
           />
 
-          <nav className="hidden items-center gap-1 lg:flex">
-            {primaryLinks.map((link) => (
-              <StorefrontSectionLink
-                key={link.href}
-                href={link.href}
-                className="rounded-full px-4 py-2 text-sm text-muted-foreground transition-colors hover:bg-primary/8 hover:text-primary"
-              >
-                {link.label}
-              </StorefrontSectionLink>
-            ))}
-          </nav>
-
-          <div className="flex items-center gap-2 sm:gap-3">
+          <div className="flex shrink-0 items-center gap-1 sm:gap-2">
+            <nav className="hidden items-center md:flex" aria-label="Storefront">
+              {primaryLinks.map((link) => (
+                <StorefrontSectionLink
+                  key={link.href}
+                  href={link.href}
+                  className="px-3 py-2 text-[0.95rem] font-medium text-ink transition-colors hover:bg-steel-shade"
+                >
+                  {link.label}
+                </StorefrontSectionLink>
+              ))}
+            </nav>
             <Link
               href="/account"
-              className="hidden rounded-full border border-border bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:border-primary/30 hover:text-primary sm:inline-flex"
+              className="px-3 py-2 text-[0.95rem] font-medium text-ink transition-colors hover:bg-steel-shade"
             >
               Account
             </Link>

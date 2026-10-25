@@ -81,7 +81,7 @@ const AddressSelect = ({
       {label ? (
         <Label
           htmlFor={id}
-          className="text-[11px] font-semibold uppercase tracking-[0.15em] text-muted-foreground"
+          className="text-[0.95rem] font-semibold text-ink-soft"
         >
           {label}
         </Label>
@@ -120,12 +120,12 @@ const AddressSelect = ({
                 <span className="flex items-center gap-2 text-sm font-medium">
                   <span>{selectedAddress.name || selectedAddress.address1}</span>
                   {selectedAddress.isDefault ? (
-                    <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    <span className="bg-steel px-2 py-0.5 text-sm font-semibold text-ink">
                       Default
                     </span>
                   ) : null}
                   {selectedAddress.isBilling ? (
-                    <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    <span className="bg-steel px-2 py-0.5 text-sm font-semibold text-ink">
                       Billing
                     </span>
                   ) : null}
@@ -162,12 +162,12 @@ const AddressSelect = ({
                 <span className="flex items-center gap-2 text-sm font-medium">
                   <span>{address.name || address.address1}</span>
                   {address.isDefault ? (
-                    <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    <span className="bg-steel px-1.5 py-0.5 text-sm font-semibold text-ink">
                       Default
                     </span>
                   ) : null}
                   {address.isBilling ? (
-                    <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    <span className="bg-steel px-1.5 py-0.5 text-sm font-semibold text-ink">
                       Billing
                     </span>
                   ) : null}

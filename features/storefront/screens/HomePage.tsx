@@ -12,10 +12,10 @@ import {
 } from "@/features/storefront/lib/store-data"
 import { getCurrencyConfig, formatCurrency } from "@/features/storefront/lib/currency"
 import { HeroBanner } from "@/features/storefront/components/HeroBanner"
-import { StoreInfoBar } from "@/features/storefront/components/StoreInfoBar"
 import { CategoryNav } from "@/features/storefront/components/CategoryNav"
-import { MenuSection } from "@/features/storefront/components/MenuSection"
+import { MenuSection, PopularRail, type MenuRow } from "@/features/storefront/components/MenuSection"
 import { getMenuItemDescriptionText } from "@/features/storefront/lib/menu-item-utils"
+import { getServiceStatus } from "@/features/storefront/lib/store-hours-display"
 import { buildMenuVisibility, selectHeroMenuItems } from "@/features/storefront/lib/menu-visibility"
 import { getStorefrontRating } from "@/features/storefront/lib/store-rating-display"
 import { cn } from "@/lib/utils"
@@ -92,35 +92,42 @@ export default async function HomePage() {
     reviewCount: storefrontRating?.reviewCount,
   }
 
+  const currency = { currencyCode: storeInfo.currencyCode, locale: storeInfo.locale }
+  const toRow = (item: MenuItem): MenuRow => ({
+    id: item.id,
+    name: item.name,
+    price: formatCurrency(item.price, currency),
+    description: getMenuItemDescriptionText(item.description),
+    thumbnail: item.thumbnail || null,
+    calories: item.calories ?? null,
+    customizable: Boolean(item.modifiers?.length),
+    soldOut: item.available === false,
+    dietary: (item.dietaryFlags || []).slice(0, 2).map((flag) => flag.replace(/_/g, " ")),
+  })
+
+  const status = getServiceStatus(storeInfo.hours, storeInfo.timezone, storeInfo.locale)
+
   const popularSectionId = "popular-dishes"
   const featuredSectionId = "house-picks"
 
   const navItems: Array<{ href: string; label: string }> = []
-
-  if (popularItems.length > 0) {
-    navItems.push({ href: `#${popularSectionId}`, label: "Popular" })
-  }
-
-  if (featuredItems.length > 0) {
-    navItems.push({ href: `#${featuredSectionId}`, label: "House picks" })
-  }
-
+  if (popularItems.length > 0) navItems.push({ href: `#${popularSectionId}`, label: "Popular" })
+  if (houseItems.length > 0) navItems.push({ href: `#${featuredSectionId}`, label: "House picks" })
   categorySections.forEach(({ category, sectionId }: { category: MenuCategory; sectionId: string }) => {
     navItems.push({ href: `#${sectionId}`, label: category.name })
   })
   if (otherItems.length > 0) navItems.push({ href: "#other-menu-items", label: "More" })
 
-  const menuHref = categorySections[0]?.sectionId
-    ? `#${categorySections[0].sectionId}`
-    : navItems[0]?.href || "#menu"
-  const navOffset = storeSettings.promoBanner ? "top-[96px]" : "top-16"
-  const sectionScrollMt = storeSettings.promoBanner ? "scroll-mt-44" : "scroll-mt-32"
+  const menuHref = navItems[0]?.href || "#menu"
+  const railOffset = storeSettings.promoBanner ? "top-[100px]" : "top-16"
+  const sectionScrollMt = storeSettings.promoBanner ? "scroll-mt-40" : "scroll-mt-32"
 
   return (
-    <div className="flex flex-col" id="menu">
+    <div className="flex flex-col bg-steel" id="menu">
       <HeroBanner
         menuHref={menuHref}
         storeInfo={storeInfo}
+        status={status}
         heroItems={heroCandidates.map((item) => ({
           id: item.id,
           name: item.name,
@@ -132,90 +139,46 @@ export default async function HomePage() {
         }))}
       />
 
-      <StoreInfoBar storeInfo={storeInfo} />
-
       {navItems.length > 0 ? (
-        <div className={cn("sticky z-40", navOffset)}>
+        <div className={cn("sticky z-40", railOffset)}>
           <CategoryNav items={navItems} />
         </div>
       ) : null}
 
       <main className="flex flex-col">
-        {popularItems.length > 0 ? (
-          <section id={popularSectionId} className={cn("py-8 sm:py-16 lg:py-24", sectionScrollMt)}>
-            <div className="storefront-shell">
-              <div className="mx-auto mb-10 flex max-w-2xl flex-col items-center justify-center space-y-3 text-center sm:mb-12">
-                <h2 className="storefront-heading">Popular picks</h2>
-                <p className="storefront-copy max-w-2xl text-center">
-                  The items customers order most often, available for the same quick checkout as the full menu below.
-                </p>
-              </div>
+        <PopularRail
+          sectionId={popularSectionId}
+          title="Popular"
+          rows={popularItems.map(toRow)}
+          className={sectionScrollMt}
+        />
 
-              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                {popularItems.map((item: MenuItem) => (
-                  <MenuSection.Card
-                    key={item.id}
-                    item={item}
-                    currencyCode={storeInfo.currencyCode}
-                    locale={storeInfo.locale}
-                    showCategory={true}
-                  />
-                ))}
-              </div>
-            </div>
-          </section>
+        <MenuSection
+          sectionId={featuredSectionId}
+          title="House picks"
+          rows={houseItems.map(toRow)}
+          className={sectionScrollMt}
+        />
+
+        {categorySections.map(({ category, items, sectionId }) => (
+          <MenuSection
+            key={category.id}
+            sectionId={sectionId}
+            title={category.name}
+            description={category.description || undefined}
+            rows={items.map(toRow)}
+            className={sectionScrollMt}
+          />
+        ))}
+
+        {otherItems.length > 0 ? (
+          <MenuSection
+            sectionId="other-menu-items"
+            title="More"
+            rows={otherItems.map(toRow)}
+            className={sectionScrollMt}
+          />
         ) : null}
-
-        {featuredItems.length > 0 ? (
-          <section id={featuredSectionId} className={cn("py-8 sm:py-16 lg:py-24", sectionScrollMt)}>
-            <div className="storefront-shell">
-              <div className="mx-auto mb-10 flex max-w-2xl flex-col items-center justify-center space-y-3 text-center sm:mb-12">
-                <h2 className="storefront-heading">House favorites</h2>
-                <p className="storefront-copy max-w-2xl text-center">
-                  Signature items highlighted at the top, with the full live menu ready just below.
-                </p>
-              </div>
-
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-                {houseItems.map((item: MenuItem) => (
-                  <MenuSection.FeatureCard
-                    key={item.id}
-                    item={item}
-                    currencyCode={storeInfo.currencyCode}
-                    locale={storeInfo.locale}
-                  />
-                ))}
-              </div>
-            </div>
-          </section>
-        ) : null}
-
-        <div className="storefront-shell py-8 sm:py-10 lg:py-14">
-          <div className="space-y-14 sm:space-y-16">
-            {categorySections.map(({ category, items, sectionId }) => (
-              <MenuSection
-                key={category.id}
-                sectionId={sectionId}
-                title={category.name}
-                description={category.description || undefined}
-                items={items}
-                currencyCode={storeInfo.currencyCode}
-                locale={storeInfo.locale}
-                className={sectionScrollMt}
-              />
-            ))}
-            {otherItems.length > 0 ? (
-              <MenuSection
-                sectionId="other-menu-items"
-                title="More to enjoy"
-                items={otherItems}
-                currencyCode={storeInfo.currencyCode}
-                locale={storeInfo.locale}
-                className={sectionScrollMt}
-              />
-            ) : null}
-          </div>
-        </div>
       </main>
     </div>
   )

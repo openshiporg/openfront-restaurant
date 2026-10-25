@@ -1,7 +1,4 @@
-import {
-  StoreBrand,
-  type StorefrontLayoutSettings,
-} from "@/features/storefront/modules/layout/components/store-logo"
+import { type StorefrontLayoutSettings } from "@/features/storefront/modules/layout/components/store-logo"
 import { StorefrontSectionLink } from "@/features/storefront/components/StorefrontSectionLink"
 import { getWeeklyHoursDisplay } from "@/features/storefront/lib/store-hours-display"
 
@@ -15,6 +12,10 @@ interface FooterProps {
   storeSettings: StorefrontLayoutSettings | null
 }
 
+function mapsHref(address: string) {
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`
+}
+
 export default function Footer({ storeSettings }: FooterProps) {
   const storeName = storeSettings?.name || "Restaurant"
   const tagline = storeSettings?.heroSubheadline || storeSettings?.tagline || ""
@@ -23,60 +24,65 @@ export default function Footer({ storeSettings }: FooterProps) {
   const hours = storeSettings?.hours || {}
   const locale = storeSettings?.locale || "en-US"
   const footerHours = getWeeklyHoursDisplay(hours, locale)
+  const hasHours = footerHours.some((entry) => entry.value !== "Closed")
 
   return (
-    <footer
-      id="visit-us"
-      className="mt-auto border-t border-border bg-muted"
-      style={{ clipPath: "polygon(0 16px, 100% 0, 100% 100%, 0 100%)" }}
-    >
-      <div className="storefront-shell py-12 sm:py-14 lg:py-16">
-        <div className="grid gap-10 lg:grid-cols-[1.2fr_0.8fr_1fr] lg:gap-12">
-          <div>
-            <StoreBrand
-              name={storeName}
-              logoIcon={storeSettings?.logoIcon}
-              logoColor={storeSettings?.logoColor}
-            />
-            {tagline ? <p className="mt-4 max-w-xl text-pretty text-base leading-7 text-muted-foreground">{tagline}</p> : null}
-
-            <div className="mt-6 space-y-2 text-sm text-muted-foreground">
-              {address ? <p>{address}</p> : null}
-              {phone ? <p>{phone}</p> : null}
-            </div>
+    <footer id="visit-us" className="mt-auto scroll-mt-16 bg-ink text-paper">
+      <div className="storefront-shell pb-8 pt-16 sm:pt-20 lg:pt-28">
+        <div className="grid gap-12 lg:grid-cols-12 lg:gap-10">
+          <div className="lg:col-span-5">
+            <h2 className="font-serif text-5xl font-black leading-[0.9] lg:text-7xl">Hours & location</h2>
+            {address ? (
+              <a href={mapsHref(address)} target="_blank" rel="noreferrer" className="mt-6 block max-w-[24ch] text-xl leading-snug underline decoration-paper/35 underline-offset-[0.2em] hover:decoration-paper">
+                {address}
+              </a>
+            ) : null}
+            {phone ? (
+              <a href={`tel:${phone.replace(/[^\d+]/g, "")}`} className="mt-3 block text-xl underline decoration-paper/35 underline-offset-[0.2em] hover:decoration-paper">
+                {phone}
+              </a>
+            ) : null}
+            {tagline ? <p className="mt-6 max-w-[44ch] text-pretty text-base leading-relaxed text-paper/75">{tagline}</p> : null}
           </div>
 
-          <div>
-            <p className="text-sm font-medium text-primary">Quick links</p>
-            <div className="mt-4 flex flex-col gap-2">
-              {quickLinks.map((link) => (
-                <StorefrontSectionLink
-                  key={link.href}
-                  href={link.href}
-                  className="w-fit text-base text-foreground transition-colors hover:text-primary"
-                >
-                  {link.label}
-                </StorefrontSectionLink>
-              ))}
-            </div>
-          </div>
-
-          <div>
-            <p className="text-sm font-medium text-primary">Hours</p>
-            <div className="mt-4 space-y-2 text-sm text-muted-foreground">
+          {hasHours ? (
+            <dl className="text-lg lg:col-span-4">
               {footerHours.map((entry) => (
-                <div key={entry.day} className="flex items-center justify-between gap-6">
-                  <span className="font-medium text-foreground">{entry.day}</span>
-                  <span className="text-right">{entry.value}</span>
+                <div key={entry.day} className="flex items-baseline justify-between gap-6 py-1">
+                  <dt className="font-semibold">{entry.day}</dt>
+                  <dd className="text-right tabular-nums text-paper/80">{entry.value}</dd>
                 </div>
               ))}
-            </div>
-          </div>
+            </dl>
+          ) : null}
+
+          <nav className="lg:col-span-2 lg:col-start-11" aria-label="Footer">
+            <ul className="flex flex-col gap-2">
+              {quickLinks.map((link) => (
+                <li key={link.href}>
+                  <StorefrontSectionLink
+                    href={link.href}
+                    className="font-serif text-2xl font-extrabold transition-colors hover:text-paper/70"
+                  >
+                    {link.label}
+                  </StorefrontSectionLink>
+                </li>
+              ))}
+            </ul>
+          </nav>
         </div>
 
-        <div className="mt-10 border-t border-border/70 pt-6 text-center text-sm text-muted-foreground sm:flex sm:items-center sm:justify-between sm:text-left">
+        <p
+          aria-hidden="true"
+          className="mt-20 overflow-hidden whitespace-nowrap font-serif font-black leading-[0.8] text-paper"
+          style={{ fontSize: `clamp(3.5rem, ${Math.min(22, 150 / Math.max(storeName.length, 6))}vw, 18rem)` }}
+        >
+          {storeName}
+        </p>
+
+        <div className="mt-8 flex flex-col gap-2 text-[0.95rem] text-paper/70 sm:flex-row sm:items-center sm:justify-between">
           <p suppressHydrationWarning>© {new Date().getFullYear()} {storeName}</p>
-          <p className="mt-2 sm:mt-0">Powered by OpenFront</p>
+          <p>Powered by Openfront</p>
         </div>
       </div>
     </footer>

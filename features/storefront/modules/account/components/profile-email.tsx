@@ -31,7 +31,7 @@ export default function ProfileEmail({ customer }: { customer: any }) {
           {state?.error ? <p className="mt-3 text-sm text-destructive">{state.error}</p> : null}
         </div>
 
-        <Button type="submit" variant="ghost" disabled={isPending} className="h-11 rounded-full border border-border px-5 text-sm text-foreground hover:border-primary/30 hover:text-primary">
+        <Button type="submit" variant="ghost" disabled={isPending} className="h-11 rounded-full px-5 text-sm text-foreground hover:border-primary/30 hover:text-primary">
           {isPending ? <Loader2 size={14} className="mr-2 animate-spin" /> : success ? <Check size={14} className="mr-2 text-emerald-600" /> : null}
           {success ? "Saved" : "Save"}
         </Button>

@@ -70,7 +70,7 @@ export function OrderSummary({
             <span>-{formatCurrency(remainingDiscount, currencyConfig)}</span>
           </div>
         ) : null}
-        <div className="flex items-center justify-between border-t border-border pt-4 text-base font-medium">
+        <div className="flex items-center justify-between pt-4 text-base font-medium">
           <span className="text-foreground">Total</span>
           <span className="text-foreground">{formatCurrency(total, currencyConfig)}</span>
         </div>

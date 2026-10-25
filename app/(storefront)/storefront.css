@@ -6,10 +6,17 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-  --font-serif: var(--font-unbounded-display);
-  --font-script: var(--font-unbounded-display);
+  --font-sans: var(--font-storefront), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace; /* taste-skill-ignore: shadcn token, unused by the storefront */
+  --font-serif: var(--font-storefront), ui-sans-serif, system-ui, sans-serif;
+  --font-script: var(--font-storefront), ui-sans-serif, system-ui, sans-serif;
+  --color-steel: var(--steel);
+  --color-steel-deep: var(--steel-deep);
+  --color-steel-shade: var(--steel-shade);
+  --color-paper: var(--paper);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-lamp: var(--lamp);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -39,37 +46,45 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: var(--radius);
+  --radius-md: var(--radius);
   --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
-  --radius-2xl: calc(var(--radius) + 8px);
-  --radius-3xl: calc(var(--radius) + 12px);
-  --radius-4xl: calc(var(--radius) + 16px);
+  --radius-xl: var(--radius);
+  --radius-2xl: var(--radius);
+  --radius-3xl: var(--radius);
+  --radius-4xl: var(--radius);
 }
 
 :root {
-  --radius: 0.25rem;
+  /* The pass: brushed steel under the heat lamps, thermal-ticket paper, one ink. */
+  --radius: 0rem;
   --store-logo-hue: 0;
   --store-brand-hue: calc(260 + var(--store-logo-hue));
-  --background: oklch(0.986 0.001 106);
-  --foreground: oklch(0.22 0.012 40);
-  --card: oklch(0.975 0.001 106);
-  --card-foreground: oklch(0.22 0.012 40);
-  --popover: oklch(0.975 0.001 106);
-  --popover-foreground: oklch(0.22 0.012 40);
-  --primary: oklch(0.55 0.22 var(--store-brand-hue));
-  --primary-foreground: oklch(0.98 0.01 100.72);
-  --secondary: oklch(0.52 0.14 247.51);
-  --secondary-foreground: oklch(0.98 0.01 100.72);
-  --muted: oklch(0.95 0.002 106);
-  --muted-foreground: oklch(0.48 0.01 40);
-  --accent: oklch(0.92 0.002 106);
-  --accent-foreground: oklch(0.22 0.012 40);
-  --destructive: oklch(0.56 0.23 29.23);
-  --border: oklch(0.89 0.002 106);
-  --input: oklch(0.89 0.002 106);
-  --ring: oklch(0.55 0.12 var(--store-brand-hue));
+  --steel: oklch(0.872 0.009 236);
+  --steel-shade: oklch(0.835 0.011 236);
+  --steel-deep: oklch(0.7 0.013 238);
+  --paper: oklch(0.987 0.003 236);
+  --ink: oklch(0.2 0.014 252);
+  --ink-soft: oklch(0.39 0.016 248);
+  --lamp: oklch(0.76 0.165 62);
+  --background: var(--paper);
+  --foreground: var(--ink);
+  --card: var(--paper);
+  --card-foreground: var(--ink);
+  --popover: var(--paper);
+  --popover-foreground: var(--ink);
+  --primary: oklch(0.47 0.2 var(--store-brand-hue));
+  --primary-foreground: oklch(0.99 0.004 236);
+  --secondary: var(--steel);
+  --secondary-foreground: var(--ink);
+  --muted: oklch(0.945 0.005 236);
+  --muted-foreground: oklch(0.43 0.016 248);
+  --accent: oklch(0.93 0.007 236);
+  --accent-foreground: var(--ink);
+  --destructive: oklch(0.53 0.2 27);
+  --border: oklch(0.86 0.009 236);
+  --input: oklch(0.8 0.011 236);
+  --ring: oklch(0.47 0.2 var(--store-brand-hue));
   --chart-1: oklch(0.58 0.23 var(--store-brand-hue));
   --chart-2: oklch(0.61 0.18 251.95);
   --chart-3: oklch(0.72 0.15 83.5);
@@ -83,15 +98,16 @@
   --sidebar-accent-foreground: oklch(0.2 0.01 18.05);
   --sidebar-border: oklch(0.87 0.01 25.23);
   --sidebar-ring: oklch(0.52 0.14 247.51);
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
 }
 
 .storefront-brand {
   /* Resolve brand-dependent tokens on the store wrapper. */
   --store-logo-hue: var(--store-page-logo-hue, 0);
   --store-brand-hue: var(--store-page-brand-hue, 260);
-  --primary: oklch(0.55 0.22 var(--store-brand-hue));
-  --secondary: oklch(0.72 0.12 var(--store-brand-hue));
-  --ring: oklch(0.55 0.12 var(--store-brand-hue));
+  --primary: oklch(0.47 0.2 var(--store-brand-hue));
+  --ring: oklch(0.47 0.2 var(--store-brand-hue));
   --chart-1: oklch(0.58 0.23 var(--store-brand-hue));
   --chart-2: oklch(0.68 0.16 var(--store-brand-hue));
 }
@@ -148,45 +164,204 @@
     letter-spacing: var(--tracking-normal);
   }
 
+  .storefront-ui,
+  .storefront-sheet {
+    font-family: var(--font-sans);
+    font-variant-numeric: tabular-nums;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .storefront-ui ::selection,
+  .storefront-sheet ::selection {
+    background: var(--ink);
+    color: var(--paper);
+  }
+
+  .storefront-ui :focus-visible,
+  .storefront-sheet :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+
+  /* Headings everywhere in the storefront speak in the condensed cut. */
+  .storefront-ui :is(h1, h2, h3).font-serif,
+  .storefront-sheet :is(h1, h2, h3).font-serif,
+  .storefront-ui .font-serif,
+  .storefront-sheet .font-serif,
+  .font-display {
+    font-family: var(--font-serif);
+    font-stretch: 68%;
+    font-variation-settings: "wdth" 68;
+    letter-spacing: -0.012em;
+    word-spacing: 0.1em;
+  }
+
   .font-script {
-    font-family: var(--font-unbounded-display);
+    font-family: var(--font-serif);
   }
 }
 
 @layer components {
   .storefront-shell {
-    @apply mx-auto max-w-7xl px-4 sm:px-6 lg:px-8;
+    @apply mx-auto w-full max-w-[90rem] px-4 sm:px-6 lg:px-10;
   }
 
   .storefront-surface {
-    @apply border border-border bg-card shadow-sm;
+    @apply bg-card;
   }
 
   .storefront-surface-soft {
-    @apply border border-border/70 bg-background/85 shadow-sm;
+    @apply bg-muted;
   }
 
-  .storefront-kicker {
-    @apply inline-flex items-center rounded-none border border-border bg-background px-3 py-1 text-sm font-medium text-foreground;
-  }
 
   .storefront-heading {
-    @apply text-balance font-serif text-3xl font-semibold md:text-4xl;
+    @apply text-balance font-serif text-4xl font-extrabold leading-[0.95] md:text-5xl;
   }
 
   .storefront-ui [data-slot='button'] {
     border-radius: 0 !important;
   }
 
-  .storefront-ui :is(a, button)[class*='rounded-full'] {
+  .storefront-ui :is(a, button)[class*='rounded-full'],
+  .storefront-sheet :is(a, button)[class*='rounded-full'] {
     border-radius: 0 !important;
   }
 
   .storefront-copy {
-    @apply text-pretty text-base leading-7 text-muted-foreground;
+    @apply text-pretty text-base leading-7 text-ink-soft;
   }
 
-  .storefront-eyebrow {
-    @apply text-sm font-medium text-primary;
+
+  /* The one action: the store's own hue, flat, square, pressable. */
+  .pass-action {
+    @apply inline-flex h-12 items-center justify-center gap-2 bg-primary px-6 text-base font-semibold text-primary-foreground;
+    transition: transform 160ms var(--ease-out), background-color 160ms ease;
+  }
+  .pass-action:hover {
+    background: color-mix(in oklch, var(--primary) 88%, black);
+  }
+  .pass-action:active {
+    transform: scale(0.97);
+  }
+  .pass-action:disabled {
+    @apply cursor-not-allowed bg-steel-deep text-paper;
+    transform: none;
+  }
+
+  .pass-link {
+    @apply text-ink underline decoration-[0.08em] underline-offset-[0.22em];
+    text-decoration-color: color-mix(in oklch, var(--ink) 35%, transparent);
+    transition: text-decoration-color 160ms ease;
+  }
+  .pass-link:hover {
+    text-decoration-color: var(--ink);
+  }
+
+  /* A thermal ticket: paper with a torn lower edge. The conic gradients are masks that cut the tear, never visible fills. taste-skill-ignore */
+  .ticket {
+    @apply bg-paper text-ink;
+    --tear: 7px;
+    -webkit-mask: conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) 50% / calc(var(--tear) * 2) 100%; /* taste-skill-ignore */
+    mask: conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) 50% / calc(var(--tear) * 2) 100%; /* taste-skill-ignore */
+    padding-bottom: calc(var(--tear) + 0.25rem);
+  }
+  .ticket-top {
+    @apply bg-paper text-ink;
+    --tear: 7px;
+    -webkit-mask: conic-gradient(from 135deg at top, #0000, #000 1deg 89deg, #0000 90deg) 50% / calc(var(--tear) * 2) 100%; /* taste-skill-ignore */
+    mask: conic-gradient(from 135deg at top, #0000, #000 1deg 89deg, #0000 90deg) 50% / calc(var(--tear) * 2) 100%; /* taste-skill-ignore */
+    padding-top: calc(var(--tear) + 0.25rem);
+  }
+
+  /* The heat lamp: lit while the kitchen takes orders. */
+  .lamp {
+    @apply inline-block shrink-0 rounded-full;
+    width: 0.2em;
+    height: 0.2em;
+    background: var(--steel-deep);
+  }
+  .lamp[data-on='true'] {
+    background: var(--lamp);
+    /* The lamp is lit: its glow is the state, not decoration. taste-skill-ignore */
+    box-shadow: 0 0 0.35em 0.06em color-mix(in oklch, var(--lamp) 70%, transparent); /* taste-skill-ignore */
+  }
+
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@keyframes pass-shutter {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+@keyframes pass-settle {
+  from {
+    transform: scale(1.12);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+
+@keyframes ticket-drop {
+  0% {
+    transform: translateY(-10px);
+    opacity: 0.4;
+  }
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.pass-shutter {
+  animation: pass-shutter 1.1s var(--ease-drawer) both;
+}
+.pass-shutter > * {
+  animation: pass-settle 1.4s var(--ease-out) both;
+}
+.ticket-drop {
+  animation: ticket-drop 260ms var(--ease-out);
+}
+
+/* Parts of each section rise into place as they enter; no script, and
+   browsers without scroll timelines simply show the content. */
+@keyframes pass-rise {
+  from {
+    opacity: 0;
+    transform: translateY(22px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .pass-rise {
+      animation: pass-rise linear both;
+      animation-timeline: view();
+      animation-range: entry 5% entry 45%;
+    }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pass-shutter,
+  .pass-shutter > *,
+  .ticket-drop {
+    animation: none;
   }
 }

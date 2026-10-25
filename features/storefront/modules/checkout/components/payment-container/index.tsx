@@ -57,7 +57,7 @@ const PaymentContainer: React.FC<PaymentContainerProps> = ({
         </span>
       </div>
       {isManual(paymentProviderId) && isDevelopment && (
-        <PaymentTest className="sm:hidden text-[10px]" />
+        <PaymentTest className="sm:hidden text-sm" />
       )}
       {children}
     </div>
@@ -93,7 +93,7 @@ export const StripeCardContainer = ({
         },
       },
       classes: {
-        base: "pt-3 pb-1 block w-full h-11 px-4 mt-0 bg-background border rounded-md appearance-none focus:outline-none focus:ring-0 border-border hover:bg-accent transition-all duration-300 ease-in-out",
+        base: "pt-3 pb-1 block w-full h-11 px-4 mt-0 bg-background border rounded-md appearance-none focus:outline-none focus:ring-0 border-border hover:bg-accent transition-colors duration-300 ease-in-out",
       },
       hidePostalCode: true,
     }
@@ -108,7 +108,7 @@ export const StripeCardContainer = ({
     >
       {selectedPaymentOptionId === paymentProviderId &&
         (stripeReady ? (
-          <div className="my-4 transition-all duration-150 ease-in-out">
+          <div className="my-4 transition-colors duration-150 ease-in-out">
             <p className="text-sm font-medium text-foreground mb-1">
               Enter your card details:
             </p>

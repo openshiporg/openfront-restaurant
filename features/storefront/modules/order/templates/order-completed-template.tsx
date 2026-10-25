@@ -62,13 +62,12 @@ export default function OrderCompletedTemplate({ order }: OrderCompletedTemplate
   return (
     <div className="py-8 sm:py-10 lg:py-14">
       <div className="storefront-shell">
-        <Link href="/account/orders" className="inline-flex items-center gap-2 rounded-full border border-border bg-background px-4 py-2 text-sm text-muted-foreground transition-colors hover:border-primary/30 hover:text-primary">
+        <Link href="/account/orders" className="inline-flex items-center gap-2 rounded-full bg-background px-4 py-2 text-sm text-muted-foreground transition-colors hover:border-primary/30 hover:text-primary">
           <ArrowLeft size={14} />
           Back to orders
         </Link>
 
-        <div className="mt-8 border-b border-border pb-6">
-          <span className="storefront-kicker">Order confirmed</span>
+        <div className="mt-8 pb-6">
           <div className="mt-4 flex flex-wrap items-start justify-between gap-4">
             <div>
               <h1 className="font-serif text-4xl font-semibold text-foreground">Order #{order.orderNumber}</h1>
@@ -76,7 +75,7 @@ export default function OrderCompletedTemplate({ order }: OrderCompletedTemplate
                 {typeLabel} · {new Date(order.createdAt).toLocaleDateString()}
               </p>
             </div>
-            <div className="border border-border bg-background px-4 py-2 text-sm font-medium text-foreground">
+            <div className=" bg-background px-4 py-2 text-sm font-medium text-foreground">
               {statusLabel}
             </div>
           </div>
@@ -108,7 +107,7 @@ export default function OrderCompletedTemplate({ order }: OrderCompletedTemplate
 
           <div className="space-y-6">
             <div className="storefront-surface bg-card p-6">
-              {order.checkAllocation && <p className="border rounded p-3 mb-3">Independent check {order.checkAllocation.ordinal} of {order.checkAllocation.guestCount} from service {order.checkAllocation.sourceOrderNumber}. Your allocated charge is shown in the total. Any food details below describe the original service and are not charged again in full.</p>}
+              {order.checkAllocation && <p className="mb-3 bg-steel p-3">Independent check {order.checkAllocation.ordinal} of {order.checkAllocation.guestCount} from service {order.checkAllocation.sourceOrderNumber}. Your allocated charge is shown in the total. Any food details below describe the original service and are not charged again in full.</p>}
               <OrderItemsList items={order.orderItems} />
             </div>
             <div className="storefront-surface bg-card p-6">

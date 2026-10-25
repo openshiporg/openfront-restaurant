@@ -137,7 +137,7 @@ const AddressFields = ({
       <div>
         <Label
           htmlFor={`${idPrefix}-address1`}
-          className="text-[11px] font-semibold uppercase tracking-[0.15em] text-muted-foreground"
+          className="text-[0.95rem] font-semibold text-ink-soft"
         >
           Street Address
         </Label>
@@ -153,7 +153,7 @@ const AddressFields = ({
       <div>
         <Label
           htmlFor={`${idPrefix}-address2`}
-          className="text-[11px] font-semibold uppercase tracking-[0.15em] text-muted-foreground"
+          className="text-[0.95rem] font-semibold text-ink-soft"
         >
           Address 2
         </Label>
@@ -169,7 +169,7 @@ const AddressFields = ({
         <div>
           <Label
             htmlFor={`${idPrefix}-city`}
-            className="text-[11px] font-semibold uppercase tracking-[0.15em] text-muted-foreground"
+            className="text-[0.95rem] font-semibold text-ink-soft"
           >
             City
           </Label>
@@ -185,7 +185,7 @@ const AddressFields = ({
         <div>
           <Label
             htmlFor={`${idPrefix}-state`}
-            className="text-[11px] font-semibold uppercase tracking-[0.15em] text-muted-foreground"
+            className="text-[0.95rem] font-semibold text-ink-soft"
           >
             State / Province
           </Label>
@@ -202,7 +202,7 @@ const AddressFields = ({
         <div>
           <Label
             htmlFor={`${idPrefix}-postal`}
-            className="text-[11px] font-semibold uppercase tracking-[0.15em] text-muted-foreground"
+            className="text-[0.95rem] font-semibold text-ink-soft"
           >
             ZIP / Postal Code
           </Label>
@@ -218,7 +218,7 @@ const AddressFields = ({
         <div>
           <Label
             htmlFor={`${idPrefix}-country`}
-            className="text-[11px] font-semibold uppercase tracking-[0.15em] text-muted-foreground"
+            className="text-[0.95rem] font-semibold text-ink-soft"
           >
             Country Code
           </Label>
@@ -578,7 +578,7 @@ const Delivery = ({
             data-testid="edit-delivery-button"
             variant="ghost"
             size="sm"
-            className="text-[13px] font-medium text-muted-foreground hover:text-foreground"
+            className="text-sm font-medium text-muted-foreground hover:text-foreground"
           >
             Edit
           </Button>
@@ -591,8 +591,8 @@ const Delivery = ({
             <div className="space-y-5">
               {/* Delivery Zone Info at Top */}
               {allowedPostalCodes.length > 0 ? (
-                <div className="rounded-xl border border-border/60 bg-muted/30 p-3">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.15em] text-muted-foreground">
+                <div className="rounded-xl bg-muted/30 p-3">
+                  <p className="text-[0.95rem] font-semibold text-ink-soft">
                     Delivery Zone
                   </p>
                   <p className="mt-1 text-xs text-muted-foreground">
@@ -649,7 +649,7 @@ const Delivery = ({
                       onChange={handleAddressFieldChange}
                     />
 
-                    <div className="flex items-start gap-3 rounded-xl border border-border/60 bg-muted/30 p-3">
+                    <div className="flex items-start gap-3 rounded-xl bg-muted/30 p-3">
                       <Checkbox
                         id="billing-same-as-delivery"
                         checked={billingSameAsDelivery}
@@ -663,7 +663,7 @@ const Delivery = ({
 
                     {!billingSameAsDelivery ? (
                       <div className="space-y-3">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.15em] text-muted-foreground">
+                        <p className="text-[0.95rem] font-semibold text-ink-soft">
                           Billing Address
                         </p>
                         <AddressFields
@@ -720,16 +720,16 @@ const Delivery = ({
               ) : null}
             </div>
           ) : (
-            <div className="rounded-xl border border-border/50 bg-muted/50 p-4">
+            <div className="rounded-xl bg-muted/50 p-4">
               <div className="flex items-start gap-3">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-border/50 bg-background">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-background">
                   <MapPin className="h-4 w-4 text-foreground" />
                 </div>
                 <div>
                   <h3 className="mb-1 text-sm font-semibold">Pickup Location</h3>
                   <p className="text-sm text-muted-foreground">{storeInfo.address}</p>
                   {storeInfo.estimatedPickup ? (
-                    <p className="mt-1 text-[13px] font-medium text-foreground">
+                    <p className="mt-1 text-sm font-medium text-foreground">
                       Estimated ready in {storeInfo.estimatedPickup}
                     </p>
                   ) : null}
@@ -760,7 +760,7 @@ const Delivery = ({
           {orderType === "delivery" ? (
             <>
               <div>
-                <p className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                <p className="mb-1 text-[0.95rem] font-semibold text-ink-soft">
                   Delivery Address
                 </p>
                 {formatAddressLines(addressInfo).map((line) => (
@@ -770,7 +770,7 @@ const Delivery = ({
                 ))}
               </div>
               <div>
-                <p className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                <p className="mb-1 text-[0.95rem] font-semibold text-ink-soft">
                   Billing Address
                 </p>
                 {billingSameAsDelivery ? (
@@ -788,7 +788,7 @@ const Delivery = ({
             </>
           ) : (
             <>
-              <p className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              <p className="mb-1 text-[0.95rem] font-semibold text-ink-soft">
                 Pickup Location
               </p>
               <p className="text-sm text-foreground">{storeInfo.address}</p>

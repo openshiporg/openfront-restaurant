@@ -31,11 +31,7 @@ export async function CheckoutPage() {
       <CheckoutPaymentStateProvider>
         <div className="storefront-shell py-8 sm:py-10 lg:py-14">
           <div className="mb-8 max-w-2xl space-y-3">
-            <span className="storefront-kicker">Checkout</span>
             <h1 className="storefront-heading">Finish your order</h1>
-            <p className="storefront-copy">
-              Review contact details, choose delivery or pickup, select payment, and place your order.
-            </p>
           </div>
 
           <div className="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_400px] lg:gap-12">
@@ -54,12 +50,12 @@ export function CheckoutLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="storefront-ui min-h-dvh w-full bg-background">
-      <div className="sticky top-0 z-40 border-b border-border bg-background/95 backdrop-blur">
+    <div className="storefront-ui min-h-dvh w-full bg-steel text-ink">
+      <div className="sticky top-0 z-40 bg-steel text-ink">
         <nav className="storefront-shell flex h-16 items-center justify-between gap-4">
           <Link
             href="/"
-            className="inline-flex items-center gap-2 rounded-full border border-border bg-background px-4 py-2 text-sm text-muted-foreground transition-colors hover:border-primary/30 hover:text-primary"
+            className="-ml-2 inline-flex items-center gap-2 px-2 py-2 text-base font-medium text-ink transition-colors hover:bg-steel-shade"
             data-testid="back-to-menu-link"
           >
             <ArrowLeft className="size-4" />
@@ -67,7 +63,7 @@ export function CheckoutLayout({
           </Link>
 
           <div className="text-center">
-            <div className="text-lg font-semibold text-foreground">Checkout</div>
+            <div className="font-serif text-2xl font-extrabold text-ink">Checkout</div>
           </div>
 
           <div className="h-10 min-w-[112px]" />

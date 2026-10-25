@@ -60,8 +60,9 @@ export default function LineItemDisplay({
   const thumbnail = item.menuItem?.thumbnail || item.thumbnail || null;
 
   return (
-    <div className={cn("flex gap-4 border-b border-border/70 py-4 last:border-b-0", className)}>
-      <div className="relative size-18 shrink-0 overflow-hidden border border-border bg-muted">
+    <div className={cn("flex gap-4 py-4", className)}>
+      {thumbnail ? (
+      <div className="relative size-16 shrink-0 overflow-hidden bg-steel">
         {thumbnail ? (
           <Image
             src={thumbnail}
@@ -70,22 +71,20 @@ export default function LineItemDisplay({
             className="object-cover"
             sizes="72px"
           />
-        ) : (
-          <div className="flex size-full items-center justify-center p-2 text-center text-xs text-muted-foreground">
-            {item.menuItem?.name}
-          </div>
-        )}
+        ) : null}
       </div>
+      ) : null}
 
       <div className="min-w-0 flex-1">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <h4 className="truncate font-medium text-foreground">{item.menuItem?.name}</h4>
-            <p className="mt-0.5 text-sm text-muted-foreground">Quantity {item.quantity}</p>
+            <h4 className="font-serif text-xl font-extrabold leading-tight text-ink">
+              <span className="text-ink-soft">{item.quantity} ×</span> {item.menuItem?.name}
+            </h4>
           </div>
 
           <div className="flex items-start gap-3">
-            <span className="whitespace-nowrap text-sm font-medium tabular-nums text-foreground">
+            <span className="whitespace-nowrap pt-0.5 text-base font-semibold tabular-nums text-ink">
               {formatCurrency(lineTotal, currencyConfig)}
             </span>
             {editable && onRemove ? (
@@ -93,7 +92,7 @@ export default function LineItemDisplay({
                 type="button"
                 onClick={() => onRemove(item.id)}
                 disabled={isUpdating}
-                className="text-muted-foreground transition-colors hover:text-foreground disabled:opacity-40"
+                className="-m-2 p-2 text-ink-soft transition-colors hover:text-ink disabled:opacity-40"
                 aria-label={`Remove ${item.menuItem?.name}`}
               >
                 <X className="size-4" />
@@ -103,9 +102,9 @@ export default function LineItemDisplay({
         </div>
 
         {modifiers.length > 0 ? (
-          <div className="mt-2 space-y-1">
+          <div className="mt-1.5 space-y-0.5">
             {modifiers.map((modifier) => (
-              <p key={modifier.id} className="text-sm text-muted-foreground">
+              <p key={modifier.id} className="text-[0.95rem] text-ink-soft">
                 + {modifier.name}
                 {(modifier.priceAdjustment || 0) > 0
                   ? ` (${formatCurrency(modifier.priceAdjustment || 0, currencyConfig)})`
@@ -116,27 +115,27 @@ export default function LineItemDisplay({
         ) : null}
 
         {item.specialInstructions ? (
-          <p className="mt-2 text-sm italic text-muted-foreground">Note: {item.specialInstructions}</p>
+          <p className="mt-1.5 text-[0.95rem] text-ink-soft">Note: {item.specialInstructions}</p>
         ) : null}
 
         {editable && onIncrease && onDecrease ? (
-          <div className="mt-4">
-            <div className="inline-flex items-center border border-border bg-background">
+          <div className="mt-3">
+            <div className="inline-flex items-center bg-steel">
               <button
                 type="button"
-                className="flex size-10 items-center justify-center text-muted-foreground transition-colors hover:bg-muted disabled:opacity-40"
+                className="flex size-10 items-center justify-center text-ink transition-colors hover:bg-steel-shade disabled:opacity-40"
                 onClick={() => onDecrease(item.id, item.quantity - 1)}
                 disabled={isUpdating || item.quantity <= 1}
                 aria-label={`Decrease quantity of ${item.menuItem?.name}`}
               >
                 <Minus className="size-4" />
               </button>
-              <span className="w-10 text-center text-sm font-semibold tabular-nums text-foreground">
+              <span className="w-10 text-center text-base font-semibold tabular-nums text-ink">
                 {item.quantity}
               </span>
               <button
                 type="button"
-                className="flex size-10 items-center justify-center text-muted-foreground transition-colors hover:bg-muted disabled:opacity-40"
+                className="flex size-10 items-center justify-center text-ink transition-colors hover:bg-steel-shade disabled:opacity-40"
                 onClick={() => onIncrease(item.id, item.quantity + 1)}
                 disabled={isUpdating}
                 aria-label={`Increase quantity of ${item.menuItem?.name}`}

@@ -107,7 +107,7 @@ const Payment = ({ cart, availablePaymentMethods, storeSettings }: PaymentProps)
         },
       },
       classes: {
-        base: "block h-11 w-full border border-border bg-background px-4 py-3 text-sm",
+        base: "block h-11 w-full border border-input bg-paper px-4 py-3 text-base",
       },
       hidePostalCode: true,
     };
@@ -207,7 +207,7 @@ const Payment = ({ cart, availablePaymentMethods, storeSettings }: PaymentProps)
             data-testid="edit-payment-button"
             variant="ghost"
             size="sm"
-            className="text-[13px] font-medium text-muted-foreground hover:text-foreground"
+            className="text-sm font-medium text-muted-foreground hover:text-foreground"
           >
             Edit
           </Button>
@@ -216,7 +216,7 @@ const Payment = ({ cart, availablePaymentMethods, storeSettings }: PaymentProps)
 
       <div>
         <div className={isOpen ? "block" : "hidden"}>
-          <div className="border border-border bg-muted/30 p-4">
+          <div className=" bg-muted/30 p-4">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="text-base font-medium text-foreground">Tip the team</p>
@@ -304,7 +304,7 @@ const Payment = ({ cart, availablePaymentMethods, storeSettings }: PaymentProps)
               </RadioGroup>
 
               {isStripePayment && stripeReady ? (
-                <div className="border border-border bg-background p-4">
+                <div className=" bg-background p-4">
                   <p className="text-sm font-medium text-primary">Card details</p>
                   <div className="mt-3">
                     <CardElement
@@ -355,7 +355,7 @@ const Payment = ({ cart, availablePaymentMethods, storeSettings }: PaymentProps)
           {cart && paymentReady && activeSession ? (
             <div className="space-y-4 pl-11">
               <div>
-                <p className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                <p className="mb-1 text-[0.95rem] font-semibold text-ink-soft">
                   Payment Method
                 </p>
                 <p className="text-sm text-foreground" data-testid="payment-method-summary">
@@ -363,11 +363,11 @@ const Payment = ({ cart, availablePaymentMethods, storeSettings }: PaymentProps)
                 </p>
               </div>
               <div>
-                <p className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                <p className="mb-1 text-[0.95rem] font-semibold text-ink-soft">
                   Details
                 </p>
                 <div className="flex items-center gap-2 text-sm text-muted-foreground" data-testid="payment-details-summary">
-                  <div className="flex size-8 items-center justify-center border border-border bg-background">
+                  <div className="flex size-8 items-center justify-center bg-background">
                     {paymentInfoMap[selectedPaymentMethod]?.icon || <CreditCard className="size-4" />}
                   </div>
                   <span>

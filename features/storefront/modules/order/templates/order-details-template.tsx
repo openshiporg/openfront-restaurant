@@ -42,8 +42,8 @@ export default function OrderDetailsTemplate({ order }: OrderDetailsTemplateProp
   return (
     <div className="py-8">
       <div className="grid gap-6">
-        <div className="border-b border-border pb-6">
-          <Link href="/account" className="inline-flex items-center gap-2 rounded-full border border-border bg-background px-4 py-2 text-sm text-muted-foreground transition-colors hover:border-primary/30 hover:text-primary">
+        <div className=" pb-6">
+          <Link href="/account" className="inline-flex items-center gap-2 rounded-full bg-background px-4 py-2 text-sm text-muted-foreground transition-colors hover:border-primary/30 hover:text-primary">
             <ArrowLeft className="size-4" />
             Back to account
           </Link>
@@ -79,7 +79,7 @@ export default function OrderDetailsTemplate({ order }: OrderDetailsTemplateProp
 
           <div className="space-y-6">
             <div className="storefront-surface bg-background p-6">
-              {order.checkAllocation && <p className="border rounded p-3 mb-3">Independent check {order.checkAllocation.ordinal} of {order.checkAllocation.guestCount} from service {order.checkAllocation.sourceOrderNumber}. Your allocated charge is shown in the total. Any food details below describe the original service and are not charged again in full.</p>}
+              {order.checkAllocation && <p className="mb-3 bg-steel p-3">Independent check {order.checkAllocation.ordinal} of {order.checkAllocation.guestCount} from service {order.checkAllocation.sourceOrderNumber}. Your allocated charge is shown in the total. Any food details below describe the original service and are not charged again in full.</p>}
               <OrderItemsList items={order.orderItems} />
             </div>
             <div className="storefront-surface bg-background p-6">

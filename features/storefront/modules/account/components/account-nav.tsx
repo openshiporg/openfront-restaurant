@@ -26,7 +26,7 @@ export default function AccountNav({ user }: AccountNavProps) {
 
   return (
     <aside className="storefront-surface h-fit bg-card p-6">
-      <div className="border-b border-border pb-5">
+      <div className=" pb-5">
         <p className="text-sm font-medium text-primary">Account</p>
         <h2 className="mt-2 font-serif text-2xl font-semibold text-foreground">{user?.name || "Your profile"}</h2>
         <p className="mt-1 text-sm text-muted-foreground break-all">{user?.email}</p>
@@ -55,7 +55,7 @@ export default function AccountNav({ user }: AccountNavProps) {
 
         <button
           onClick={handleLogout}
-          className="mt-2 flex items-center gap-3 border border-border bg-background px-4 py-3 text-left text-sm font-medium text-muted-foreground transition-colors hover:border-destructive/30 hover:text-destructive"
+          className="mt-2 flex items-center gap-3 bg-background px-4 py-3 text-left text-sm font-medium text-muted-foreground transition-colors hover:border-destructive/30 hover:text-destructive"
         >
           <LogOut size={16} />
           <span>Log out</span>

@@ -1,6 +1,7 @@
 import type { CSSProperties } from "react";
 import { normalizeStoreLogoColor } from "@/features/lib/store-logo";
 import { getStoreSettings } from "@/features/storefront/lib/data/menu";
+import { storefrontFont } from "@/features/storefront/lib/fonts";
 import "./storefront.css";
 
 type StorefrontBrandStyle = CSSProperties & {
@@ -21,5 +22,5 @@ export default async function StorefrontLayout({
     "--store-page-brand-hue": brandHue,
   };
 
-  return <div className="storefront-brand" style={brandStyle}>{children}</div>;
+  return <div className={`storefront-brand ${storefrontFont.variable}`} style={brandStyle}>{children}</div>;
 }

@@ -16,7 +16,7 @@ const STATUS_COLORS: Record<string, string> = {
   cancelled: "bg-red-500",
   open: "bg-blue-500",
   in_progress: "bg-amber-500",
-  ready: "bg-purple-500",
+  ready: "bg-lamp",
   served: "bg-teal-500",
   sent_to_kitchen: "bg-orange-500",
 }
@@ -41,8 +41,7 @@ export default async function AccountOrdersPage() {
 
   return (
     <div className="w-full animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="border-b border-border pb-6">
-        <span className="storefront-kicker">Order history</span>
+      <div className=" pb-6">
         <h1 className="mt-4 font-serif text-4xl font-semibold text-foreground">Your orders</h1>
         <p className="mt-2 text-base text-muted-foreground">
           {orders.length > 0
@@ -61,12 +60,12 @@ export default async function AccountOrdersPage() {
             </Link>
           </div>
         ) : (
-          <div className="border border-border bg-background">
+          <div className=" bg-background">
             {orders.map((order: any) => (
               <Link
                 key={order.id}
                 href={`/account/orders/details/${order.id}`}
-                className="flex items-center justify-between gap-4 border-b border-border px-5 py-4 transition-colors last:border-b-0 hover:bg-muted/30"
+                className="flex items-center justify-between gap-4 px-5 py-4 transition-colors last:-0 hover:bg-muted/30"
               >
                 <div className="flex min-w-0 items-start gap-3">
                   <StatusDot status={order.status} />

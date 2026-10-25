@@ -28,8 +28,8 @@ export function AddressModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-xl border border-border bg-background p-0">
-        <DialogHeader className="border-b border-border px-6 py-5">
+      <DialogContent className="max-w-xl bg-background p-0">
+        <DialogHeader className=" px-6 py-5">
           <DialogTitle className="font-serif text-2xl font-semibold text-foreground">
             {address ? "Edit address" : "Add address"}
           </DialogTitle>
@@ -72,7 +72,7 @@ export function AddressModal({
             </div>
           </div>
 
-          <div className="grid gap-3 border-t border-border pt-5">
+          <div className="grid gap-3 pt-5">
             <label htmlFor="isDefault" className="flex items-center gap-3 text-sm text-foreground">
               <Checkbox id="isDefault" name="isDefault" defaultChecked={address?.isDefault} />
               Set as default address
@@ -83,8 +83,8 @@ export function AddressModal({
             </label>
           </div>
 
-          <DialogFooter className="gap-3 border-t border-border pt-5 sm:justify-end">
-            <Button type="button" variant="ghost" onClick={onClose} className="rounded-full border border-border px-5 text-sm text-foreground hover:border-primary/30 hover:text-primary">
+          <DialogFooter className="gap-3 pt-5 sm:justify-end">
+            <Button type="button" variant="ghost" onClick={onClose} className="rounded-full px-5 text-sm text-foreground hover:border-primary/30 hover:text-primary">
               Cancel
             </Button>
             <Button type="submit" variant="ghost" disabled={isPending} className="rounded-full bg-primary px-5 text-sm text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground">

@@ -21,7 +21,7 @@ export default function AccountLayout({
         ) : (
           <div className="grid gap-6 lg:grid-cols-[280px_minmax(0,1fr)] lg:gap-8">
             <AccountNav user={user} />
-            <div className="storefront-surface bg-card p-6 sm:p-8"><AccountPrivacy />{children}</div>
+            <div className="bg-paper p-6 sm:p-8">{children}<AccountPrivacy /></div>
           </div>
         )}
       </div>

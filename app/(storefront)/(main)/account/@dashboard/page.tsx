@@ -23,13 +23,12 @@ export default async function AccountOverviewPage() {
 
   return (
     <div className="w-full animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="border-b border-border pb-6">
-        <span className="storefront-kicker">Overview</span>
+      <div className=" pb-6">
         <h1 className="mt-4 font-serif text-4xl font-semibold text-foreground">Hello, {firstName}</h1>
         <p className="mt-2 text-base text-muted-foreground">Welcome back to your account.</p>
       </div>
 
-      <div className="grid gap-4 border-b border-border py-6 sm:grid-cols-3">
+      <div className="grid gap-4 py-6 sm:grid-cols-3">
         <div className="storefront-surface-soft bg-background px-5 py-4">
           <p className="text-sm font-medium text-primary">Profile</p>
           <p className="mt-3 text-3xl font-semibold text-foreground">{completion}%</p>
@@ -72,12 +71,12 @@ export default async function AccountOverviewPage() {
             </Link>
           </div>
         ) : (
-          <div className="border border-border bg-background">
+          <div className=" bg-background">
             {orders.slice(0, 4).map((order: any) => (
               <Link
                 key={order.id}
                 href={`/account/orders/details/${order.id}`}
-                className="flex items-center justify-between gap-4 border-b border-border px-5 py-4 transition-colors last:border-b-0 hover:bg-muted/30"
+                className="flex items-center justify-between gap-4 px-5 py-4 transition-colors last:-0 hover:bg-muted/30"
               >
                 <div>
                   <p className="text-base font-medium text-foreground">#{order.orderNumber}</p>

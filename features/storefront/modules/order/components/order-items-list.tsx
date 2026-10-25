@@ -39,8 +39,8 @@ export function OrderItemsList({ items, currencyCode = "USD", locale = "en-US" }
       <p className="text-sm font-medium text-primary">Order items</p>
       <div>
         {items.map((item) => (
-          <div key={item.id} className="flex gap-4 border-b border-border py-4 first:pt-0 last:border-b-0 last:pb-0">
-            <div className="relative size-18 shrink-0 overflow-hidden border border-border bg-muted">
+          <div key={item.id} className="flex gap-4 py-4 first:pt-0 last:-0 last:pb-0">
+            <div className="relative size-18 shrink-0 overflow-hidden bg-muted">
               {item.thumbnail ? (
                 <Image src={item.thumbnail} alt={item.menuItem.name} fill className="object-cover" sizes="72px" />
               ) : (

@@ -71,7 +71,7 @@ export function OrderDetailsCard({
       </div>
 
       {(customerName || customerEmail || customerPhone) ? (
-        <div className="border-t border-border pt-5">
+        <div className=" pt-5">
           <p className="text-sm font-medium text-primary">Customer</p>
           <div className="mt-3 space-y-2 text-sm text-muted-foreground">
             {customerName ? <p>{customerName}</p> : null}
@@ -82,7 +82,7 @@ export function OrderDetailsCard({
       ) : null}
 
       {orderType === "delivery" && deliveryAddress ? (
-        <div className="border-t border-border pt-5">
+        <div className=" pt-5">
           <p className="text-sm font-medium text-primary">Delivery address</p>
           <div className="mt-3 space-y-1 text-sm text-muted-foreground">
             <p>{deliveryAddress}</p>
@@ -93,7 +93,7 @@ export function OrderDetailsCard({
       ) : null}
 
       {specialInstructions ? (
-        <div className="border-t border-border pt-5">
+        <div className=" pt-5">
           <p className="text-sm font-medium text-primary">Special instructions</p>
           <p className="mt-3 text-sm text-muted-foreground">{specialInstructions}</p>
         </div>

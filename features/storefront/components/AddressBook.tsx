@@ -48,7 +48,7 @@ export function AddressBook({ addresses }: { addresses: any[] }) {
   return (
     <>
       <div className="mb-4 flex items-center justify-end">
-        <Button variant="ghost" onClick={handleCreate} className="rounded-full border border-border px-5 text-sm text-foreground hover:border-primary/30 hover:text-primary">
+        <Button variant="ghost" onClick={handleCreate} className="rounded-full px-5 text-sm text-foreground hover:border-primary/30 hover:text-primary">
           <Plus className="mr-2 size-4" />
           Add address
         </Button>
@@ -74,8 +74,8 @@ export function AddressBook({ addresses }: { addresses: any[] }) {
                   <div>
                     <p className="text-base font-medium text-foreground">{address.name}</p>
                     <div className="mt-2 flex flex-wrap gap-2">
-                      {address.isDefault ? <span className="border border-border bg-card px-2 py-0.5 text-xs text-primary">Default</span> : null}
-                      {address.isBilling ? <span className="border border-border bg-card px-2 py-0.5 text-xs text-primary">Billing</span> : null}
+                      {address.isDefault ? <span className=" bg-card px-2 py-0.5 text-xs text-primary">Default</span> : null}
+                      {address.isBilling ? <span className=" bg-card px-2 py-0.5 text-xs text-primary">Billing</span> : null}
                     </div>
                   </div>
                 </div>
@@ -92,7 +92,7 @@ export function AddressBook({ addresses }: { addresses: any[] }) {
                 {address.phone ? <p className="pt-1">{address.phone}</p> : null}
               </div>
 
-              <div className="mt-5 flex items-center gap-2 border-t border-border pt-4">
+              <div className="mt-5 flex items-center gap-2 pt-4">
                 <button onClick={() => handleEdit(address)} className="inline-flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-primary">
                   <Edit2 size={14} />
                   Edit

@@ -1,0 +1,402 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-25T22:41:45.854560+00:00",
+  "title": "Design System: Openfront Restaurant Storefront",
+  "extensions": {
+    "colorMeta": {
+      "primary": {
+        "role": "primary",
+        "displayName": "Store Hue",
+        "canonical": "oklch(0.47 0.2 var(--store-brand-hue))",
+        "tonalRamp": [
+          "oklch(0.15 0.2 260)",
+          "oklch(0.27 0.2 260)",
+          "oklch(0.39 0.2 260)",
+          "oklch(0.51 0.2 260)",
+          "oklch(0.63 0.2 260)",
+          "oklch(0.75 0.2 260)",
+          "oklch(0.86 0.2 260)",
+          "oklch(0.95 0.2 260)"
+        ],
+        "perTenant": true,
+        "derivation": "brand-hue = (260 + store logoColor hue) mod 360; set as --store-page-brand-hue on the storefront layout and resolved on .storefront-brand. Ramp shown at the default hue 260."
+      },
+      "primary-foreground": {
+        "role": "primary",
+        "displayName": "Action Paper",
+        "canonical": "oklch(0.99 0.004 236)",
+        "tonalRamp": [
+          "oklch(0.15 0.004 236)",
+          "oklch(0.27 0.004 236)",
+          "oklch(0.39 0.004 236)",
+          "oklch(0.51 0.004 236)",
+          "oklch(0.63 0.004 236)",
+          "oklch(0.75 0.004 236)",
+          "oklch(0.86 0.004 236)",
+          "oklch(0.95 0.004 236)"
+        ]
+      },
+      "lamp": {
+        "role": "secondary",
+        "displayName": "Heat-Lamp Amber",
+        "canonical": "oklch(0.76 0.165 62)",
+        "tonalRamp": [
+          "oklch(0.15 0.165 62)",
+          "oklch(0.27 0.165 62)",
+          "oklch(0.39 0.165 62)",
+          "oklch(0.51 0.165 62)",
+          "oklch(0.63 0.165 62)",
+          "oklch(0.75 0.165 62)",
+          "oklch(0.86 0.165 62)",
+          "oklch(0.95 0.165 62)"
+        ]
+      },
+      "steel": {
+        "role": "neutral",
+        "displayName": "Brushed Steel",
+        "canonical": "oklch(0.872 0.009 236)",
+        "tonalRamp": [
+          "oklch(0.15 0.009 236)",
+          "oklch(0.27 0.009 236)",
+          "oklch(0.39 0.009 236)",
+          "oklch(0.51 0.009 236)",
+          "oklch(0.63 0.009 236)",
+          "oklch(0.75 0.009 236)",
+          "oklch(0.86 0.009 236)",
+          "oklch(0.95 0.009 236)"
+        ]
+      },
+      "steel-shade": {
+        "role": "neutral",
+        "displayName": "Steel Shade",
+        "canonical": "oklch(0.835 0.011 236)",
+        "tonalRamp": [
+          "oklch(0.15 0.011 236)",
+          "oklch(0.27 0.011 236)",
+          "oklch(0.39 0.011 236)",
+          "oklch(0.51 0.011 236)",
+          "oklch(0.63 0.011 236)",
+          "oklch(0.75 0.011 236)",
+          "oklch(0.86 0.011 236)",
+          "oklch(0.95 0.011 236)"
+        ]
+      },
+      "steel-deep": {
+        "role": "neutral",
+        "displayName": "Steel Deep",
+        "canonical": "oklch(0.7 0.013 238)",
+        "tonalRamp": [
+          "oklch(0.15 0.013 238)",
+          "oklch(0.27 0.013 238)",
+          "oklch(0.39 0.013 238)",
+          "oklch(0.51 0.013 238)",
+          "oklch(0.63 0.013 238)",
+          "oklch(0.75 0.013 238)",
+          "oklch(0.86 0.013 238)",
+          "oklch(0.95 0.013 238)"
+        ]
+      },
+      "paper": {
+        "role": "neutral",
+        "displayName": "Ticket Paper",
+        "canonical": "oklch(0.987 0.003 236)",
+        "tonalRamp": [
+          "oklch(0.15 0.003 236)",
+          "oklch(0.27 0.003 236)",
+          "oklch(0.39 0.003 236)",
+          "oklch(0.51 0.003 236)",
+          "oklch(0.63 0.003 236)",
+          "oklch(0.75 0.003 236)",
+          "oklch(0.86 0.003 236)",
+          "oklch(0.95 0.003 236)"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "oklch(0.2 0.014 252)",
+        "tonalRamp": [
+          "oklch(0.15 0.014 252)",
+          "oklch(0.27 0.014 252)",
+          "oklch(0.39 0.014 252)",
+          "oklch(0.51 0.014 252)",
+          "oklch(0.63 0.014 252)",
+          "oklch(0.75 0.014 252)",
+          "oklch(0.86 0.014 252)",
+          "oklch(0.95 0.014 252)"
+        ]
+      },
+      "ink-soft": {
+        "role": "neutral",
+        "displayName": "Soft Ink",
+        "canonical": "oklch(0.39 0.016 248)",
+        "tonalRamp": [
+          "oklch(0.15 0.016 248)",
+          "oklch(0.27 0.016 248)",
+          "oklch(0.39 0.016 248)",
+          "oklch(0.51 0.016 248)",
+          "oklch(0.63 0.016 248)",
+          "oklch(0.75 0.016 248)",
+          "oklch(0.86 0.016 248)",
+          "oklch(0.95 0.016 248)"
+        ]
+      },
+      "border": {
+        "role": "neutral",
+        "displayName": "Hairline",
+        "canonical": "oklch(0.86 0.009 236)",
+        "tonalRamp": [
+          "oklch(0.15 0.009 236)",
+          "oklch(0.27 0.009 236)",
+          "oklch(0.39 0.009 236)",
+          "oklch(0.51 0.009 236)",
+          "oklch(0.63 0.009 236)",
+          "oklch(0.75 0.009 236)",
+          "oklch(0.86 0.009 236)",
+          "oklch(0.95 0.009 236)"
+        ]
+      },
+      "destructive": {
+        "role": "error",
+        "displayName": "Error Red",
+        "canonical": "oklch(0.53 0.2 27)",
+        "tonalRamp": [
+          "oklch(0.15 0.2 27)",
+          "oklch(0.27 0.2 27)",
+          "oklch(0.39 0.2 27)",
+          "oklch(0.51 0.2 27)",
+          "oklch(0.63 0.2 27)",
+          "oklch(0.75 0.2 27)",
+          "oklch(0.86 0.2 27)",
+          "oklch(0.95 0.2 27)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Store Name",
+        "purpose": "Hero h1 store name only, sized by name length; the footer full-width name uses the same voice."
+      },
+      "headline": {
+        "displayName": "Section Headline",
+        "purpose": "Category titles, Popular, footer Hours & location."
+      },
+      "title": {
+        "displayName": "Dish Title",
+        "purpose": "Dish names and prices, modifier group names, totals, brand name, chips (700, 1.125rem)."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Descriptions, facts and the hero headline sentence; regular width."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Nav links, metadata, modifier prices, promo banner."
+      }
+    },
+    "shadows": [
+      {
+        "name": "lamp-glow",
+        "value": "0 0 0.35em 0.06em color-mix(in oklch, var(--lamp) 70%, transparent)",
+        "purpose": "Only on the lit service lamp; it is the open state, not elevation."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-out",
+        "value": "cubic-bezier(0.23, 1, 0.32, 1)",
+        "purpose": "Press feedback, entrances, ticket drop, plate settle."
+      },
+      {
+        "name": "ease-drawer",
+        "value": "cubic-bezier(0.32, 0.72, 0, 1)",
+        "purpose": "Hero plate shutter reveal."
+      },
+      {
+        "name": "press",
+        "value": "transform 160ms var(--ease-out); :active scale(0.97)",
+        "purpose": "Pass action and ticket press."
+      },
+      {
+        "name": "pass-shutter",
+        "value": "clip-path inset(0 100% 0 0) to inset(0) 1.1s ease-drawer; child scale 1.12 to 1 over 1.4s ease-out",
+        "purpose": "Hero plate opens once on load."
+      },
+      {
+        "name": "ticket-drop",
+        "value": "translateY(-10px), opacity 0.4 to 1 over 260ms ease-out",
+        "purpose": "Order ticket contents drop once when the count changes."
+      },
+      {
+        "name": "pass-rise",
+        "value": "translateY(22px), opacity 0 to 1 on animation-timeline: view(), range entry 5% to 45%",
+        "purpose": "Section titles and rows rise in; scroll-timeline browsers with no reduced-motion preference only."
+      },
+      {
+        "name": "plate-crossfade",
+        "value": "opacity and scale 1.03 to 1 over 300ms ease-out",
+        "purpose": "Sticky menu plate switching to the hovered dish."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "sm",
+        "value": "640px"
+      },
+      {
+        "name": "md",
+        "value": "768px"
+      },
+      {
+        "name": "lg",
+        "value": "1024px"
+      },
+      {
+        "name": "xl",
+        "value": "1280px"
+      },
+      {
+        "name": "shell-max",
+        "value": "90rem"
+      }
+    ],
+    "tear": {
+      "value": "7px",
+      "purpose": "Tooth size of the thermal-ticket mask (conic-gradient, bottom or top edge)."
+    },
+    "scope": "Guest storefront only. Dashboard and platform pages use a separate shared shell and are not documented."
+  },
+  "components": [
+    {
+      "name": "Pass Action",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The one store-hue action per screen: See the menu, Add to order, Checkout.",
+      "html": "<button class=\"ds-pass-action\"><span>Add to order</span><span>$19.99</span></button><button class=\"ds-pass-action\" disabled>Sold out</button>",
+      "css": ".ds-pass-action { font-family: var(--font-storefront, Archivo), ui-sans-serif, system-ui, sans-serif; display: inline-flex; align-items: center; justify-content: space-between; gap: 12px; height: 48px; padding: 0 24px; min-width: 14rem; border: 0; border-radius: 0; background: oklch(0.47 0.2 var(--store-brand-hue, 260)); color: oklch(0.99 0.004 236); font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; cursor: pointer; transition: transform 160ms cubic-bezier(0.23,1,0.32,1), background-color 160ms ease; margin-right: 8px; } .ds-pass-action:hover { background: color-mix(in oklch, oklch(0.47 0.2 var(--store-brand-hue, 260)) 88%, black); } .ds-pass-action:active { transform: scale(0.97); } .ds-pass-action:focus-visible { outline: 2px solid oklch(0.47 0.2 var(--store-brand-hue, 260)); outline-offset: 2px; } .ds-pass-action:disabled { background: oklch(0.7 0.013 238); color: oklch(0.987 0.003 236); cursor: not-allowed; transform: none; }"
+    },
+    {
+      "name": "Pass Link",
+      "kind": "custom",
+      "refersTo": "pass-link",
+      "description": "Inline ink link with a quiet underline that firms on hover.",
+      "html": "<a href=\"#\" class=\"ds-pass-link\">742 Artisan Way, Brooklyn</a>",
+      "css": ".ds-pass-link { font-family: var(--font-storefront, Archivo), ui-sans-serif, system-ui, sans-serif; color: oklch(0.2 0.014 252); font-size: 18px; text-decoration: underline; text-decoration-thickness: 0.08em; text-underline-offset: 0.22em; text-decoration-color: color-mix(in oklch, oklch(0.2 0.014 252) 35%, transparent); transition: text-decoration-color 160ms ease; } .ds-pass-link:hover { text-decoration-color: oklch(0.2 0.014 252); }"
+    },
+    {
+      "name": "Order Ticket",
+      "kind": "custom",
+      "refersTo": "ticket",
+      "description": "The nav cart button: a paper ticket with a torn bottom edge clipped to the steel bar.",
+      "html": "<div class=\"ds-bar\"><button class=\"ds-ticket\"><span class=\"ds-ticket-name\">Order</span><span class=\"ds-ticket-count\">3</span><span class=\"ds-ticket-sub\">$42.50</span></button></div>",
+      "css": ".ds-bar { background: oklch(0.872 0.009 236); padding: 8px 16px 16px; display: flex; justify-content: flex-end; } .ds-ticket { font-family: var(--font-storefront, Archivo), ui-sans-serif, system-ui, sans-serif; display: inline-flex; align-items: baseline; gap: 10px; height: 48px; padding: 10px 14px 11px; border: 0; background: oklch(0.987 0.003 236); color: oklch(0.2 0.014 252); font-variant-numeric: tabular-nums; cursor: pointer; -webkit-mask: conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) 50% / 14px 100%; mask: conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) 50% / 14px 100%; transition: transform 150ms ease; } .ds-ticket:active { transform: scale(0.97); } .ds-ticket:focus-visible { outline: 2px solid oklch(0.47 0.2 var(--store-brand-hue, 260)); outline-offset: 2px; } .ds-ticket-name { font-family: var(--font-storefront, Archivo), ui-sans-serif, system-ui, sans-serif; font-stretch: 68%; font-variation-settings: 'wdth' 68; letter-spacing: -0.012em; font-size: 18px; font-weight: 800; line-height: 1; } .ds-ticket-count { font-size: 15px; font-weight: 600; } .ds-ticket-sub { font-size: 15px; color: oklch(0.39 0.016 248); }"
+    },
+    {
+      "name": "Category Rail",
+      "kind": "chip",
+      "refersTo": "category-chip",
+      "description": "Condensed category chips on steel; the active chip is an ink block.",
+      "html": "<nav class=\"ds-rail\"><button class=\"ds-chip ds-chip-on\">Burgers</button><button class=\"ds-chip\">Chicken</button><button class=\"ds-chip\">Sides</button><button class=\"ds-chip\">Shakes</button></nav>",
+      "css": ".ds-rail { display: flex; gap: 4px; padding: 8px 12px; background: oklch(0.872 0.009 236); overflow-x: auto; scrollbar-width: none; } .ds-chip { font-family: var(--font-storefront, Archivo), ui-sans-serif, system-ui, sans-serif; font-stretch: 68%; font-variation-settings: 'wdth' 68; letter-spacing: -0.012em; flex-shrink: 0; padding: 8px 14px; border: 0; border-radius: 0; background: transparent; color: oklch(0.2 0.014 252); font-size: 18px; font-weight: 700; line-height: 1; cursor: pointer; transition: background-color 150ms; } .ds-chip:hover { background: oklch(0.835 0.011 236); } .ds-chip:focus-visible { outline: 2px solid oklch(0.47 0.2 var(--store-brand-hue, 260)); outline-offset: 2px; } .ds-chip-on, .ds-chip-on:hover { background: oklch(0.2 0.014 252); color: oklch(0.987 0.003 236); }"
+    },
+    {
+      "name": "Nav Link",
+      "kind": "nav",
+      "refersTo": "nav-link",
+      "description": "Sticky 64px steel bar with the brand lockup and plain ink links.",
+      "html": "<header class=\"ds-nav\"><a class=\"ds-brand\" href=\"#\">Stack Kitchen</a><span><a class=\"ds-nav-link\" href=\"#\">Menu</a><a class=\"ds-nav-link\" href=\"#\">Hours &amp; location</a><a class=\"ds-nav-link\" href=\"#\">Account</a></span></header>",
+      "css": ".ds-nav { font-family: var(--font-storefront, Archivo), ui-sans-serif, system-ui, sans-serif; display: flex; align-items: center; justify-content: space-between; height: 64px; padding: 0 24px; background: oklch(0.872 0.009 236); color: oklch(0.2 0.014 252); } .ds-brand { font-family: var(--font-storefront, Archivo), ui-sans-serif, system-ui, sans-serif; font-stretch: 68%; font-variation-settings: 'wdth' 68; letter-spacing: -0.012em; font-size: 1.55rem; font-weight: 800; line-height: 1; color: inherit; text-decoration: none; } .ds-nav-link { padding: 8px 12px; font-size: 0.95rem; font-weight: 500; color: inherit; text-decoration: none; transition: background-color 150ms; } .ds-nav-link:hover { background: oklch(0.835 0.011 236); } .ds-nav-link:focus-visible { outline: 2px solid oklch(0.47 0.2 var(--store-brand-hue, 260)); outline-offset: 2px; }"
+    },
+    {
+      "name": "Menu Row",
+      "kind": "card",
+      "refersTo": "menu-row",
+      "description": "A menu-board row: condensed name and price on a baseline, description, soft metadata.",
+      "html": "<div class=\"ds-steel\"><a class=\"ds-row\" href=\"#\"><span class=\"ds-row-head\"><span>Classic Burger</span><span>$19.99</span></span><span class=\"ds-row-desc\">Two smashed patties, American cheese, pickles, house sauce.</span><span class=\"ds-row-meta\">650 cal, Choose options</span></a><a class=\"ds-row ds-row-on\" href=\"#\"><span class=\"ds-row-head\"><span>Signature Cheeseburger</span><span>$13.99</span></span><span class=\"ds-row-meta\">720 cal</span></a></div>",
+      "css": ".ds-steel { background: oklch(0.872 0.009 236); padding: 12px; } .ds-row { font-family: var(--font-storefront, Archivo), ui-sans-serif, system-ui, sans-serif; display: flex; flex-direction: column; gap: 6px; padding: 16px; color: oklch(0.2 0.014 252); text-decoration: none; transition: background-color 150ms; } .ds-row:hover { background: oklch(0.835 0.011 236); } .ds-row:focus-visible { outline: 2px solid oklch(0.47 0.2 var(--store-brand-hue, 260)); outline-offset: 2px; } .ds-row-on, .ds-row-on:hover { background: oklch(0.987 0.003 236); } .ds-row-head { font-family: var(--font-storefront, Archivo), ui-sans-serif, system-ui, sans-serif; font-stretch: 68%; font-variation-settings: 'wdth' 68; letter-spacing: -0.012em; display: flex; justify-content: space-between; align-items: baseline; gap: 16px; font-size: 1.5rem; font-weight: 800; line-height: 1.05; font-variant-numeric: tabular-nums; } .ds-row-desc { font-size: 16px; line-height: 1.625; max-width: 56ch; } .ds-row-meta { font-size: 0.95rem; color: oklch(0.39 0.016 248); }"
+    },
+    {
+      "name": "Modifier Option",
+      "kind": "input",
+      "refersTo": "modifier-option",
+      "description": "Full-width choice rows; selected inverts to ink. Circle marker for single choice, square for multiple.",
+      "html": "<div class=\"ds-paper\"><button class=\"ds-opt ds-opt-on\" role=\"radio\" aria-checked=\"true\"><span class=\"ds-opt-l\"><span class=\"ds-mark ds-round\"><span class=\"ds-dot ds-round\"></span></span>Single Patty</span><span></span></button><button class=\"ds-opt\" role=\"radio\" aria-checked=\"false\"><span class=\"ds-opt-l\"><span class=\"ds-mark ds-round\"></span>Double Patty</span><span class=\"ds-price\">+$3.50</span></button><button class=\"ds-opt\" role=\"checkbox\" aria-checked=\"false\"><span class=\"ds-opt-l\"><span class=\"ds-mark\"></span>Crispy Bacon</span><span class=\"ds-price\">+$2.00</span></button></div>",
+      "css": ".ds-paper { background: oklch(0.987 0.003 236); padding: 16px; display: flex; flex-direction: column; gap: 4px; } .ds-opt { font-family: var(--font-storefront, Archivo), ui-sans-serif, system-ui, sans-serif; display: flex; justify-content: space-between; align-items: center; gap: 16px; width: 100%; padding: 12px; border: 0; border-radius: 0; background: color-mix(in oklch, oklch(0.872 0.009 236) 45%, transparent); color: oklch(0.2 0.014 252); font-size: 16px; font-weight: 500; text-align: left; cursor: pointer; transition: background-color 150ms; } .ds-opt:hover { background: oklch(0.872 0.009 236); } .ds-opt:active { transform: scale(0.99); } .ds-opt:focus-visible { outline: 2px solid oklch(0.47 0.2 var(--store-brand-hue, 260)); outline-offset: 2px; } .ds-opt-on, .ds-opt-on:hover { background: oklch(0.2 0.014 252); color: oklch(0.987 0.003 236); } .ds-opt-l { display: flex; align-items: center; gap: 12px; } .ds-mark { display: flex; align-items: center; justify-content: center; width: 20px; height: 20px; background: oklch(0.987 0.003 236); box-shadow: inset 0 0 0 1px oklch(0.7 0.013 238); } .ds-opt-on .ds-mark { box-shadow: none; } .ds-dot { width: 10px; height: 10px; background: oklch(0.2 0.014 252); } .ds-round { border-radius: 9999px; } .ds-price { font-size: 0.95rem; font-weight: 600; font-variant-numeric: tabular-nums; }"
+    },
+    {
+      "name": "Quantity Stepper",
+      "kind": "input",
+      "refersTo": "stepper",
+      "description": "Steel block with minus and plus cells and a tabular count.",
+      "html": "<div class=\"ds-step\"><button aria-label=\"Decrease\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><path d=\"M5 12h14\"/></svg></button><span>1</span><button aria-label=\"Increase\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><path d=\"M5 12h14M12 5v14\"/></svg></button></div>",
+      "css": ".ds-step { font-family: var(--font-storefront, Archivo), ui-sans-serif, system-ui, sans-serif; display: inline-flex; align-items: center; background: oklch(0.872 0.009 236); color: oklch(0.2 0.014 252); } .ds-step button { display: flex; align-items: center; justify-content: center; width: 40px; height: 48px; border: 0; background: transparent; color: inherit; cursor: pointer; transition: background-color 150ms; } .ds-step button:hover { background: oklch(0.835 0.011 236); } .ds-step button:focus-visible { outline: 2px solid oklch(0.47 0.2 var(--store-brand-hue, 260)); outline-offset: 2px; } .ds-step span { width: 32px; text-align: center; font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; }"
+    },
+    {
+      "name": "Service Lamp",
+      "kind": "custom",
+      "refersTo": "lamp",
+      "description": "The heat lamp on the title line: amber with glow while open, steel-deep when closed.",
+      "html": "<div class=\"ds-hero\"><h1 class=\"ds-h1\">Stack Kitchen<span class=\"ds-lamp\" data-on=\"true\" role=\"img\" aria-label=\"Open now\"></span></h1><h1 class=\"ds-h1\">Closed Diner<span class=\"ds-lamp\" role=\"img\" aria-label=\"Closed\"></span></h1></div>",
+      "css": ".ds-hero { background: oklch(0.872 0.009 236); padding: 24px; color: oklch(0.2 0.014 252); } .ds-h1 { font-family: var(--font-storefront, Archivo), ui-sans-serif, system-ui, sans-serif; font-stretch: 68%; font-variation-settings: 'wdth' 68; letter-spacing: -0.012em; margin: 0 0 12px; font-size: 64px; font-weight: 900; line-height: 0.86; } .ds-lamp { display: inline-block; width: 0.2em; height: 0.2em; margin-left: 0.16em; transform: translateY(-0.26em); border-radius: 9999px; background: oklch(0.7 0.013 238); } .ds-lamp[data-on='true'] { background: oklch(0.76 0.165 62); box-shadow: 0 0 0.35em 0.06em color-mix(in oklch, oklch(0.76 0.165 62) 70%, transparent); }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Pass",
+    "overview": "The storefront is the restaurant's pass: the steel shelf under the heat lamps where finished food lands and waits for its ticket. Brushed, cool blue-grey steel is the ground of every food surface. Thermal-ticket paper holds anything a guest reads closely or acts on, set in one near-black ink. The heat lamp's amber appears only as the open-now lamp beside the store name, plus whatever warmth is already in the food photos. The store's own hue fills the one action.\n\nColour is laid down as flat registered blocks: steel, paper, ink, the store hue, the lamp. No tints, gradients or washes. The photo is one block and the type is the keyblock. Hierarchy comes from scale contrast inside one family. Archivo is condensed and heavy for names, prices and headings, and regular width for everything else. Corners are square, nothing has a shadow at rest, and tickets have a torn edge.\n\nThe density is a menu board. Dishes are rows of name and price, and the plate beside the list changes to the dish under the pointer. Facts each get one line in a fixed order (Today, Pickup, Delivery, Address, Rating). The interface speaks only in labels and states.",
+    "keyCharacteristics": [
+      "Steel ground, paper for reading and acting, one ink, the store hue for the one action, amber only for the lamp.",
+      "One family (Archivo, variable `wdth`) used two ways: condensed (wdth 68) heavy for names and prices, regular width for text.",
+      "Square corners everywhere. Circles appear only for state indicators: the lamp and the radio dot.",
+      "No shadows at rest. Depth comes from the paper sitting on the steel.",
+      "A torn thermal-ticket edge on the cart button, the hero plate tag, the item panel and the cart sheet.",
+      "Tabular figures throughout, so prices line up."
+    ],
+    "rules": [
+      {
+        "name": "The One Hue Rule",
+        "body": "The store hue fills the one action on a screen (See the menu, Add to order, Checkout) and the focus ring. Nothing else is drawn in it except the single text link on the hero ticket.",
+        "section": "colors"
+      },
+      {
+        "name": "The Lamp Is State Rule",
+        "body": "Amber means the kitchen is taking orders. Never use it as an accent, a highlight or a warning colour.",
+        "section": "colors"
+      },
+      {
+        "name": "The Flat Block Rule",
+        "body": "Colours are flat blocks. Use no gradients, washes or tinted overlays. The only colour mixes are the action's hover and the lamp's glow.",
+        "section": "colors"
+      },
+      {
+        "name": "The Two Widths Rule",
+        "body": "Use the condensed cut for anything that names or prices, and the regular width for anything that explains. Never mix in a second family.",
+        "section": "typography"
+      },
+      {
+        "name": "The Tabular Price Rule",
+        "body": "Storefront roots set `font-variant-numeric: tabular-nums`. Prices sit right-aligned on the same baseline as the name.",
+        "section": "typography"
+      },
+      {
+        "name": "The Paper-on-Steel Rule",
+        "body": "To lift something, set it on paper over steel. Do not add a shadow.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "**Do** set every food surface on steel and every read-or-act surface on paper, with ink text.",
+      "**Do** derive the action colour from the store: `oklch(0.47 0.2 var(--store-brand-hue))`. Never hard-code a tenant's hue.",
+      "**Do** use the condensed Archivo cut (wdth 68, weight 800 to 900) for names, prices and headings, and the regular width for text.",
+      "**Do** keep corners square. The only circles are the lamp and the radio dot.",
+      "**Do** give each store fact its own line, in a fixed order, with a fixed label column.",
+      "**Do** design for missing data: no photo, no hours, no rating, no delivery, and any name length."
+    ],
+    "donts": [
+      "**Don't** use amber for anything except the lit lamp.",
+      "**Don't** add shadows, gradients or tinted washes. Lift a surface by setting it on paper over steel.",
+      "**Don't** use rounded cards, icon badge rows, or a split hero repeated per category.",
+      "**Don't** introduce a second typeface. Don't treat `font-serif` as a serif, because in this storefront it is the condensed Archivo cut.",
+      "**Don't** put a second store-hue action on a screen that already has one."
+    ]
+  }
+}
