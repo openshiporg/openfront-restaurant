@@ -41,18 +41,25 @@ async function mutateKitchenState<T>(
     assertKitchenProjectionCurrent(expectedOrder, currentOrder);
     // Every projection write re-reads the aggregate inside its serializable commit.
     // A concurrent close/cancellation conflicts with this read instead of resurrecting work.
-    const guarded = Object.create(tx);
-    guarded.kitchenTicket = Object.create(tx.kitchenTicket);
-    guarded.kitchenTicket.update = async (args: any) => {
-      const current = await tx.kitchenTicket.findUnique({ where: args.where });
-      if (current && ["served", "cancelled"].includes(current.status)) return current;
-      if (currentOrder.status === "cancelled" && args.data.status !== "cancelled") return current;
-      return tx.kitchenTicket.update(args);
-    };
-    guarded.kitchenTicket.create = async (args: any) => {
-      if (currentOrder.status === "cancelled") throw new Error("Order was cancelled before kitchen dispatch");
-      return tx.kitchenTicket.create(args);
-    };
+    // Prisma's transaction client is a Proxy whose set trap
+    // writes onto the transaction itself, so assigning guarded.kitchenTicket replaced
+    // tx.kitchenTicket and the guard's create/update called themselves forever
+    // ("Maximum call stack size exceeded" on completeActiveCart). Keep the original
+    // delegate and expose the guard through a read-only proxy instead.
+    const tickets = tx.kitchenTicket;
+    const guardedTickets = Object.create(tickets, {
+      update: { value: async (args: any) => {
+        const current = await tickets.findUnique({ where: args.where });
+        if (current && ["served", "cancelled"].includes(current.status)) return current;
+        if (currentOrder.status === "cancelled" && args.data.status !== "cancelled") return current;
+        return tickets.update(args);
+      } },
+      create: { value: async (args: any) => {
+        if (currentOrder.status === "cancelled") throw new Error("Order was cancelled before kitchen dispatch");
+        return tickets.create(args);
+      } },
+    });
+    const guarded = new Proxy(tx, { get: (target, prop) => (prop === "kitchenTicket" ? guardedTickets : Reflect.get(target, prop)) });
     return operation(guarded, context.session?.itemId || null);
   });
 }
