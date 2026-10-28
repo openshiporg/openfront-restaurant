@@ -152,7 +152,7 @@ export function MenuItemPurchaseForm({
     setAddError(null)
 
     try {
-      await addToCart({
+      const result = await addToCart({
         menuItemId: item.id,
         quantity,
         modifierIds: selectedModifiers.map((modifier) => modifier.modifierId),
@@ -160,15 +160,15 @@ export function MenuItemPurchaseForm({
         orderType,
       })
 
-      router.refresh()
-      onAdded?.()
+      if (!result.success) {
+        setAddError(result.message)
+      } else {
+        router.refresh()
+        onAdded?.()
+      }
     } catch (error) {
       console.error("Error adding to cart:", error)
-      const message = error instanceof Error ? error.message : ""
-      // Ordering rules the guest can act on are shown as written; anything else is a retry.
-      setAddError(/closed|service period|unavailable|sold out|minimum|limit/i.test(message)
-        ? message
-        : "This item couldn't be added to your order. Try again.")
+      setAddError("This item couldn't be added to your order. Try again.")
     }
 
     setIsAdding(false)
