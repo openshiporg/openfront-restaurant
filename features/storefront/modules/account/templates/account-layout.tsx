@@ -14,7 +14,7 @@ export default function AccountLayout({
   const isAuthView = !user
 
   return (
-    <div className="flex-1 bg-background py-8 sm:py-10 lg:py-14" data-testid="account-page">
+    <div className="flex-1 bg-steel py-8 sm:py-10 lg:py-14" data-testid="account-page">
       <div className="storefront-shell">
         {isAuthView ? (
           <div className="flex min-h-[calc(100dvh-16rem)] items-center justify-center">{children}</div>

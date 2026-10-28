@@ -1,4 +1,3 @@
-import { notFound } from "next/navigation";
 import Wrapper from "@/features/storefront/modules/checkout/components/payment-wrapper";
 import CheckoutForm from "@/features/storefront/modules/checkout/components/checkout-form";
 import CheckoutSummary from "@/features/storefront/modules/checkout/components/checkout-summary";
@@ -14,16 +13,26 @@ export const metadata = {
   title: "Checkout",
 };
 
-const fetchCartData = async () => {
-  const cart = await retrieveCart();
-  if (!cart) {
-    return notFound();
-  }
-  return cart;
-};
+function EmptyCheckout() {
+  return (
+    <div className="storefront-shell flex min-h-[60dvh] flex-col items-start justify-center py-16">
+      <h1 className="storefront-heading">Nothing on the ticket yet</h1>
+      <p className="storefront-copy mt-4 max-w-[46ch]">
+        Add a dish from the menu, then come back here to choose pickup or delivery and pay.
+      </p>
+      <Link href="/#menu" className="pass-action mt-8">
+        Browse the menu
+      </Link>
+    </div>
+  );
+}
 
 export async function CheckoutPage() {
-  const cart = await fetchCartData();
+  const cart = await retrieveCart();
+  // With no ticket open (or an emptied one) there is nothing to pay for: say so instead of a bare 404.
+  if (!cart || !Array.isArray(cart.items) || cart.items.length === 0) {
+    return <EmptyCheckout />;
+  }
   const [customer, storeSettings] = await Promise.all([getUser(), getStoreSettings()]);
 
   return (

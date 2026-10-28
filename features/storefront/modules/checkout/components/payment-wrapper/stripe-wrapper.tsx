@@ -24,6 +24,8 @@ const StripeWrapper = ({
 }: StripeWrapperProps) => {
   const options = {
     clientSecret: paymentSession?.data?.clientSecret,
+    // Card fields render in Stripe's iframe; give it the storefront typeface.
+    fonts: [{ cssSrc: "https://fonts.googleapis.com/css2?family=Archivo:wght@400;500&display=swap" }],
   }
 
   if (!stripeKey) {

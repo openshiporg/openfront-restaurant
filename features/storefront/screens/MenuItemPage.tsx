@@ -47,7 +47,6 @@ export default async function MenuItemPage(props: Props) {
 
   const currencyConfig = getCurrencyConfig(storeSettings)
   const description = getMenuItemDescriptionText(item.description)
-  const categoryName = typeof item.category === "object" ? item.category?.name : null
 
   const facts = [
     item.prepTime ? { label: "Ready in", value: `About ${item.prepTime} min` } : null,
@@ -65,7 +64,7 @@ export default async function MenuItemPage(props: Props) {
           className="-ml-2 inline-flex items-center gap-2 px-2 py-2 text-base font-medium text-ink transition-colors hover:bg-steel-shade"
         >
           <ArrowLeft className="size-4" aria-hidden="true" />
-          {categoryName ? `Menu, ${categoryName}` : "Menu"}
+          Back to menu
         </Link>
       </div>
 

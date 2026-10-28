@@ -98,12 +98,18 @@ const Payment = ({ cart, availablePaymentMethods, storeSettings }: PaymentProps)
     return {
       style: {
         base: {
-          fontFamily: "Outfit, sans-serif",
+          // The storefront's ink and type (Archivo, loaded into the Stripe frame by StripeWrapper).
+          fontFamily: "Archivo, ui-sans-serif, system-ui, sans-serif",
           fontSize: "16px",
-          color: "#3f2b26",
+          color: "#11171c",
+          iconColor: "#11171c",
           "::placeholder": {
-            color: "rgb(138 122 116)",
+            color: "#495158",
           },
+        },
+        invalid: {
+          color: "#c51e21",
+          iconColor: "#c51e21",
         },
       },
       classes: {

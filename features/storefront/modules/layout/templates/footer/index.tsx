@@ -48,9 +48,9 @@ export default function Footer({ storeSettings }: FooterProps) {
           {hasHours ? (
             <dl className="text-lg lg:col-span-4">
               {footerHours.map((entry) => (
-                <div key={entry.day} className="flex items-baseline justify-between gap-6 py-1">
+                <div key={entry.day} className="grid grid-cols-[3.5rem_minmax(0,1fr)] items-baseline gap-4 py-1">
                   <dt className="font-semibold">{entry.day}</dt>
-                  <dd className="text-right tabular-nums text-paper/80">{entry.value}</dd>
+                  <dd className="tabular-nums text-paper/80">{entry.value}</dd>
                 </div>
               ))}
             </dl>

@@ -50,7 +50,7 @@ export default function Nav({ storeSettings, cart, brandHue }: NavProps) {
                 <StorefrontSectionLink
                   key={link.href}
                   href={link.href}
-                  className="px-3 py-2 text-[0.95rem] font-medium text-ink transition-colors hover:bg-steel-shade"
+                  className="inline-flex h-10 items-center px-3 text-[0.95rem] font-medium text-ink transition-colors hover:bg-steel-shade"
                 >
                   {link.label}
                 </StorefrontSectionLink>
@@ -58,7 +58,7 @@ export default function Nav({ storeSettings, cart, brandHue }: NavProps) {
             </nav>
             <Link
               href="/account"
-              className="px-3 py-2 text-[0.95rem] font-medium text-ink transition-colors hover:bg-steel-shade"
+              className="inline-flex h-10 items-center px-3 text-[0.95rem] font-medium text-ink transition-colors hover:bg-steel-shade"
             >
               Account
             </Link>

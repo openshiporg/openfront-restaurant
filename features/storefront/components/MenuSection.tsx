@@ -146,7 +146,7 @@ export function MenuSection({ sectionId, title, description, rows, plateSide = "
   )
 }
 
-/** Popular items as small plates on a rail; the strip scrolls sideways on a phone. */
+/** Popular items as small plates: two to a row on a phone, one row of four from tablet up. */
 export function PopularRail({ sectionId, title, rows, className }: { sectionId: string; title: string; rows: MenuRow[]; className?: string }) {
   if (rows.length === 0) return null
 
@@ -154,7 +154,7 @@ export function PopularRail({ sectionId, title, rows, className }: { sectionId: 
     <section id={sectionId} className={cn("scroll-mt-32 py-10 sm:py-16 lg:py-20", className)}>
       <div className="storefront-shell lg:grid lg:grid-cols-12 lg:gap-10">
         <h2 className="pass-rise font-serif text-5xl font-black leading-[0.9] sm:text-6xl lg:col-span-4 lg:text-7xl">{title}</h2>
-        <ul className="mt-6 grid grid-cols-4 gap-3 sm:gap-4 lg:col-span-8 lg:mt-0 lg:gap-6">
+        <ul className="mt-6 grid grid-cols-2 gap-x-3 gap-y-6 sm:grid-cols-4 sm:gap-4 lg:col-span-8 lg:mt-0 lg:gap-6">
           {rows.map((row, index) => (
             <li key={row.id} className="pass-rise">
               <Link href={getMenuItemHref(row.id)} prefetch={false} className="group block">
@@ -165,7 +165,7 @@ export function PopularRail({ sectionId, title, rows, className }: { sectionId: 
                       alt={row.name}
                       fill
                       priority={index < 2}
-                      sizes="(max-width: 1024px) 24vw, 15vw"
+                      sizes="(max-width: 640px) 48vw, (max-width: 1024px) 24vw, 15vw"
                       className="object-cover transition-transform duration-500 ease-out group-hover:scale-[1.04]"
                     />
                   ) : (
@@ -173,7 +173,7 @@ export function PopularRail({ sectionId, title, rows, className }: { sectionId: 
                   )}
                 </div>
                 <div className="mt-2 flex flex-col gap-0.5">
-                  <h3 className="font-serif text-base font-extrabold leading-[1.05] group-hover:underline sm:text-2xl">{row.name}</h3>
+                  <h3 className="text-balance font-serif text-xl font-extrabold leading-[1.05] group-hover:underline sm:text-2xl">{row.name}</h3>
                   <span className="text-[0.95rem] font-semibold sm:text-base">
                     {row.soldOut ? <span className="text-ink-soft">Sold out</span> : row.price}
                   </span>

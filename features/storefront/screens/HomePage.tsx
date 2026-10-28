@@ -140,7 +140,7 @@ export default async function HomePage() {
       />
 
       {navItems.length > 0 ? (
-        <div className={cn("sticky z-40", railOffset)}>
+        <div className={cn("sticky z-40 mt-4 sm:mt-6", railOffset)}>
           <CategoryNav items={navItems} />
         </div>
       ) : null}

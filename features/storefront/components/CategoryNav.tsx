@@ -67,7 +67,7 @@ export function CategoryNav({ items }: CategoryNavProps) {
                   document.getElementById(item.href.replace(/^\/?#/, ""))?.scrollIntoView({ block: "start" })
                 }}
                 className={cn(
-                  "shrink-0 whitespace-nowrap px-3.5 py-2 font-serif text-lg font-bold leading-none transition-colors duration-150",
+                  "inline-flex h-10 shrink-0 items-center whitespace-nowrap px-3.5 font-serif text-lg font-bold leading-none transition-colors duration-150",
                   isActive ? "bg-ink text-paper" : "text-ink hover:bg-steel-shade",
                 )}
               >

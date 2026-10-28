@@ -120,9 +120,16 @@ export default function CartDropdown({ cart, currencyCode, locale, brandHue }: C
           {items.length === 0 ? (
             <div className="flex flex-1 flex-col items-start justify-center px-6 pb-16">
               <p className="font-serif text-3xl font-extrabold text-ink">Nothing on the ticket yet</p>
+              <p className="mt-2 max-w-[34ch] text-pretty text-base text-ink-soft">
+                Pick a dish and it lands here, ready for pickup or delivery.
+              </p>
               <button
                 type="button"
-                onClick={() => setIsCartOpen(false)}
+                onClick={() => {
+                  setIsCartOpen(false)
+                  // Off the home page, closing the sheet alone leaves the guest where they were.
+                  if (window.location.pathname !== "/") router.push("/#menu")
+                }}
                 className="pass-action mt-6"
               >
                 Browse the menu
