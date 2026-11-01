@@ -4,6 +4,7 @@ import { useSearchParams } from "next/navigation";
 import { formatCurrency } from "@/features/storefront/lib/currency";
 import { checkoutDisplayItems, checkoutDisplayPricing, checkoutSessionMatchesPricing, selectedCheckoutQuote } from "@/features/storefront/lib/checkout-quote-display";
 import PaymentButton from "../payment-button";
+import PromoCode from "../promo-code";
 import LineItemDisplay from "@/features/storefront/modules/common/components/line-item-display";
 
 type CheckoutSummaryProps = {
@@ -33,6 +34,8 @@ const CheckoutSummary = ({
   };
 
   const { deliveryFee, pickupDiscount, tax, tip, total } = pricing;
+  const promoDiscount = Number(pricing.promoDiscount || 0);
+  const promoCode: string | null = checkoutQuote ? checkoutQuote.promo?.code || null : cart?.promo?.code || null;
   const activeSessionMatchesTotal = checkoutSessionMatchesPricing(activeSession, pricing);
   const currentStep = searchParams?.get("step") || "contact";
   const isPaymentStage = currentStep === "payment" || currentStep === "review";
@@ -87,6 +90,15 @@ const CheckoutSummary = ({
             </div>
           )}
 
+          {promoDiscount > 0 && (
+            <div className="flex items-center justify-between text-emerald-700">
+              <span>Promo {promoCode}</span>
+              <span className="font-medium tabular-nums">
+                -{formatCurrency(promoDiscount, currencyConfig)}
+              </span>
+            </div>
+          )}
+
           {deliveryFee > 0 && (
             <div className="flex items-center justify-between">
               <span className="text-muted-foreground">Delivery fee</span>
@@ -119,6 +131,8 @@ const CheckoutSummary = ({
             </span>
           </div>
         </div>
+
+        <div className="mt-4"><PromoCode applied={promoCode} locked={Boolean(checkoutQuote)} /></div>
 
         {canShowPaymentControls ? (
           <div className="mt-5 pt-5 space-y-3">

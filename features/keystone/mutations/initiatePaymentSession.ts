@@ -6,6 +6,7 @@ import { createPayment } from "../utils/paymentProviderAdapter";
 import { calculateRestaurantTotals } from "../../lib/restaurant-order-pricing";
 import { assertCanAccessCart } from "../utils/cartAccess";
 import { validateCartItemInput } from "../utils/cartItemValidation";
+import { resolveCartPromo } from "./storefrontPublic";
 import { isPaymentProviderConfigured } from "../utils/paymentProviderConfig";
 import {
   assertDeliveryAddressComplete,
@@ -103,7 +104,10 @@ export default async function initiatePaymentSession(
     deliveryZip: cart.deliveryZip,
   });
 
+  const basePricing = calculateRestaurantTotals({ subtotal, orderType: cart.orderType, pickupDiscountPercent: settings?.pickupDiscount });
+  const promo = activeAttempt?.data?.checkoutQuote ? null : await resolveCartPromo(context.prisma, cartId, subtotal, basePricing.pickupDiscount);
   const pricing = activeAttempt?.data?.checkoutQuote?.pricing || calculateRestaurantTotals({
+    promoDiscount: promo?.amount,
     subtotal,
     orderType: cart.orderType,
     tipPercent: cart.tipPercent,
@@ -118,7 +122,7 @@ export default async function initiatePaymentSession(
   }
   const amount = pricing.total;
   const { paymentCollection: _collection, ...quotedCart } = cart;
-  const checkoutQuote = activeAttempt?.data?.checkoutQuote || { version: 1, pricingPolicy: { taxRate: settings?.taxRate || 0, currencyCode: currency, deliveryFee: settings?.deliveryFee, deliveryMinimum: settings?.deliveryMinimum, pickupDiscount: settings?.pickupDiscount }, cart: quotedCart, cartSignature: checkoutCartSignature(cart), items: validatedItems, pricing: { ...pricing, subtotal }, currencyCode: currency, createdAt: new Date().toISOString() };
+  const checkoutQuote = activeAttempt?.data?.checkoutQuote || { version: 1, pricingPolicy: { taxRate: settings?.taxRate || 0, currencyCode: currency, deliveryFee: settings?.deliveryFee, deliveryMinimum: settings?.deliveryMinimum, pickupDiscount: settings?.pickupDiscount }, cart: quotedCart, cartSignature: checkoutCartSignature(cart), items: validatedItems, pricing: { ...pricing, subtotal }, promo: promo ? { code: promo.code, discountId: promo.discountId, amount: pricing.promoDiscount } : null, currencyCode: currency, createdAt: new Date().toISOString() };
   const idempotencyKey = activeAttempt?.idempotencyKey || sessionKey({
     cartId,
     cartUpdatedAt: cart.updatedAt,

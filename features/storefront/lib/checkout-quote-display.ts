@@ -6,6 +6,7 @@ type CheckoutCart = {
   tipPercent?: number | string | null;
   items?: any[];
   paymentCollection?: { paymentSessions?: any[] } | null;
+  promo?: { code: string; amount: number } | null;
 };
 
 function selectedPaymentSession(cart: CheckoutCart) {
@@ -35,6 +36,7 @@ export function checkoutDisplayPricing(cart: CheckoutCart, settings: any) {
     deliveryMinimum: settings?.deliveryMinimum ?? 0,
     pickupDiscountPercent: Number(settings?.pickupDiscount ?? 0),
     taxRate: Number(settings?.taxRate ?? 0),
+    promoDiscount: Number(cart.promo?.amount ?? 0),
     currencyCode: settings?.currencyCode || "USD",
   });
 }

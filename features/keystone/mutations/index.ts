@@ -28,6 +28,7 @@ import addActiveCartItem from "./addActiveCartItem";
 import updateActiveCart from "./updateActiveCart";
 import updateCartItemQuantity from "./updateCartItemQuantity";
 import removeCartItem from "./removeCartItem";
+import { reservationAvailability, createGuestReservation, lookupGiftCardBalance, startGiftCardPurchase, completeGiftCardPurchase, lookupGuestOrder, applyPromoCode, removePromoCode, cartPromo } from "./storefrontPublic";
 import getCustomerOrder from "./getCustomerOrder";
 import getCustomerOrders from "./getCustomerOrders";
 import activeCartPaymentProviders from "../queries/activeCartPaymentProviders";
@@ -111,6 +112,10 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
         getCustomerOrders(limit: Int, offset: Int): JSON
         unplacedCheckoutAttempts(skip: Int, take: Int): UnplacedCheckoutAttemptPage!
         lookupGiftCard(code: String!): JSON
+        reservationAvailability(date: String!, partySize: Int!): JSON
+        lookupGiftCardBalance(code: String!): JSON
+        lookupGuestOrder(orderNumber: String!, email: String!): JSON
+        cartPromo(cartId: ID!): JSON
       }
 
       type RestaurantNotification { id: ID!, recipient: String, subject: String, entityId: ID, status: String!, error: String }
@@ -150,6 +155,11 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
         createActiveCart(orderType: String): Cart
         addActiveCartItem(cartId: ID!, input: ActiveCartItemInput!): Cart
         updateActiveCart(cartId: ID!, data: ActiveCartUpdateInput!): Cart
+        createGuestReservation(date: String!, startsAt: String!, partySize: Int!, name: String!, email: String!, phone: String!, notes: String): JSON
+        startGiftCardPurchase(amount: Int!, purchaserEmail: String!, recipientName: String, recipientEmail: String, message: String): JSON
+        completeGiftCardPurchase(paymentIntentId: String!): JSON
+        applyPromoCode(cartId: ID!, code: String!): JSON
+        removePromoCode(cartId: ID!): JSON
         updateCartItemQuantity(cartItemId: ID!, quantity: Int!): Cart
         removeCartItem(cartItemId: ID!): Cart
 
@@ -574,8 +584,10 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
         getCustomerOrders,
         unplacedCheckoutAttempts,
         lookupGiftCard,
+        reservationAvailability, lookupGiftCardBalance, lookupGuestOrder, cartPromo,
       },
       Mutation: {
+        createGuestReservation, startGiftCardPurchase, completeGiftCardPurchase, applyPromoCode, removePromoCode,
         createRestaurantCampaign, dispatchRestaurantCampaign, recordRestaurantPurchaseInvoice, recordRestaurantPurchaseCredit, setRestaurantLotHold,
         transferRestaurantStock,
         retryRestaurantOperations, reviewLegacyRestaurantRecipes,

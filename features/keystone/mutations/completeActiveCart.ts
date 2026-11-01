@@ -198,7 +198,7 @@ export default async function completeActiveCart(
     deliveryZip: cart.deliveryZip,
   });
 
-  const { tax, tip, pickupDiscount, deliveryFee, total, deliveryMinimumNotMet } = quote?.pricing || calculateRestaurantTotals({
+  const { tax, tip, pickupDiscount: basePickupDiscount, promoDiscount = 0, deliveryFee, total, deliveryMinimumNotMet } = quote?.pricing || calculateRestaurantTotals({
     subtotal,
     orderType: cart.orderType,
     tipPercent: cart.tipPercent,
@@ -209,6 +209,8 @@ export default async function completeActiveCart(
     currencyCode,
   });
 
+  // Orders record one combined discount; the promo portion is tied back through order.discounts.
+  const pickupDiscount = Number(basePickupDiscount || 0) + Number(promoDiscount || 0);
   if (deliveryMinimumNotMet) {
     throw new Error(`Delivery orders require a minimum subtotal of ${settings?.deliveryMinimum || "0.00"}.`);
   }
@@ -360,6 +362,12 @@ export default async function completeActiveCart(
 
       },
     });
+    if (quote?.promo?.discountId) {
+      const claimed = await tx.discount.updateMany({ where: { id: quote.promo.discountId, isDisabled: false }, data: { usageCount: { increment: 1 } } });
+      const used = await tx.discount.findUnique({ where: { id: quote.promo.discountId } });
+      if (!claimed.count || (used?.usageLimit != null && used.usageCount > used.usageLimit)) throw new Error("That promo code has been fully used. Cancel the unpaid checkout and remove the code.");
+      await tx.restaurantOrder.update({ where: { id: order.id }, data: { discounts: { connect: { id: quote.promo.discountId } } } });
+    }
     if (quote?.pricingPolicy) await freezeOrderPricingPolicy(tx, order.id, quote.pricingPolicy, context.session?.itemId);
     else await getOrderPricingPolicy(tx, order.id, settings);
     const snapshotItems = validatedItems.map((item: any) => ({

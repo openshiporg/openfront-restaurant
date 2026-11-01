@@ -2,6 +2,7 @@ import Wrapper from "@/features/storefront/modules/checkout/components/payment-w
 import CheckoutForm from "@/features/storefront/modules/checkout/components/checkout-form";
 import CheckoutSummary from "@/features/storefront/modules/checkout/components/checkout-summary";
 import { retrieveCart } from "@/features/storefront/lib/data/cart";
+import { getCartPromo } from "@/features/storefront/lib/data/public";
 import { getUser } from "@/features/storefront/lib/data/user";
 import { getStoreSettings } from "@/features/storefront/lib/data/menu";
 import { CheckoutPaymentStateProvider } from "@/features/storefront/modules/checkout/components/checkout-state";
@@ -28,7 +29,8 @@ function EmptyCheckout() {
 }
 
 export async function CheckoutPage() {
-  const cart = await retrieveCart();
+  const baseCart = await retrieveCart();
+  const cart = baseCart ? { ...baseCart, promo: await getCartPromo() } : baseCart;
   // With no ticket open (or an emptied one) there is nothing to pay for: say so instead of a bare 404.
   if (!cart || !Array.isArray(cart.items) || cart.items.length === 0) {
     return <EmptyCheckout />;

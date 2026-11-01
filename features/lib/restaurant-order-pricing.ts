@@ -27,6 +27,7 @@ export function calculateRestaurantTotals({
   deliveryMinimum,
   pickupDiscountPercent,
   taxRate,
+  promoDiscount,
   currencyCode = "USD",
 }: {
   subtotal: number
@@ -36,6 +37,8 @@ export function calculateRestaurantTotals({
   deliveryMinimum?: NumericLike
   pickupDiscountPercent?: NumericLike
   taxRate?: NumericLike
+  /** Promo-code discount in minor units. Tax is assessed before it, like the pickup discount. */
+  promoDiscount?: NumericLike
   currencyCode?: string
 }) {
   const normalizedSubtotal = toNumber(subtotal)
@@ -54,7 +57,10 @@ export function calculateRestaurantTotals({
     : 0
   const tax = Math.round(normalizedSubtotal * (normalizedTaxRate / 100))
   const tip = Math.round(normalizedSubtotal * (normalizedTipPercent / 100))
-  const total = normalizedSubtotal - pickupDiscount + normalizedDeliveryFee + tax + tip
+  const beforePromo = normalizedSubtotal - pickupDiscount + normalizedDeliveryFee + tax + tip
+  // A promo never takes a payable order to zero: card providers reject zero-amount charges.
+  const appliedPromo = Math.max(0, Math.min(Math.round(toNumber(promoDiscount)), beforePromo - 1))
+  const total = beforePromo - appliedPromo
   const deliveryMinimumNotMet =
     isDeliveryOrder(orderType) && normalizedDeliveryMinimum > 0 && normalizedSubtotal < normalizedDeliveryMinimum
 
@@ -67,6 +73,7 @@ export function calculateRestaurantTotals({
       ? normalizedDeliveryMinimum - normalizedSubtotal
       : 0,
     pickupDiscount,
+    promoDiscount: appliedPromo,
     tax,
     tip,
     total,
