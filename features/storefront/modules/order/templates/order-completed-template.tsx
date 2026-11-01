@@ -3,6 +3,7 @@ import { OrderItemsList } from "../components/order-items-list";
 import { OrderSummary } from "../components/order-summary";
 import { OrderDetailsCard } from "../components/order-details-card";
 import Link from "next/link";
+import { OrderLiveRefresh } from "../components/order-live-refresh";
 import { ArrowLeft } from "lucide-react";
 
 interface RestaurantOrder {
@@ -67,6 +68,7 @@ export default function OrderCompletedTemplate({ order }: OrderCompletedTemplate
           Back to orders
         </Link>
 
+        <OrderLiveRefresh status={order.status} />
         <div className="mt-8 pb-6">
           <div className="mt-4 flex flex-wrap items-start justify-between gap-4">
             <div>

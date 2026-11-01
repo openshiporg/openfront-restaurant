@@ -4,6 +4,10 @@ import { getWeeklyHoursDisplay } from "@/features/storefront/lib/store-hours-dis
 
 const quickLinks = [
   { href: "/#menu", label: "Menu" },
+  { href: "/locations", label: "Hours & location" },
+  { href: "/reservations", label: "Reserve a table" },
+  { href: "/gift-cards", label: "Gift cards" },
+  { href: "/find-order", label: "Find your order" },
   { href: "/account", label: "Account" },
   { href: "/checkout?step=contact", label: "Checkout" },
 ]

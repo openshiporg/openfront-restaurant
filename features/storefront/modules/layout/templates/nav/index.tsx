@@ -6,11 +6,15 @@ import {
   StoreBrand,
   type StorefrontLayoutSettings,
 } from "@/features/storefront/modules/layout/components/store-logo"
+import { NavServiceStatus } from "@/features/storefront/components/NavServiceStatus"
+import { getServiceStatus } from "@/features/storefront/lib/store-hours-display"
 import { StorefrontSectionLink } from "@/features/storefront/components/StorefrontSectionLink"
 
 const primaryLinks = [
   { href: "/#menu", label: "Menu" },
-  { href: "/#visit-us", label: "Hours & location" },
+  { href: "/reservations", label: "Reserve" },
+  { href: "/gift-cards", label: "Gift cards" },
+  { href: "/locations", label: "Hours & location" },
 ]
 
 interface NavProps {
@@ -25,6 +29,10 @@ export default function Nav({ storeSettings, cart, brandHue }: NavProps) {
     currencyCode: storeSettings?.currencyCode || undefined,
     locale: storeSettings?.locale || undefined,
   })
+
+  const timezone = storeSettings?.timezone || "America/New_York"
+  const locale = currencyConfig.locale
+  const initialStatus = getServiceStatus(storeSettings?.hours, timezone, locale)
 
   return (
     <div className="sticky top-0 z-50">
@@ -56,6 +64,7 @@ export default function Nav({ storeSettings, cart, brandHue }: NavProps) {
                 </StorefrontSectionLink>
               ))}
             </nav>
+            <NavServiceStatus hours={storeSettings?.hours} timezone={timezone} locale={locale} initial={initialStatus} />
             <Link
               href="/account"
               className="inline-flex h-10 items-center px-3 text-[0.95rem] font-medium text-ink transition-colors hover:bg-steel-shade"

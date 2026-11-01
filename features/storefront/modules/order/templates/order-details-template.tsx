@@ -4,6 +4,8 @@ import { OrderSummary } from "../components/order-summary";
 import { OrderDetailsCard } from "../components/order-details-card";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
+import { ReorderButton } from "../components/reorder-button";
+import { OrderLiveRefresh } from "../components/order-live-refresh";
 
 interface RestaurantOrder {
   id: string;
@@ -51,6 +53,8 @@ export default function OrderDetailsTemplate({ order }: OrderDetailsTemplateProp
           <Link href={`/order/confirmed/${order.id}`} className="mt-2 inline-block text-sm text-primary hover:underline">
             View confirmation
           </Link>
+          <div className="mt-4"><ReorderButton orderId={order.id} /></div>
+          <OrderLiveRefresh status={order.status} />
         </div>
 
         <div className="grid gap-6 lg:grid-cols-2">
