@@ -359,14 +359,13 @@ export default async function completeActiveCart(
         deliveryZip: isDeliveryOrder ? cart.deliveryZip || "" : "",
         deliveryCountryCode: isDeliveryOrder ? cart.deliveryCountryCode || "" : "",
         secretKey,
-
+        ...(quote?.promo?.discountId ? { discounts: { connect: { id: quote.promo.discountId } } } : {}),
       },
     });
     if (quote?.promo?.discountId) {
-      const claimed = await tx.discount.updateMany({ where: { id: quote.promo.discountId, isDisabled: false }, data: { usageCount: { increment: 1 } } });
-      const used = await tx.discount.findUnique({ where: { id: quote.promo.discountId } });
-      if (!claimed.count || (used?.usageLimit != null && used.usageCount > used.usageLimit)) throw new Error("That promo code has been fully used. Cancel the unpaid checkout and remove the code.");
-      await tx.restaurantOrder.update({ where: { id: order.id }, data: { discounts: { connect: { id: quote.promo.discountId } } } });
+      // One guarded round trip: claim a use only while the code is enabled and under its limit.
+      const claimed = await tx.$executeRaw`UPDATE "Discount" SET "usageCount" = "usageCount" + 1 WHERE "id" = ${quote.promo.discountId} AND "isDisabled" = false AND ("usageLimit" IS NULL OR "usageCount" < "usageLimit")`;
+      if (!claimed) throw new Error("That promo code has been fully used. Cancel the unpaid checkout and remove the code.");
     }
     if (quote?.pricingPolicy) await freezeOrderPricingPolicy(tx, order.id, quote.pricingPolicy, context.session?.itemId);
     else await getOrderPricingPolicy(tx, order.id, settings);
@@ -452,7 +451,8 @@ export default async function completeActiveCart(
       text: `Your ${order.orderType} order ${order.orderNumber} has been received. Total: ${total} minor units ${currencyCode}. Payment: ${payment.status}. Please contact the restaurant with your order number for changes.`,
     });
     return { order, payment, replay: false };
-  }, { isolationLevel: "Serializable" });
+    // The payment has already been taken, so give a slow database room to record the order.
+  }, { isolationLevel: "Serializable", maxWait: 10000, timeout: 30000 });
 
   if (isKitchenActiveOrderStatus(result.order.status)) {
     await syncKitchenTicketsForOrder(result.order.id, context);
