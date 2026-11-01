@@ -45,6 +45,7 @@ export default async function getCustomerOrder(
         thumbnail
         itemNameSnapshot
         itemThumbnailSnapshot
+        menuItemIdSnapshot
         modifiersSnapshot
         quantity
         unitPrice

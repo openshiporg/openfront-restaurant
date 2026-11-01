@@ -630,7 +630,7 @@ export async function placeOrder(paymentSessionId?: string) {
   if (!cartId) throw new Error("No cartId cookie found");
 
   const headers = await getAuthHeaders();
-  const { completeActiveCart } = await openfrontClient.request(
+  const { completeActiveCart } = await openfrontClient.requestPatient(
     gql`
       mutation CompleteActiveCart($cartId: ID!, $paymentSessionId: ID) {
         completeActiveCart(cartId: $cartId, paymentSessionId: $paymentSessionId) {

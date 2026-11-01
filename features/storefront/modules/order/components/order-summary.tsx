@@ -53,8 +53,9 @@ export function OrderSummary({
           </div>
         ) : null}
         {pickupDiscount > 0 ? (
-          <div className="flex items-center justify-between text-emerald-700">
-            <span>Pickup discount</span>
+          <div className="flex items-center justify-between text-leaf">
+            {/* The order keeps one discount figure: pickup savings plus any promo code. */}
+            <span>Discounts</span>
             <span>-{formatCurrency(pickupDiscount, currencyConfig)}</span>
           </div>
         ) : null}

@@ -16,12 +16,12 @@ export async function reorderPastOrder(orderId: string): Promise<ReorderResult> 
   let added = 0;
   let skipped = 0;
   for (const item of order.orderItems || []) {
-    const menuItemId = item.menuItem?.id;
+    const menuItemId = item.menuItem?.id || item.menuItemIdSnapshot;
     if (!menuItemId) { skipped += 1; continue; }
     const result = await addToCart({
       menuItemId,
       quantity: Math.max(1, Number(item.quantity) || 1),
-      modifierIds: (item.modifiers || []).map((m: { id: string }) => m.id),
+      modifierIds: ((item.modifiers?.length ? item.modifiers : item.modifiersSnapshot) || []).map((m: { id: string }) => m.id),
       specialInstructions: item.specialInstructions || undefined,
       orderType,
     });

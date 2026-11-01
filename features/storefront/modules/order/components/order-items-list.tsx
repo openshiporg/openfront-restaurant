@@ -6,15 +6,19 @@ import { formatCurrency } from "@/features/storefront/lib/currency";
 interface OrderItem {
   id: string;
   thumbnail?: string | null;
+  itemNameSnapshot?: string | null;
+  itemThumbnailSnapshot?: string | null;
+  modifiersSnapshot?: { id: string; name: string; priceAdjustment: number }[] | null;
   quantity: number;
   unitPrice: number;
   totalPrice: number;
   specialInstructions?: string;
-  menuItem: {
+  menuItem?: {
     id: string;
     name: string;
     price: number;
-  };
+    thumbnail?: string | null;
+  } | null;
   modifiers?: {
     id: string;
     name: string;
@@ -38,14 +42,19 @@ export function OrderItemsList({ items, currencyCode = "USD", locale = "en-US" }
     <div className="space-y-5">
       <p className="text-sm font-medium text-primary">Order items</p>
       <div>
-        {items.map((item) => (
+        {items.map((item) => {
+          // Paid orders keep what was bought as a snapshot; the live menu item may be gone or changed.
+          const name = item.itemNameSnapshot || item.menuItem?.name || "Item";
+          const thumbnail = item.itemThumbnailSnapshot || item.thumbnail || item.menuItem?.thumbnail || null;
+          const modifiers = item.modifiers?.length ? item.modifiers : Array.isArray(item.modifiersSnapshot) ? item.modifiersSnapshot : [];
+          return (
           <div key={item.id} className="flex gap-4 py-4 first:pt-0 last:-0 last:pb-0">
-            <div className="relative size-18 shrink-0 overflow-hidden bg-muted">
-              {item.thumbnail ? (
-                <Image src={item.thumbnail} alt={item.menuItem.name} fill className="object-cover" sizes="72px" />
+            <div className="relative size-18 shrink-0 overflow-hidden rounded-xl bg-muted">
+              {thumbnail ? (
+                <Image src={thumbnail} alt={name} fill className="object-cover" sizes="72px" />
               ) : (
                 <div className="flex size-full items-center justify-center p-2 text-center text-xs text-muted-foreground">
-                  {item.menuItem.name}
+                  {name}
                 </div>
               )}
             </div>
@@ -53,7 +62,7 @@ export function OrderItemsList({ items, currencyCode = "USD", locale = "en-US" }
             <div className="min-w-0 flex-1">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="font-medium text-foreground">{item.menuItem.name}</p>
+                  <p className="font-medium text-foreground">{name}</p>
                   <p className="mt-1 text-sm text-muted-foreground">Quantity {item.quantity}</p>
                 </div>
                 <p className="text-sm font-medium tabular-nums text-foreground">
@@ -61,9 +70,9 @@ export function OrderItemsList({ items, currencyCode = "USD", locale = "en-US" }
                 </p>
               </div>
 
-              {item.modifiers?.length ? (
+              {modifiers.length ? (
                 <div className="mt-2 space-y-1">
-                  {item.modifiers.map((mod) => (
+                  {modifiers.map((mod) => (
                     <p key={mod.id} className="text-sm text-muted-foreground">
                       + {mod.name} {mod.priceAdjustment > 0 ? `(${formatCurrency(mod.priceAdjustment, currencyConfig)})` : ""}
                     </p>
@@ -76,7 +85,8 @@ export function OrderItemsList({ items, currencyCode = "USD", locale = "en-US" }
               ) : null}
             </div>
           </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
