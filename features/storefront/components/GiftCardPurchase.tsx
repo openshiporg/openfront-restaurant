@@ -66,7 +66,7 @@ export default function GiftCardPurchase({ locale, currencyCode }: { locale: str
   const [pending, start] = useTransition()
 
   const effective = custom ? Math.round(parseFloat(custom) * 100) || 0 : amount
-  const options = useMemo(() => intent ? { clientSecret: intent.clientSecret, fonts: [{ cssSrc: "https://fonts.googleapis.com/css2?family=Archivo:wght@400;500&display=swap" }] } : undefined, [intent])
+  const options = useMemo(() => intent ? { clientSecret: intent.clientSecret, fonts: [{ cssSrc: "https://fonts.googleapis.com/css2?family=Figtree:wght@400;500&display=swap" }], appearance: { variables: { fontFamily: "Figtree, ui-sans-serif, system-ui, sans-serif", colorPrimary: "#2c983a", colorText: "#1d2a24", borderRadius: "12px" } } } : undefined, [intent])
 
   // Return from a redirect-based payment method.
   useEffect(() => {
@@ -119,7 +119,7 @@ export default function GiftCardPurchase({ locale, currencyCode }: { locale: str
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {AMOUNTS.map((value) => (
             <button key={value} type="button" aria-pressed={!custom && amount === value} onClick={() => { setAmount(value); setCustom("") }}
-              className={cn("h-11 border border-border text-base tabular-nums", !custom && amount === value ? "bg-ink text-paper" : "bg-background text-ink hover:bg-paper")}>
+              className={cn("h-11 rounded-xl border text-base tabular-nums transition-colors", !custom && amount === value ? "border-leaf bg-mint font-medium text-leaf" : "border-border bg-background text-ink hover:border-leaf/40")}>
               {money(value)}
             </button>
           ))}

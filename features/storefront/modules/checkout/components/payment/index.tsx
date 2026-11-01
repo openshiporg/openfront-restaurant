@@ -98,11 +98,11 @@ const Payment = ({ cart, availablePaymentMethods, storeSettings }: PaymentProps)
     return {
       style: {
         base: {
-          // The storefront's ink and type (Archivo, loaded into the Stripe frame by StripeWrapper).
-          fontFamily: "Archivo, ui-sans-serif, system-ui, sans-serif",
+          // The storefront's ink and type (Figtree, loaded into the Stripe frame by StripeWrapper).
+          fontFamily: "Figtree, ui-sans-serif, system-ui, sans-serif",
           fontSize: "16px",
-          color: "#11171c",
-          iconColor: "#11171c",
+          color: "#1d2a24",
+          iconColor: "#1d2a24",
           "::placeholder": {
             color: "#495158",
           },
@@ -113,7 +113,7 @@ const Payment = ({ cart, availablePaymentMethods, storeSettings }: PaymentProps)
         },
       },
       classes: {
-        base: "block h-11 w-full border border-input bg-paper px-4 py-3 text-base",
+        base: "block h-11 w-full rounded-xl border border-input bg-paper px-4 py-3 text-base",
       },
       hidePostalCode: true,
     };

@@ -104,7 +104,7 @@ export default function ReservationForm({ today, maxDate, timezone, locale, rest
                 type="button"
                 aria-pressed={chosen === slot.startsAt}
                 onClick={() => setChosen(slot.startsAt)}
-                className={cn("h-11 border border-border text-base tabular-nums transition-colors", chosen === slot.startsAt ? "bg-ink text-paper" : "bg-background text-ink hover:bg-paper")}
+                className={cn("h-11 rounded-xl border text-base tabular-nums transition-colors", chosen === slot.startsAt ? "border-leaf bg-mint font-medium text-leaf" : "border-border bg-background text-ink hover:border-leaf/40")}
               >
                 {formatTime(slot.startsAt, timezone, locale)}
               </button>

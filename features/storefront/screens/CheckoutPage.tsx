@@ -17,7 +17,7 @@ export const metadata = {
 function EmptyCheckout() {
   return (
     <div className="storefront-shell flex min-h-[60dvh] flex-col items-start justify-center py-16">
-      <h1 className="storefront-heading">Nothing on the ticket yet</h1>
+      <h1 className="storefront-heading">Your order bag is empty</h1>
       <p className="storefront-copy mt-4 max-w-[46ch]">
         Add a dish from the menu, then come back here to choose pickup or delivery and pay.
       </p>

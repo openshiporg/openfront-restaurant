@@ -10,7 +10,7 @@ export function Field({ id, label, children, hint }: { id: string; label: string
   )
 }
 
-export const inputClass = "h-11 w-full border-border bg-background text-base"
+export const inputClass = "h-11 w-full rounded-xl border-border bg-background text-base"
 
 export function FormError({ message }: { message?: string | null }) {
   return message ? <p role="alert" className="text-sm text-destructive">{message}</p> : null

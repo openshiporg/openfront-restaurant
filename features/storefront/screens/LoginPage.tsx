@@ -64,7 +64,7 @@ export default function LoginPage() {
               <Input id="password" name="password" type="password" required className="h-11 border-border bg-background" />
             </div>
             {signinError ? <p className="text-sm font-medium text-destructive">{signinError}</p> : null}
-            <Button type="submit" variant="ghost" className="h-12 w-full rounded-none bg-primary text-base font-semibold text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground" disabled={isSigninPending}>
+            <Button type="submit" variant="ghost" className="h-12 w-full rounded-full bg-primary text-base font-semibold text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground" disabled={isSigninPending}>
               {isSigninPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
               Sign in
             </Button>
@@ -88,7 +88,7 @@ export default function LoginPage() {
               <Input id="signup-password" name="password" type="password" required className="h-11 border-border bg-background" />
             </div>
             {signupError ? <p className="text-sm font-medium text-destructive">{signupError}</p> : null}
-            <Button type="submit" variant="ghost" className="h-12 w-full rounded-none bg-primary text-base font-semibold text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground" disabled={isSignupPending}>
+            <Button type="submit" variant="ghost" className="h-12 w-full rounded-full bg-primary text-base font-semibold text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground" disabled={isSignupPending}>
               {isSignupPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
               Create account
             </Button>
