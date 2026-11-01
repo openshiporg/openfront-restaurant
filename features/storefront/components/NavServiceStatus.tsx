@@ -28,7 +28,7 @@ export function NavServiceStatus({ hours, timezone, locale, initial }: NavServic
   return (
     <Link
       href="/locations"
-      className="inline-flex h-10 items-center gap-2 px-2 text-[0.95rem] font-medium text-ink transition-colors hover:bg-steel-shade sm:px-3"
+      className="hidden h-10 items-center gap-2 rounded-full px-3 text-[0.95rem] font-medium text-ink transition-colors hover:bg-mint sm:inline-flex"
       aria-label={detail ? `${label}. ${detail}. Hours and location` : `${label}. Hours and location`}
     >
       <span className="lamp !size-2.5" data-on={status.isOpen ? "true" : "false"} aria-hidden="true" />

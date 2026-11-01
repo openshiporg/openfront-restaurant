@@ -1,35 +1,59 @@
 import { Metadata } from "next"
+import Image from "next/image"
+import { Clock, Leaf } from "lucide-react"
 import {
   getMenuCategories,
   getMenuItems,
   getStoreSettings,
 } from "@/features/storefront/lib/data/menu"
+import { retrieveCart } from "@/features/storefront/lib/data/cart"
 import { StorefrontDataUnavailableError } from "@/features/storefront/lib/data/errors"
-import {
-  type MenuCategory,
-  type MenuItem,
-  type StoreInfo,
-} from "@/features/storefront/lib/store-data"
+import { type MenuCategory, type MenuItem } from "@/features/storefront/lib/store-data"
 import { getCurrencyConfig, formatCurrency } from "@/features/storefront/lib/currency"
-import { HeroBanner } from "@/features/storefront/components/HeroBanner"
-import { CategoryNav } from "@/features/storefront/components/CategoryNav"
-import { MenuSection, PopularRail, type MenuRow } from "@/features/storefront/components/MenuSection"
 import { getMenuItemDescriptionText } from "@/features/storefront/lib/menu-item-utils"
-import { getServiceStatus } from "@/features/storefront/lib/store-hours-display"
+import { getServiceStatus, getWeeklyHoursDisplay } from "@/features/storefront/lib/store-hours-display"
 import { buildMenuVisibility, selectHeroMenuItems } from "@/features/storefront/lib/menu-visibility"
-import { getStorefrontRating } from "@/features/storefront/lib/store-rating-display"
-import { cn } from "@/lib/utils"
 import { StorefrontUnavailable } from "@/features/storefront/components/StorefrontUnavailable"
+import { MenuGrid, type GridItem, type GridTab } from "@/features/storefront/components/antares/MenuGrid"
+import { OrderBag } from "@/features/storefront/components/antares/OrderBag"
+import { StoreMark } from "@/features/storefront/modules/layout/components/store-logo"
 
 export async function generateMetadata(): Promise<Metadata> {
   const storeSettings = await getStoreSettings()
-
   return {
-    title: storeSettings?.name
-      ? `${storeSettings.name} - ${storeSettings.tagline || ""}`
-      : "Restaurant",
+    title: storeSettings?.name ? `${storeSettings.name.trim()} | Order Pickup` : "Restaurant",
     description: storeSettings?.heroSubheadline || storeSettings?.tagline || "",
   }
+}
+
+const HERO_PHOTO = "/images/bacon-bbq-burger-onion-rings.png"
+
+function readyIn(estimate?: string | null) {
+  const value = (estimate || "").trim()
+  if (!value) return null
+  return /min|hour|hr/i.test(value) ? value : `${value} min`
+}
+
+/** "Open 11am – 9pm Daily" when every day matches; otherwise today's hours. */
+function hoursLine(hours: unknown, locale: string, timezone: string) {
+  const week = getWeeklyHoursDisplay(hours, locale)
+  const open = week.filter((entry) => entry.value !== "Closed")
+  if (open.length === 0) return null
+  if (open.length === 7 && open.every((entry) => entry.value === open[0].value)) return `Open ${open[0].value} daily`
+  let today = ""
+  try {
+    today = new Intl.DateTimeFormat("en-US", { weekday: "short", timeZone: timezone }).format(new Date())
+  } catch {
+    today = new Intl.DateTimeFormat("en-US", { weekday: "short" }).format(new Date())
+  }
+  const entry = week.find((day) => day.day === today)
+  return entry && entry.value !== "Closed" ? `Today ${entry.value}` : null
+}
+
+/** Splits a headline into lines at sentence ends so "Craft Burgers. Real Good." stacks like the menu board. */
+function headlineLines(headline: string) {
+  const parts = headline.match(/[^.!?]+[.!?]*/g)?.map((part) => part.trim()).filter(Boolean) || [headline]
+  return parts.length > 1 && parts.length <= 3 ? parts : [headline]
 }
 
 export default async function HomePage() {
@@ -57,129 +81,140 @@ export default async function HomePage() {
     />
   }
 
-  const { featuredItems, popularItems, houseItems, categorySections, otherItems } = buildMenuVisibility<MenuItem, MenuCategory>(allItems, categories)
+  const cart = await retrieveCart().catch(() => null)
+  const currency = getCurrencyConfig(storeSettings)
+  const timezone = storeSettings.timezone || "America/New_York"
+  const status = getServiceStatus(storeSettings.hours, timezone, currency.locale)
+  const ready = readyIn(storeSettings.estimatedPickup)
+  const hours = hoursLine(storeSettings.hours, currency.locale, timezone)
+  const storeName = String(storeSettings.name || "").trim()
+  const headline = storeSettings.heroHeadline || storeName
+  const subheadline = storeSettings.heroSubheadline || storeSettings.tagline || ""
+  const madeFresh = (storeSettings.heroTagline || "").split("·")[0]?.trim()
 
-  const heroCandidates = selectHeroMenuItems(allItems, featuredItems, popularItems)
+  const { featuredItems, popularItems } = buildMenuVisibility<MenuItem, MenuCategory>(allItems, categories)
+  const heroItem = selectHeroMenuItems(allItems, featuredItems, popularItems).find((item) => item.thumbnail)
+  // A composed counter shot reads better at hero width than a square menu crop.
+  const hero = heroItem ? { name: heroItem.name, thumbnail: HERO_PHOTO } : null
 
-  const currencyConfig = getCurrencyConfig(storeSettings)
-  const storefrontRating = getStorefrontRating(storeSettings.rating, storeSettings.reviewCount)
+  const usedCategories = categories.filter((category) =>
+    allItems.some((item) => (typeof item.category === "object" ? item.category?.id : item.category) === category.id),
+  )
+  const popularIds = new Set([...popularItems, ...featuredItems].map((item) => item.id))
+  const tabs: GridTab[] = [
+    ...(popularIds.size > 0 ? [{ id: "popular", label: "Popular", icon: "popular" }] : []),
+    ...usedCategories
+      .filter((category) => !/^featured$/i.test(category.name))
+      .map((category) => ({ id: category.id, label: category.name, icon: (category as { icon?: string | null }).icon })),
+  ]
+  if (tabs.length === 0) tabs.push({ id: "all", label: "All", icon: "all" })
 
-  const storeInfo: StoreInfo = {
-    name: storeSettings.name,
-    tagline: storeSettings.tagline || "",
-    address: storeSettings.address || "",
-    phone: storeSettings.phone || "",
-    currencyCode: currencyConfig.currencyCode,
-    locale: currencyConfig.locale,
-    timezone: storeSettings.timezone || "America/New_York",
-    countryCode: storeSettings.countryCode || "US",
-    deliveryEnabled: storeSettings.deliveryEnabled ?? true,
-    deliveryPostalCodes: Array.isArray(storeSettings.deliveryPostalCodes)
-      ? storeSettings.deliveryPostalCodes
-      : [],
-    hours: storeSettings.hours || {},
-    deliveryFee: parseFloat(storeSettings.deliveryFee) || 0,
-    deliveryMinimum: parseFloat(storeSettings.deliveryMinimum) || 0,
-    pickupDiscount: storeSettings.pickupDiscount ?? 0,
-    taxRate: parseFloat(storeSettings.taxRate || "8.75") || 8.75,
-    estimatedDelivery: storeSettings.estimatedDelivery || "",
-    estimatedPickup: storeSettings.estimatedPickup || "",
-    heroHeadline: storeSettings.heroHeadline,
-    heroSubheadline: storeSettings.heroSubheadline,
-    heroTagline: storeSettings.heroTagline,
-    promoBanner: storeSettings.promoBanner,
-    rating: storefrontRating?.rating,
-    reviewCount: storefrontRating?.reviewCount,
-  }
-
-  const currency = { currencyCode: storeInfo.currencyCode, locale: storeInfo.locale }
-  const toRow = (item: MenuItem): MenuRow => ({
-    id: item.id,
-    name: item.name,
-    price: formatCurrency(item.price, currency),
-    description: getMenuItemDescriptionText(item.description),
-    thumbnail: item.thumbnail || null,
-    calories: item.calories ?? null,
-    customizable: Boolean(item.modifiers?.length),
-    soldOut: item.available === false,
-    dietary: (item.dietaryFlags || []).slice(0, 2).map((flag) => flag.replace(/_/g, " ")),
+  const gridItems: GridItem[] = allItems.map((item) => {
+    const modifiers = item.modifiers || []
+    const groups = new Map<string, { required: boolean; min: number; defaults: number }>()
+    for (const modifier of modifiers) {
+      const key = modifier.modifierGroup || "other"
+      const group = groups.get(key) || { required: false, min: 0, defaults: 0 }
+      group.required ||= Boolean(modifier.required)
+      group.min = Math.max(group.min, modifier.minSelections || 0)
+      if (modifier.defaultSelected) group.defaults += 1
+      groups.set(key, group)
+    }
+    const needsChoice = [...groups.values()].some((group) => (group.required || group.min > 0) && group.defaults < Math.max(1, group.min))
+    const categoryId = typeof item.category === "object" ? item.category?.id : item.category
+    return {
+      id: item.id,
+      name: item.name,
+      price: formatCurrency(item.price, currency),
+      thumbnail: item.thumbnail || null,
+      description: getMenuItemDescriptionText(item.description),
+      needsChoice,
+      defaultModifierIds: modifiers.filter((modifier) => modifier.defaultSelected).map((modifier) => modifier.id),
+      soldOut: item.available === false,
+      categoryIds: [...(categoryId ? [categoryId] : []), ...(popularIds.has(item.id) ? ["popular"] : []), "all"],
+    }
   })
-
-  const status = getServiceStatus(storeInfo.hours, storeInfo.timezone, storeInfo.locale)
-
-  const popularSectionId = "popular-dishes"
-  const featuredSectionId = "house-picks"
-
-  const navItems: Array<{ href: string; label: string }> = []
-  if (popularItems.length > 0) navItems.push({ href: `#${popularSectionId}`, label: "Popular" })
-  if (houseItems.length > 0) navItems.push({ href: `#${featuredSectionId}`, label: "House picks" })
-  categorySections.forEach(({ category, sectionId }: { category: MenuCategory; sectionId: string }) => {
-    navItems.push({ href: `#${sectionId}`, label: category.name })
-  })
-  if (otherItems.length > 0) navItems.push({ href: "#other-menu-items", label: "More" })
-
-  const menuHref = navItems[0]?.href || "#menu"
-  const railOffset = storeSettings.promoBanner ? "top-[100px]" : "top-16"
-  const sectionScrollMt = storeSettings.promoBanner ? "scroll-mt-40" : "scroll-mt-32"
 
   return (
-    <div className="flex flex-col bg-steel" id="menu">
-      <HeroBanner
-        menuHref={menuHref}
-        storeInfo={storeInfo}
-        status={status}
-        heroItems={heroCandidates.map((item) => ({
-          id: item.id,
-          name: item.name,
-          description: getMenuItemDescriptionText(item.description),
-          imagePath: item.thumbnail || null,
-          price: item.price,
-          categoryName:
-            typeof item.category === "object" && item.category?.name ? item.category.name : undefined,
-        }))}
-      />
-
-      {navItems.length > 0 ? (
-        <div className={cn("sticky z-40 mt-4 sm:mt-6", railOffset)}>
-          <CategoryNav items={navItems} />
-        </div>
-      ) : null}
-
-      <main className="flex flex-col">
-        <PopularRail
-          sectionId={popularSectionId}
-          title="Popular"
-          rows={popularItems.map(toRow)}
-          className={sectionScrollMt}
-        />
-
-        <MenuSection
-          sectionId={featuredSectionId}
-          title="House picks"
-          rows={houseItems.map(toRow)}
-          className={sectionScrollMt}
-        />
-
-        {categorySections.map(({ category, items, sectionId }) => (
-          <MenuSection
-            key={category.id}
-            sectionId={sectionId}
-            title={category.name}
-            description={category.description || undefined}
-            rows={items.map(toRow)}
-            className={sectionScrollMt}
-          />
-        ))}
-
-        {otherItems.length > 0 ? (
-          <MenuSection
-            sectionId="other-menu-items"
-            title="More"
-            rows={otherItems.map(toRow)}
-            className={sectionScrollMt}
-          />
+    <div className="bg-white">
+      {/* Phone: pickup timing and the store card. */}
+      <section className="storefront-shell pt-5 md:hidden">
+        {ready ? (
+          <p className="flex items-start gap-3">
+            <Clock className="mt-0.5 size-8 shrink-0 text-leaf" strokeWidth={1.75} aria-hidden="true" />
+            <span>
+              <span className="block text-[1.3rem] font-semibold leading-tight text-leaf">Ready in {ready}</span>
+              <span className="text-base text-ink-soft">Pickup</span>
+            </span>
+          </p>
         ) : null}
-      </main>
+        <div className="mt-6 flex items-center gap-4">
+          <StoreMark logoIcon={storeSettings.logoIcon} logoColor={storeSettings.logoColor} name={storeName} />
+          <div className="min-w-0 flex-1">
+            <h1 className="truncate font-serif text-[1.55rem] font-bold leading-tight">{storeName}</h1>
+            {storeSettings.address ? <p className="truncate text-[0.95rem] text-ink-soft">{storeSettings.address}</p> : null}
+            <p className={status.isOpen ? "text-[0.95rem] font-medium text-leaf" : "text-[0.95rem] font-medium text-ink-soft"}>
+              {status.isOpen ? "Open" : "Closed"}
+              {status.detail ? <span className="font-normal text-ink-soft"> · {status.detail}</span> : null}
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* Wider: hero with the order bag floating over its right edge. */}
+      <div className="relative">
+        <section className="relative hidden overflow-hidden bg-[oklch(0.965_0.003_90)] md:block">
+          {hero?.thumbnail ? (
+            <div className="absolute inset-y-0 right-0 aspect-[5/4] lg:right-[19rem] xl:right-[21rem]">
+              <Image src={hero.thumbnail} alt={hero.name} fill priority sizes="40vw" className="object-cover" />
+              <span aria-hidden="true" className="absolute inset-y-0 left-0 w-2/5 bg-gradient-to-r from-[oklch(0.965_0.003_90)] via-[oklch(0.965_0.003_90/0.55)] to-transparent" />
+            </div>
+          ) : null}
+          <div className="storefront-shell relative py-10 lg:py-12">
+            <div className="max-w-[34rem] lg:max-w-[38%]">
+              <h1 className="font-serif text-[3.1rem] font-bold leading-[1] tracking-[-0.02em] text-ink lg:text-[3.7rem]">
+                {headlineLines(headline).map((line) => (
+                  <span key={line} className="block">{line}</span>
+                ))}
+              </h1>
+              <span aria-hidden="true" className="mt-5 block h-1 w-14 rounded-full bg-leaf" />
+              {subheadline ? <p className="mt-5 max-w-[44ch] text-pretty text-[1.1rem] text-ink">{subheadline}</p> : null}
+              <ul className="mt-8 flex flex-wrap gap-x-8 gap-y-2.5 text-base text-ink">
+                {madeFresh ? (
+                  <li className="flex items-center gap-2.5"><Leaf className="size-5 fill-leaf text-leaf" aria-hidden="true" />{madeFresh}</li>
+                ) : null}
+                {ready ? (
+                  <li className="flex items-center gap-2.5"><Clock className="size-5 text-leaf" aria-hidden="true" />Ready in <span className="text-leaf">{ready}</span></li>
+                ) : null}
+                {hours ? (
+                  <li className="flex items-center gap-2.5"><Clock className="size-5 text-ink-soft" aria-hidden="true" />{hours}</li>
+                ) : null}
+              </ul>
+            </div>
+          </div>
+        </section>
+
+        <div className="storefront-shell pb-16 pt-8 md:pt-12 lg:grid lg:grid-cols-[minmax(0,1fr)_18rem] lg:gap-8 xl:grid-cols-[minmax(0,1fr)_20rem]">
+          <MenuGrid tabs={tabs} items={gridItems} />
+        </div>
+
+        {/* The bag starts at the hero's top edge and follows the guest down the menu. */}
+        <div className="pointer-events-none absolute inset-0 hidden lg:block">
+          <div className="storefront-shell flex h-full justify-end pb-16 pt-8">
+            <div className="pointer-events-auto w-[18rem] xl:w-[20rem]">
+              <div className="sticky top-28">
+                <OrderBag
+                  cart={cart}
+                  currencyCode={currency.currencyCode}
+                  locale={currency.locale}
+                  readyIn={ready}
+                  address={storeSettings.address}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }

@@ -1,5 +1,6 @@
 import Nav from "@/features/storefront/modules/layout/templates/nav"
 import Footer from "@/features/storefront/modules/layout/templates/footer"
+import { TabBar } from "@/features/storefront/modules/layout/templates/tab-bar"
 import StorefrontServer from "./StorefrontServer"
 import { getStoreSettings } from "@/features/storefront/lib/data/menu"
 import { retrieveCart } from "@/features/storefront/lib/data/cart"
@@ -17,7 +18,7 @@ export async function MainLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div
-      className="storefront-ui min-h-dvh bg-background font-sans text-foreground antialiased"
+      className="storefront-ui min-h-dvh bg-white font-sans text-foreground antialiased"
     >
       <StorefrontServer
         prefetchUser={true}
@@ -29,6 +30,9 @@ export async function MainLayout({ children }: { children: React.ReactNode }) {
           <Nav storeSettings={storeSettings} cart={cart} brandHue={brandHue} />
           {children}
           <Footer storeSettings={storeSettings} />
+          <TabBar />
+          {/* Room for the phone tab bar under the footer. */}
+          <div className="h-[calc(4rem+env(safe-area-inset-bottom))] md:hidden" aria-hidden="true" />
         </div>
       </StorefrontServer>
     </div>

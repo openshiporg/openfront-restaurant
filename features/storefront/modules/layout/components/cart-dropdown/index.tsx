@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState, type CSSProperties } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { formatCurrency } from "@/features/storefront/lib/currency"
@@ -8,6 +8,7 @@ import { updateLineItem, removeLineItem } from "@/features/storefront/lib/data/c
 import { useRouter } from "next/navigation"
 import LineItemDisplay from "@/features/storefront/modules/common/components/line-item-display"
 import { storefrontFont } from "@/features/storefront/lib/fonts"
+import { ShoppingBag, ShoppingCart } from "lucide-react"
 
 interface CartItem {
   id: string
@@ -86,31 +87,37 @@ export default function CartDropdown({ cart, currencyCode, locale, brandHue }: C
     <>
       <button
         onClick={() => setIsCartOpen(true)}
-        className="ticket relative ml-1 inline-flex h-12 items-start gap-2 px-3.5 pt-2.5 text-left transition-transform duration-150 active:scale-[0.97]"
-        aria-label={itemCount > 0 ? `Open order, ${itemCount} item${itemCount === 1 ? "" : "s"}` : "Open order"}
+        className="relative hidden size-11 place-items-center rounded-full text-ink md:grid transition-colors hover:bg-mint active:scale-95"
+        aria-label={itemCount > 0 ? `Open order bag, ${itemCount} item${itemCount === 1 ? "" : "s"}` : "Open order bag"}
       >
-        <span key={itemCount} className={itemCount > 0 ? "ticket-drop flex w-full items-baseline justify-between gap-3" : "flex w-full items-baseline justify-between gap-3"}>
-          <span className="font-serif text-lg font-extrabold leading-none">Order</span>
-          {itemCount > 0 ? (
-            <span className="flex items-baseline gap-2 leading-none">
-              <span className="text-[0.95rem] font-semibold">{itemCount > 99 ? "99+" : itemCount}</span>
-              <span className="hidden text-[0.95rem] text-ink-soft sm:inline">{formatCurrency(subtotal, { currencyCode, locale })}</span>
-            </span>
-          ) : null}
-        </span>
+        <ShoppingBag className="size-6" strokeWidth={1.75} aria-hidden="true" />
+        {itemCount > 0 ? (
+          <span key={itemCount} className="ticket-drop absolute -right-0.5 -top-0.5 grid min-w-5 place-items-center rounded-full bg-leaf px-1 text-xs font-semibold leading-5 text-white">
+            {itemCount > 99 ? "99+" : itemCount}
+          </span>
+        ) : null}
       </button>
+
+      {itemCount > 0 ? (
+        <button
+          type="button"
+          onClick={() => setIsCartOpen(true)}
+          className="fixed bottom-[calc(5.25rem+env(safe-area-inset-bottom))] right-4 z-40 inline-flex h-14 items-center gap-3 rounded-full bg-white pl-6 pr-5 text-lg font-medium tabular-nums text-ink shadow-[0_8px_30px_rgb(0_0_0/0.14)] transition-transform active:scale-95 md:hidden"
+          aria-label={`Open order bag, ${formatCurrency(subtotal, { currencyCode, locale })}`}
+        >
+          {formatCurrency(subtotal, { currencyCode, locale })}
+          <ShoppingCart className="size-6 text-leaf" strokeWidth={2} aria-hidden="true" />
+        </button>
+      ) : null}
 
       <Sheet open={isCartOpen} onOpenChange={setIsCartOpen}>
         <SheetContent
-          className={`storefront-sheet ${storefrontFont.variable} flex w-full max-w-lg flex-col gap-0 border-0 bg-steel p-0 text-ink sm:max-w-lg`}
-          style={{
-            "--primary": `oklch(0.47 0.2 ${brandHue})`,
-            "--ring": `oklch(0.47 0.2 ${brandHue})`,
-          } as CSSProperties}
+          className={`storefront-sheet ${storefrontFont.variable} flex w-full max-w-md flex-col gap-0 border-0 bg-white p-0 text-ink sm:max-w-md`}
         >
           <SheetHeader className="px-6 pb-4 pt-6 text-left">
-            <SheetTitle className="font-serif text-4xl font-extrabold leading-none text-ink">
-              Your order
+            <SheetTitle className="flex items-center gap-3 font-serif text-3xl font-bold leading-none text-ink">
+              <ShoppingBag className="size-7" strokeWidth={1.75} aria-hidden="true" />
+              Your order bag
             </SheetTitle>
             {itemCount > 0 ? (
               <p className="text-base text-ink-soft">{itemCount} item{itemCount === 1 ? "" : "s"}</p>
@@ -118,11 +125,12 @@ export default function CartDropdown({ cart, currencyCode, locale, brandHue }: C
           </SheetHeader>
 
           {items.length === 0 ? (
-            <div className="flex flex-1 flex-col items-start justify-center px-6 pb-16">
-              <p className="font-serif text-3xl font-extrabold text-ink">Nothing on the ticket yet</p>
-              <p className="mt-2 max-w-[34ch] text-pretty text-base text-ink-soft">
-                Pick a dish and it lands here, ready for pickup or delivery.
-              </p>
+            <div className="flex flex-1 flex-col items-center justify-center px-6 pb-16">
+              <div className="flex w-full flex-col items-center rounded-2xl bg-mint px-6 py-12 text-center">
+                <ShoppingBag className="size-12 text-leaf" strokeWidth={1.5} aria-hidden="true" />
+                <p className="mt-5 text-xl font-medium text-ink">Your order bag is empty</p>
+                <p className="mt-1.5 max-w-[26ch] text-pretty text-[0.95rem] text-ink-soft">Add something delicious to get started.</p>
+              </div>
               <button
                 type="button"
                 onClick={() => {
@@ -138,7 +146,7 @@ export default function CartDropdown({ cart, currencyCode, locale, brandHue }: C
           ) : (
             <>
               <ScrollArea className="min-h-0 flex-1">
-                <div className="ticket-top mx-4 bg-paper px-5 pb-2 sm:mx-6">
+                <div className="mx-4 divide-y divide-border sm:mx-6">
                   {items.map((item) => (
                     <LineItemDisplay
                       key={item.id}
@@ -156,7 +164,7 @@ export default function CartDropdown({ cart, currencyCode, locale, brandHue }: C
                 </div>
               </ScrollArea>
 
-              <div className="mx-4 mb-4 bg-paper px-5 pb-5 pt-4 sm:mx-6 sm:mb-6">
+              <div className="mx-4 mb-4 border-t border-border pb-5 pt-4 sm:mx-6 sm:mb-6">
                 <dl className="space-y-1.5 text-base">
                   <div className="flex items-center justify-between">
                     <dt className="text-ink-soft">Subtotal</dt>
@@ -167,8 +175,8 @@ export default function CartDropdown({ cart, currencyCode, locale, brandHue }: C
                     <dd className="font-medium text-ink">{formatCurrency(subtotal * 0.0875, currencyConfig)}</dd>
                   </div>
                   <div className="flex items-baseline justify-between pt-2">
-                    <dt className="font-serif text-2xl font-extrabold text-ink">Total</dt>
-                    <dd className="font-serif text-2xl font-extrabold text-ink">{formatCurrency(subtotal * 1.0875, currencyConfig)}</dd>
+                    <dt className="text-xl font-semibold text-ink">Estimated total</dt>
+                    <dd className="text-xl font-semibold text-leaf">{formatCurrency(subtotal * 1.0875, currencyConfig)}</dd>
                   </div>
                 </dl>
 
@@ -180,7 +188,7 @@ export default function CartDropdown({ cart, currencyCode, locale, brandHue }: C
                     router.push("/checkout?step=contact")
                   }}
                 >
-                  Checkout
+                  Go to checkout
                 </button>
               </div>
             </>

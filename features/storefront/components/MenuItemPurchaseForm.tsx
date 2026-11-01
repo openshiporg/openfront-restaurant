@@ -181,20 +181,20 @@ export function MenuItemPurchaseForm({
   }))
 
   return (
-    <div className={cn("space-y-8 px-5 py-5 sm:px-6", className)}>
+    <div className={cn("space-y-6 px-5 py-5 sm:px-6", className)}>
       {modifierGroups.length > 0 ? (
-        <div className="space-y-8">
+        <div className="space-y-6">
           {modifierGroups.map((group) => (
             <fieldset key={group.id}>
               <legend className="flex w-full items-baseline justify-between gap-3">
-                <span className="font-serif text-2xl font-extrabold">{group.name}</span>
+                <span className="text-[1.2rem] font-medium">{group.name}</span>
                 <span className={cn("text-[0.95rem]", group.required ? "font-semibold text-ink" : "text-ink-soft")}>
                   {group.required ? "Required" : "Optional"}
                   {group.max > 1 ? `, up to ${group.max}` : ""}
                 </span>
               </legend>
 
-              <div className="mt-3 space-y-1">
+              <div className="mt-3 flex flex-wrap gap-2.5">
                 {group.modifiers.map((modifier) => {
                   const isSelected = isModifierSelected(group.id, modifier.id)
                   const allowsMultiple = group.max > 1
@@ -207,34 +207,31 @@ export function MenuItemPurchaseForm({
                       aria-checked={isSelected}
                       onClick={() => toggleModifier(group, modifier.id)}
                       className={cn(
-                        "flex w-full items-center justify-between gap-4 px-3 py-3 text-left transition-colors duration-150 active:scale-[0.99]",
-                        isSelected ? "bg-ink text-paper" : "bg-steel/45 text-ink hover:bg-steel",
+                        "inline-flex min-h-11 items-center gap-2.5 rounded-full border px-4 py-2 text-left transition-colors duration-150 active:scale-[0.98]",
+                        isSelected ? "border-leaf bg-mint text-leaf" : "border-border bg-white text-ink hover:border-leaf/40",
                       )}
                     >
                       <span className="flex items-center gap-3">
                         <span
                           aria-hidden="true"
                           className={cn(
-                            "flex size-5 shrink-0 items-center justify-center",
-                            allowsMultiple ? "" : "rounded-full",
-                            isSelected ? "bg-paper" : "bg-paper ring-1 ring-inset ring-steel-deep",
+                            "flex size-4 shrink-0 items-center justify-center",
+                            allowsMultiple ? "rounded-[5px]" : "rounded-full",
+                            isSelected ? "bg-leaf" : "bg-white ring-1 ring-inset ring-steel-deep",
                           )}
                         >
                           {isSelected ? (
-                            <span className={cn("size-2.5 bg-ink", allowsMultiple ? "" : "rounded-full")} />
+                            <span className={cn("size-1.5 bg-white", allowsMultiple ? "rounded-[2px]" : "rounded-full")} />
                           ) : null}
                         </span>
-                        <span className="text-base font-medium">{modifier.name}</span>
+                        <span className="text-[0.98rem]">{modifier.name}</span>
                       </span>
 
-                      <span className={cn("shrink-0 text-right text-[0.95rem]", isSelected ? "text-paper/80" : "text-ink-soft")}>
-                        {modifier.price > 0 ? (
-                          <span className={cn("font-semibold", isSelected ? "text-paper" : "text-ink")}>
-                            +{formatCurrency(modifier.price, { currencyCode, locale })}
-                          </span>
-                        ) : null}
-                        {modifier.calories ? <span className="block">{modifier.calories} cal</span> : null}
-                      </span>
+                      {modifier.price > 0 ? (
+                        <span className="shrink-0 text-sm font-medium text-leaf">
+                          +{formatCurrency(modifier.price, { currencyCode, locale })}
+                        </span>
+                      ) : null}
                     </button>
                   )
                 })}
@@ -245,7 +242,7 @@ export function MenuItemPurchaseForm({
       ) : null}
 
       <div>
-        <label htmlFor={`instructions-${item.id}`} className="font-serif text-2xl font-extrabold">
+        <label htmlFor={`instructions-${item.id}`} className="text-[1.2rem] font-medium">
           Note for the kitchen
         </label>
         <Textarea
@@ -253,7 +250,7 @@ export function MenuItemPurchaseForm({
           placeholder="Optional"
           value={specialInstructions}
           onChange={(event) => setSpecialInstructions(event.target.value)}
-          className="mt-3 min-h-20 resize-none rounded-none border-0 bg-steel/45 text-base text-ink shadow-none placeholder:text-ink-soft focus-visible:ring-2 focus-visible:ring-ring"
+          className="mt-3 min-h-16 resize-none rounded-2xl border border-border bg-white text-base text-ink shadow-none placeholder:text-ink-soft focus-visible:ring-2 focus-visible:ring-ring"
           rows={2}
         />
       </div>
@@ -271,11 +268,12 @@ export function MenuItemPurchaseForm({
         </div>
       ) : null}
 
-      <div className="flex items-stretch gap-3">
-        <div className="inline-flex shrink-0 items-center bg-steel">
+      <div className="flex items-center gap-4">
+        <span className="text-[1.2rem] font-medium">Quantity</span>
+        <div className="inline-flex shrink-0 items-center rounded-xl border border-border">
           <button
             type="button"
-            className="flex h-12 w-10 items-center justify-center text-ink transition-colors hover:bg-steel-shade disabled:opacity-40"
+            className="flex h-11 w-10 items-center justify-center rounded-l-xl text-ink-soft transition-colors hover:bg-mint disabled:opacity-40"
             onClick={() => setQuantity(Math.max(1, quantity - 1))}
             disabled={quantity <= 1}
             aria-label="Decrease quantity"
@@ -287,7 +285,7 @@ export function MenuItemPurchaseForm({
           </span>
           <button
             type="button"
-            className="flex h-12 w-10 items-center justify-center text-ink transition-colors hover:bg-steel-shade"
+            className="flex h-11 w-10 items-center justify-center rounded-r-xl text-leaf transition-colors hover:bg-mint"
             onClick={() => setQuantity(quantity + 1)}
             aria-label="Increase quantity"
           >
@@ -295,9 +293,12 @@ export function MenuItemPurchaseForm({
           </button>
         </div>
 
+      </div>
+
+      <div>
         <button
           type="button"
-          className="pass-action min-w-0 flex-1 justify-between gap-3 whitespace-nowrap px-4 sm:px-5"
+          className="pass-action h-14 w-full gap-2 whitespace-nowrap px-5 text-[1.1rem] font-medium"
           onClick={handleAddToCart}
           disabled={isAdding || item.available === false}
         >
@@ -306,6 +307,7 @@ export function MenuItemPurchaseForm({
           ) : (
             <>
               <span>{isAdding ? "Adding…" : "Add to order"}</span>
+              <span aria-hidden="true">-</span>
               <span>{formatCurrency(itemTotal, { currencyCode, locale })}</span>
             </>
           )}

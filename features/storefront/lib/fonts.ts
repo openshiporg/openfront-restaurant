@@ -1,10 +1,17 @@
-import { Archivo } from "next/font/google"
+import { Figtree, Source_Serif_4 } from "next/font/google"
 
-// One family, two voices: the condensed heavy cut names dishes and prices,
-// the regular width carries everything a guest reads.
-export const storefrontFont = Archivo({
+// A friendly sans for everything a guest reads, and a sturdy serif for names and titles.
+const sans = Figtree({
   variable: "--font-storefront",
   subsets: ["latin", "latin-ext"],
-  axes: ["wdth"],
   display: "swap",
 })
+
+const serif = Source_Serif_4({
+  variable: "--font-storefront-serif",
+  subsets: ["latin", "latin-ext"],
+  weight: ["600", "700"],
+  display: "swap",
+})
+
+export const storefrontFont = { variable: `${sans.variable} ${serif.variable}` }

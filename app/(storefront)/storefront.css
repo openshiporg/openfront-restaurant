@@ -7,9 +7,11 @@
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-storefront), ui-sans-serif, system-ui, sans-serif;
+  --color-mint: var(--mint);
+  --color-leaf: var(--leaf);
   --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace; /* taste-skill-ignore: shadcn token, unused by the storefront */
-  --font-serif: var(--font-storefront), ui-sans-serif, system-ui, sans-serif;
-  --font-script: var(--font-storefront), ui-sans-serif, system-ui, sans-serif;
+  --font-serif: var(--font-storefront-serif), ui-serif, Georgia, serif;
+  --font-script: var(--font-storefront-serif), ui-serif, Georgia, serif;
   --color-steel: var(--steel);
   --color-steel-deep: var(--steel-deep);
   --color-steel-shade: var(--steel-shade);
@@ -46,46 +48,48 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
-  --radius-sm: var(--radius);
-  --radius-md: var(--radius);
+  --radius-sm: calc(var(--radius) - 6px);
+  --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
-  --radius-xl: var(--radius);
-  --radius-2xl: var(--radius);
-  --radius-3xl: var(--radius);
-  --radius-4xl: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 16px);
+  --radius-4xl: calc(var(--radius) + 24px);
 }
 
 :root {
-  /* The pass: brushed steel under the heat lamps, thermal-ticket paper, one ink. */
-  --radius: 0rem;
+  /* Antares: a bright counter, one fresh green, serif names over a clean sans. */
+  --radius: 0.75rem;
   --store-logo-hue: 0;
-  --store-brand-hue: calc(260 + var(--store-logo-hue));
-  --steel: oklch(0.872 0.009 236);
-  --steel-shade: oklch(0.835 0.011 236);
-  --steel-deep: oklch(0.7 0.013 238);
-  --paper: oklch(0.987 0.003 236);
-  --ink: oklch(0.2 0.014 252);
-  --ink-soft: oklch(0.39 0.016 248);
-  --lamp: oklch(0.76 0.165 62);
+  --store-brand-hue: 145;
+  --steel: oklch(0.975 0.003 150);
+  --steel-shade: oklch(0.948 0.006 150);
+  --steel-deep: oklch(0.84 0.01 150);
+  --paper: oklch(1 0 0);
+  --ink: oklch(0.27 0.025 160);
+  --ink-soft: oklch(0.5 0.015 160);
+  --lamp: oklch(0.6 0.165 145);
+  --leaf: oklch(0.6 0.165 145);
+  --mint: oklch(0.965 0.025 155);
   --background: var(--paper);
   --foreground: var(--ink);
   --card: var(--paper);
   --card-foreground: var(--ink);
   --popover: var(--paper);
   --popover-foreground: var(--ink);
-  --primary: oklch(0.47 0.2 var(--store-brand-hue));
-  --primary-foreground: oklch(0.99 0.004 236);
+  --primary: var(--leaf);
+  --primary-foreground: oklch(1 0 0);
   --secondary: var(--steel);
   --secondary-foreground: var(--ink);
-  --muted: oklch(0.945 0.005 236);
-  --muted-foreground: oklch(0.43 0.016 248);
-  --accent: oklch(0.93 0.007 236);
+  --muted: oklch(0.965 0.004 150);
+  --muted-foreground: oklch(0.5 0.015 160);
+  --accent: var(--mint);
   --accent-foreground: var(--ink);
-  --destructive: oklch(0.53 0.2 27);
-  --border: oklch(0.86 0.009 236);
-  --input: oklch(0.8 0.011 236);
-  --ring: oklch(0.47 0.2 var(--store-brand-hue));
-  --chart-1: oklch(0.58 0.23 var(--store-brand-hue));
+  --destructive: oklch(0.55 0.2 27);
+  --border: oklch(0.91 0.006 150);
+  --input: oklch(0.88 0.008 150);
+  --ring: var(--leaf);
+  --chart-1: var(--leaf);
   --chart-2: oklch(0.61 0.18 251.95);
   --chart-3: oklch(0.72 0.15 83.5);
   --chart-4: oklch(0.67 0.15 144.89);
@@ -103,13 +107,8 @@
 }
 
 .storefront-brand {
-  /* Resolve brand-dependent tokens on the store wrapper. */
+  /* The store's logo stays its own; the storefront speaks in one green. */
   --store-logo-hue: var(--store-page-logo-hue, 0);
-  --store-brand-hue: var(--store-page-brand-hue, 260);
-  --primary: oklch(0.47 0.2 var(--store-brand-hue));
-  --ring: oklch(0.47 0.2 var(--store-brand-hue));
-  --chart-1: oklch(0.58 0.23 var(--store-brand-hue));
-  --chart-2: oklch(0.68 0.16 var(--store-brand-hue));
 }
 
 .dark {
@@ -183,18 +182,13 @@
     outline-offset: 2px;
   }
 
-  /* Headings everywhere in the storefront speak in the condensed cut. */
-  .storefront-ui :is(h1, h2, h3).font-serif,
-  .storefront-sheet :is(h1, h2, h3).font-serif,
+  /* Names and section titles are set in the serif; everything a guest reads is the sans. */
   .storefront-ui .font-serif,
   .storefront-sheet .font-serif,
   .storefront-heading,
   .font-display {
     font-family: var(--font-serif);
-    font-stretch: 68%;
-    font-variation-settings: "wdth" 68;
-    letter-spacing: -0.012em;
-    word-spacing: 0.1em;
+    letter-spacing: -0.015em;
   }
 
   .font-script {
@@ -207,26 +201,22 @@
     @apply mx-auto w-full max-w-[90rem] px-4 sm:px-6 lg:px-10;
   }
 
+  .storefront-card {
+    @apply rounded-2xl border border-border bg-card;
+    box-shadow: 0 1px 2px oklch(0.27 0.025 160 / 0.04), 0 8px 24px oklch(0.27 0.025 160 / 0.05);
+  }
+
   .storefront-surface {
-    @apply bg-card;
+    @apply rounded-2xl border border-border bg-card;
   }
 
   .storefront-surface-soft {
-    @apply bg-muted;
+    @apply rounded-2xl bg-muted;
   }
 
 
   .storefront-heading {
-    @apply text-balance font-serif text-4xl font-extrabold leading-[0.95] md:text-5xl;
-  }
-
-  .storefront-ui [data-slot='button'] {
-    border-radius: 0 !important;
-  }
-
-  .storefront-ui :is(a, button)[class*='rounded-full'],
-  .storefront-sheet :is(a, button)[class*='rounded-full'] {
-    border-radius: 0 !important;
+    @apply text-balance font-serif text-4xl font-bold leading-[1.02] md:text-5xl;
   }
 
   .storefront-copy {
@@ -234,19 +224,19 @@
   }
 
 
-  /* The one action: the store's own hue, flat, square, pressable. */
+  /* The one action: a green pill. */
   .pass-action {
-    @apply inline-flex h-12 items-center justify-center gap-2 bg-primary px-6 text-base font-semibold text-primary-foreground;
+    @apply inline-flex h-12 items-center justify-center gap-2 rounded-full bg-primary px-6 text-base font-semibold text-primary-foreground;
     transition: transform 160ms var(--ease-out), background-color 160ms ease;
   }
   .pass-action:hover {
-    background: color-mix(in oklch, var(--primary) 88%, black);
+    background: color-mix(in oklch, var(--primary) 86%, black);
   }
   .pass-action:active {
     transform: scale(0.97);
   }
   .pass-action:disabled {
-    @apply cursor-not-allowed bg-steel-deep text-paper;
+    @apply cursor-not-allowed bg-steel-deep text-white;
     transform: none;
   }
 
@@ -259,23 +249,13 @@
     text-decoration-color: var(--ink);
   }
 
-  /* A thermal ticket: paper with a torn lower edge. The conic gradients are masks that cut the tear, never visible fills. taste-skill-ignore */
-  .ticket {
-    @apply bg-paper text-ink;
-    --tear: 7px;
-    -webkit-mask: conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) 50% / calc(var(--tear) * 2) 100%; /* taste-skill-ignore */
-    mask: conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) 50% / calc(var(--tear) * 2) 100%; /* taste-skill-ignore */
-    padding-bottom: calc(var(--tear) + 0.25rem);
-  }
+  /* Surfaces that used to be paper tickets are rounded cards in this design. */
+  .ticket,
   .ticket-top {
-    @apply bg-paper text-ink;
-    --tear: 7px;
-    -webkit-mask: conic-gradient(from 135deg at top, #0000, #000 1deg 89deg, #0000 90deg) 50% / calc(var(--tear) * 2) 100%; /* taste-skill-ignore */
-    mask: conic-gradient(from 135deg at top, #0000, #000 1deg 89deg, #0000 90deg) 50% / calc(var(--tear) * 2) 100%; /* taste-skill-ignore */
-    padding-top: calc(var(--tear) + 0.25rem);
+    @apply rounded-2xl border border-border bg-paper text-ink;
   }
 
-  /* The heat lamp: lit while the kitchen takes orders. */
+  /* The status dot: green while the kitchen takes orders. */
   .lamp {
     @apply inline-block shrink-0 rounded-full;
     width: 0.2em;
@@ -284,8 +264,6 @@
   }
   .lamp[data-on='true'] {
     background: var(--lamp);
-    /* The lamp is lit: its glow is the state, not decoration. taste-skill-ignore */
-    box-shadow: 0 0 0.35em 0.06em color-mix(in oklch, var(--lamp) 70%, transparent); /* taste-skill-ignore */
   }
 
   .no-scrollbar {

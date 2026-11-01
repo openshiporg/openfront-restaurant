@@ -62,7 +62,7 @@ export default function LineItemDisplay({
   return (
     <div className={cn("flex gap-4 py-4", className)}>
       {thumbnail ? (
-      <div className="relative size-16 shrink-0 overflow-hidden bg-steel">
+      <div className="relative size-16 shrink-0 overflow-hidden rounded-xl bg-muted">
         {thumbnail ? (
           <Image
             src={thumbnail}
@@ -78,7 +78,7 @@ export default function LineItemDisplay({
       <div className="min-w-0 flex-1">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <h4 className="font-serif text-xl font-extrabold leading-tight text-ink">
+            <h4 className="text-[1.05rem] font-medium leading-tight text-ink">
               <span className="text-ink-soft">{item.quantity} ×</span> {item.menuItem?.name}
             </h4>
           </div>
@@ -120,10 +120,10 @@ export default function LineItemDisplay({
 
         {editable && onIncrease && onDecrease ? (
           <div className="mt-3">
-            <div className="inline-flex items-center bg-steel">
+            <div className="inline-flex items-center rounded-full border border-border">
               <button
                 type="button"
-                className="flex size-10 items-center justify-center text-ink transition-colors hover:bg-steel-shade disabled:opacity-40"
+                className="flex size-9 items-center justify-center rounded-full text-ink transition-colors hover:bg-mint disabled:opacity-40"
                 onClick={() => onDecrease(item.id, item.quantity - 1)}
                 disabled={isUpdating || item.quantity <= 1}
                 aria-label={`Decrease quantity of ${item.menuItem?.name}`}
@@ -135,7 +135,7 @@ export default function LineItemDisplay({
               </span>
               <button
                 type="button"
-                className="flex size-10 items-center justify-center text-ink transition-colors hover:bg-steel-shade disabled:opacity-40"
+                className="flex size-9 items-center justify-center rounded-full text-ink transition-colors hover:bg-mint disabled:opacity-40"
                 onClick={() => onIncrease(item.id, item.quantity + 1)}
                 disabled={isUpdating}
                 aria-label={`Increase quantity of ${item.menuItem?.name}`}
