@@ -28,7 +28,7 @@ interface StoreBrandProps {
  * SVG source, hue treatment, typography, sizing, or link behavior.
  */
 export function StoreBrand({ name, logoIcon, logoColor, className }: StoreBrandProps & { className?: string }) {
-  // Only a mark the store chose in Store Settings; otherwise the wordmark stands alone.
+  // The saved icon always shows beside the name; the platform default stands in when none is saved.
   const mark = storeOwnMark(logoIcon)
   return (
     <Link href="/" className={`flex min-w-0 items-center gap-2.5 py-1 ${className || ""}`}>
