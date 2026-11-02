@@ -44,18 +44,18 @@ export function MenuGrid({ tabs, items }: { tabs: GridTab[]; items: GridItem[] }
   return (
     <section id="menu" className="scroll-mt-24" aria-labelledby="menu-title">
       <div className="flex items-center justify-between gap-4">
-        <h2 id="menu-title" className="font-serif text-[1.15rem] font-bold leading-none sm:text-[2.6rem]">
+        <h2 id="menu-title" className="font-serif text-[1.03rem] font-bold leading-none sm:text-[2.6rem]">
           <span className="sm:hidden">Menu</span>
           <span className="hidden sm:inline">Our Menu</span>
         </h2>
         <button
           type="button"
           onClick={() => setSearching((open) => !open)}
-          className="grid size-8 place-items-center rounded-full border border-border bg-white text-ink transition-colors hover:bg-mint sm:size-12 lg:hidden"
+          className="grid size-[1.7rem] place-items-center rounded-full border border-border bg-white text-ink transition-colors hover:bg-mint sm:size-12 lg:hidden"
           aria-label={searching ? "Close search" : "Search the menu"}
           aria-expanded={searching}
         >
-          {searching ? <X className="size-4 sm:size-5" /> : <Search className="size-4 sm:size-5" />}
+          {searching ? <X className="size-3.5 sm:size-5" /> : <Search className="size-3.5 sm:size-5" />}
         </button>
       </div>
 
@@ -88,7 +88,7 @@ export function MenuGrid({ tabs, items }: { tabs: GridTab[]; items: GridItem[] }
                 setActive(tab.id)
               }}
               className={cn(
-                "inline-flex h-[1.55rem] shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-3 text-[0.75rem] transition-colors",
+                "inline-flex h-[1.55rem] shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-3 text-[0.75rem] tracking-[-0.01em] transition-colors",
                 on ? "border-leaf bg-leaf font-medium text-white" : "border-border bg-white text-ink hover:border-leaf/40",
               )}
             >
@@ -143,11 +143,11 @@ export function MenuGrid({ tabs, items }: { tabs: GridTab[]; items: GridItem[] }
                     ) : null}
                     <span aria-hidden="true" className="absolute inset-x-0 bottom-0 h-3/5 bg-gradient-to-t from-black/40 to-transparent" />
                     <span className="absolute inset-x-2 bottom-2 flex flex-col items-start gap-1 pr-9">
-                      <span className="line-clamp-2 text-[0.85rem] font-semibold leading-tight text-white [text-shadow:0_1px_6px_rgb(0_0_0/0.4)]">{item.name}</span>
-                      <span className="rounded-full bg-white px-2 py-0.5 text-[0.75rem] font-medium tabular-nums text-ink">{item.soldOut ? "Sold out" : item.price}</span>
+                      <span className="line-clamp-2 text-[0.77rem] font-semibold leading-tight text-white [text-shadow:0_1px_6px_rgb(0_0_0/0.4)]">{item.name}</span>
+                      <span className="flex h-[1.1rem] items-center rounded-full bg-white px-2 text-[0.75rem] font-medium tabular-nums text-ink">{item.soldOut ? "Sold out" : item.price}</span>
                     </span>
                     <span className={cn("absolute right-2", tall ? "top-2" : "bottom-2")}>
-                      <QuickAdd itemId={item.id} name={item.name} needsChoice={item.needsChoice} defaultModifierIds={item.defaultModifierIds} soldOut={item.soldOut} variant="light" className="size-7 [&_svg]:size-4" />
+                      <QuickAdd itemId={item.id} name={item.name} needsChoice={item.needsChoice} defaultModifierIds={item.defaultModifierIds} soldOut={item.soldOut} variant="light" className="size-[1.45rem] [&_svg]:size-3.5" />
                     </span>
                   </Link>
                 </li>
