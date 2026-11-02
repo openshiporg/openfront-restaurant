@@ -9,6 +9,7 @@ import React, { Component, ErrorInfo, ReactNode } from 'react'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { AlertTriangle } from 'lucide-react'
+import { isNextRouterError } from 'next/dist/client/components/is-next-router-error'
 
 interface Props {
   children: ReactNode
@@ -30,10 +31,16 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    if (isNextRouterError(error)) return
     console.error("Dashboard operation failed (details redacted).")
   }
 
   render() {
+    // notFound() and redirect() are control flow, not failures: hand them back to Next so an unknown
+    // dashboard URL shows the 404 page instead of "Something went wrong".
+    if (this.state.hasError && this.state.error && isNextRouterError(this.state.error)) {
+      throw this.state.error
+    }
     if (this.state.hasError) {
       return (
         <div className="min-h-screen flex items-center justify-center p-4">
