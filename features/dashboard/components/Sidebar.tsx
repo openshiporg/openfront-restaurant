@@ -54,6 +54,7 @@ interface User {
   email: string;
   name?: string;
   onboardingStatus?: string;
+  menuItemsCount?: number | null;
   role?: {
     canAccessDashboard?: boolean;
     canManageOnboarding?: boolean;
@@ -368,6 +369,7 @@ export function Sidebar({ adminMeta, user, onOpenDialog }: SidebarProps) {
               description: 'Your restaurant is empty. Click get started to configure your menu with items, categories, and modifiers.',
             }]}
             onboardingStatus={user?.onboardingStatus}
+            menuItemsCount={user?.menuItemsCount}
             userRole={user?.role}
             onDismiss={async () => {
               try {
