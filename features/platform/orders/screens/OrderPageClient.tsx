@@ -121,12 +121,9 @@ export function OrderPageClient({ order, currencyCode = "USD", locale = "en-US" 
             <h1 className="text-2xl font-semibold tracking-tight break-all sm:break-normal">
               Order #{order.orderNumber}
             </h1>
-            <span className="text-[10px] uppercase tracking-wider border border-border rounded-full px-2 py-0.5 text-muted-foreground">
-              {order.orderSource || "online"}
-            </span>
-            <span className="text-[10px] uppercase tracking-wider border border-border rounded-full px-2 py-0.5 text-muted-foreground">
-              {order.orderType?.replace("_", " ") || "order"}
-            </span>
+            <p className="text-sm text-muted-foreground">
+              {[order.orderSource || "online", order.orderType || "order"].map((v: string) => { const t = v.replace(/_/g, " "); return t.charAt(0).toUpperCase() + t.slice(1); }).join(" · ")}
+            </p>
           </div>
         </div>
 
