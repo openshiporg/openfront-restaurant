@@ -311,8 +311,8 @@ export function OrderPageClient({ order, currencyCode = "USD", locale = "en-US" 
                 <div className="px-4 md:px-6 pb-4 space-y-2">
                   {order.payments.map((payment: any) => (
                     <div key={payment.id} className="rounded-lg border border-border px-3 py-2.5 flex items-center justify-between">
-                      <span className="text-xs text-muted-foreground uppercase tracking-wide">
-                        {payment.paymentMethod} · {payment.status}
+                      <span className="text-sm text-muted-foreground">
+                        {sentenceCase(payment.paymentMethod)} · {sentenceCase(payment.status)}
                       </span>
                       <span className="text-sm font-semibold">
                         {formatCurrency(payment.amount, currencyConfig)}
