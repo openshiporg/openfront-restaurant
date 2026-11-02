@@ -1,4 +1,5 @@
 'use client'
+import { ViewerTime } from '@/features/dashboard/components/ViewerTime';
 
 import React, { useState, useEffect, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
@@ -398,11 +399,11 @@ export function PurchaseOrdersPage() {
                             {po.vendor?.name || 'No vendor'}
                           </span>
                           <span className="text-xs text-muted-foreground">
-                            Ordered {new Date(po.orderDate).toLocaleDateString()}
+                            Ordered <ViewerTime value={po.orderDate} style="date" />
                           </span>
                           {po.expectedDelivery && (
                             <span className="text-xs text-muted-foreground">
-                              Expected {new Date(po.expectedDelivery).toLocaleDateString()}
+                              Expected <ViewerTime value={po.expectedDelivery} style="date" />
                             </span>
                           )}
                           <span className="text-xs text-muted-foreground">

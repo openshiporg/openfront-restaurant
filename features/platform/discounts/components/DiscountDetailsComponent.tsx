@@ -1,4 +1,6 @@
 "use client";
+import { ViewerTime } from '@/features/dashboard/components/ViewerTime';
+import { formatInZone } from '@/features/dashboard/lib/storeTime';
 
 import { useState } from "react";
 import {
@@ -104,7 +106,7 @@ export function DiscountDetailsComponent({ discount, list }: DiscountDetailsComp
                     {discount.endsAt && (
                       <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
                         <Calendar className="size-3.5" />
-                        <span>Exp: {new Date(discount.endsAt).toLocaleDateString()}</span>
+                        <span>Exp: <ViewerTime value={discount.endsAt} style="date" /></span>
                       </div>
                     )}
                     {discount.orders && discount.orders.length > 0 && (
@@ -201,11 +203,11 @@ export function DiscountDetailsComponent({ discount, list }: DiscountDetailsComp
                     <div className="space-y-3 bg-card p-4 rounded-2xl border shadow-sm">
                       <div className="flex justify-between text-sm">
                         <span className="text-muted-foreground">Created</span>
-                        <span className="font-medium text-xs">{new Date(discount.createdAt).toLocaleString()}</span>
+                        <span className="font-medium text-xs"><ViewerTime value={discount.createdAt} style="datetime" /></span>
                       </div>
                       <div className="flex justify-between text-sm">
                         <span className="text-muted-foreground">Last Used</span>
-                        <span className="font-medium text-xs">{discount.orders?.[0] ? new Date(discount.orders[0].createdAt).toLocaleString() : 'Never'}</span>
+                        <span className="font-medium text-xs">{discount.orders?.[0] ? formatInZone(discount.orders[0].createdAt, undefined, "datetime") : 'Never'}</span>
                       </div>
                     </div>
                   </div>
@@ -224,7 +226,7 @@ export function DiscountDetailsComponent({ discount, list }: DiscountDetailsComp
                         >
                           <div className="flex flex-col">
                             <span className="text-xs font-bold">#{order.orderNumber}</span>
-                            <span className="text-[10px] text-muted-foreground">{new Date(order.createdAt).toLocaleDateString()}</span>
+                            <span className="text-[10px] text-muted-foreground"><ViewerTime value={order.createdAt} style="date" /></span>
                           </div>
                           <div className="flex flex-col items-end">
                             <span className="text-sm font-black">${order.total}</span>

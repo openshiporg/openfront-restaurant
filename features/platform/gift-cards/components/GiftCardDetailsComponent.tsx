@@ -1,4 +1,5 @@
 "use client";
+import { ViewerTime } from '@/features/dashboard/components/ViewerTime';
 
 import React, { useState } from "react";
 import {
@@ -192,12 +193,12 @@ export function GiftCardDetailsComponent({
                     <div className="flex flex-wrap items-center gap-4 text-xs font-bold text-muted-foreground uppercase tracking-widest">
                       <div className="flex items-center gap-1.5">
                         <Calendar className="size-3.5" />
-                        <span>Issued: {new Date(giftcard.createdAt).toLocaleDateString()}</span>
+                        <span>Issued: <ViewerTime value={giftcard.createdAt} style="date" /></span>
                       </div>
                       {giftcard.endsAt && (
                         <div className="flex items-center gap-1.5">
                           <History className="size-3.5" />
-                          <span>Exp: {new Date(giftcard.endsAt).toLocaleDateString()}</span>
+                          <span>Exp: <ViewerTime value={giftcard.endsAt} style="date" /></span>
                         </div>
                       )}
                     </div>
@@ -319,7 +320,7 @@ export function GiftCardDetailsComponent({
                             <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-widest">
                               <span className="text-muted-foreground">Date</span>
                               <span className="text-zinc-600 dark:text-zinc-400">
-                                {new Date(transaction.createdAt).toLocaleDateString()}
+                                <ViewerTime value={transaction.createdAt} style="date" />
                               </span>
                             </div>
                           </div>

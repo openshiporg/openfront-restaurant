@@ -1,4 +1,5 @@
 'use client'
+import { formatInZone } from '@/features/dashboard/lib/storeTime';
 
 import { Label } from "@/components/ui/label"
 import { useMemo, useState, type ReactNode } from 'react'
@@ -334,7 +335,7 @@ export function StoreSettingsPage({ initialSettings }: { initialSettings: StoreS
         return
       }
       toast.success('Store settings updated successfully')
-      setSavedAt(new Date().toLocaleTimeString())
+      setSavedAt(formatInZone(new Date(), undefined, 'datetime'))
     } catch (e: any) {
       setError(e?.message || 'Failed to save store settings')
     } finally {

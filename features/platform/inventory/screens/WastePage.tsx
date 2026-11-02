@@ -1,4 +1,5 @@
 'use client'
+import { ViewerTime } from '@/features/dashboard/components/ViewerTime';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { Button } from '@/components/ui/button'
@@ -300,7 +301,7 @@ export function WastePage() {
                               </span>
                               <span className="text-[11px] text-muted-foreground">{rc.label}</span>
                               <span className="text-[11px] text-muted-foreground">
-                                {new Date(log.createdAt).toLocaleDateString()} {new Date(log.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                <ViewerTime value={log.createdAt} style="date" /> <ViewerTime value={log.createdAt} style="datetime" />
                               </span>
                               {log.loggedBy && (
                                 <span className="text-[11px] text-muted-foreground">{log.loggedBy.name}</span>

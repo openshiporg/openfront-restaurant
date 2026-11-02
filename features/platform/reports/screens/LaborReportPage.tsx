@@ -1,4 +1,5 @@
 'use client'
+import { ViewerTime } from '@/features/dashboard/components/ViewerTime';
 
 import React, { useState, useEffect, useCallback } from 'react'
 import {
@@ -321,9 +322,7 @@ export function LaborReportPage() {
                           </Badge>
                         </TableCell>
                         <TableCell className="text-xs text-muted-foreground">
-                          {new Date(entry.startTime).toLocaleDateString(undefined, {
-                            month: 'short', day: 'numeric', year: 'numeric',
-                          })}
+                          <ViewerTime value={entry.startTime} style="date" />
                         </TableCell>
                         <TableCell>
                           <Badge className={cn(

@@ -1,4 +1,5 @@
 'use client'
+import { ViewerTime } from '@/features/dashboard/components/ViewerTime';
 
 import React, { useState, useEffect, useCallback } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -652,7 +653,7 @@ export function FloorPlanClient() {
                         <div className="font-medium">#{tableOrder.orderNumber}</div>
                         <div className="text-muted-foreground flex items-center gap-1">
                           <Clock className="h-3 w-3" />
-                          {new Date(tableOrder.createdAt).toLocaleTimeString()}
+                          <ViewerTime value={tableOrder.createdAt} style="datetime" />
                         </div>
                       </div>
                       <div className="text-right">

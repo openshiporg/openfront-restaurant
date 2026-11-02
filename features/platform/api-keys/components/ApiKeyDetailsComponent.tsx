@@ -7,10 +7,10 @@ import { MoreVertical, Settings, Key, ExternalLink } from "lucide-react";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { EditItemDrawerClientWrapper } from "@/features/platform/components/EditItemDrawerClientWrapper";
+import { formatInZone } from "@/features/dashboard/lib/storeTime";
 import type { ApiKey } from "../actions/getApiKeys";
 import {
   differenceInHours,
-  format,
   parseISO,
   differenceInMinutes,
 } from "date-fns";
@@ -57,7 +57,7 @@ export const ApiKeyDetailsComponent = ({
     } else if (hoursDifference < 24) {
       return `${hoursDifference} hours ago`;
     } else {
-      return format(date, "PPP");
+      return formatInZone(date, undefined, "date");
     }
   }
 

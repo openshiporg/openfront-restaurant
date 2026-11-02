@@ -1,3 +1,5 @@
+import { ViewerTime } from '@/features/dashboard/components/ViewerTime';
+import { formatInZone } from '@/features/dashboard/lib/storeTime';
 /**
  * ApiKeyListPageClient - API Keys Platform Page
  */
@@ -188,7 +190,7 @@ export function ApiKeyListPageClient({
                         </span>
                         <span className="text-[11px] text-muted-foreground flex items-center gap-1">
                           <Clock size={10} />
-                          {apiKey.lastUsedAt ? new Date(apiKey.lastUsedAt).toLocaleDateString() : 'Never used'}
+                          {apiKey.lastUsedAt ? formatInZone(apiKey.lastUsedAt, undefined, "date") : 'Never used'}
                         </span>
                         {apiKey.scopes?.length > 0 && (
                           <span className="text-[11px] text-muted-foreground flex items-center gap-1">
@@ -198,7 +200,7 @@ export function ApiKeyListPageClient({
                         )}
                         {apiKey.expiresAt && (
                           <span className="text-[11px] text-muted-foreground">
-                            Expires {new Date(apiKey.expiresAt).toLocaleDateString()}
+                            Expires <ViewerTime value={apiKey.expiresAt} style="date" />
                           </span>
                         )}
                       </div>

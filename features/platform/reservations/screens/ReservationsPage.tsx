@@ -1,4 +1,5 @@
 'use client'
+import { formatInZone } from '@/features/dashboard/lib/storeTime';
 
 import { useState, useEffect, useCallback } from 'react'
 import { gql, request } from 'graphql-request'
@@ -100,12 +101,12 @@ const STATUS_CONFIG: Record<string, { label: string; dot: string; text: string }
 
 function formatTime(dateStr: string | null) {
   if (!dateStr) return '—'
-  return new Date(dateStr).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  return formatInZone(dateStr, undefined, "datetime")
 }
 
 function formatDate(dateStr: string | null) {
   if (!dateStr) return '—'
-  return new Date(dateStr).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })
+  return formatInZone(dateStr, undefined, "date")
 }
 
 function toDateInputValue(d: Date) {

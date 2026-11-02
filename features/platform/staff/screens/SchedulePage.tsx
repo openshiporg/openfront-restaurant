@@ -1,4 +1,5 @@
 'use client'
+import { formatInZone } from '@/features/dashboard/lib/storeTime';
 
 import React, { useState, useEffect, useCallback } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -106,7 +107,7 @@ const UPDATE_SHIFT_STATUS = gql`
 `
 
 function formatTime(dateStr: string): string {
-  return new Date(dateStr).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+  return formatInZone(dateStr, undefined, "datetime")
 }
 
 function getWeekDates(baseDate: Date): Date[] {

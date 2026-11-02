@@ -1,4 +1,5 @@
 "use client";
+import { formatInZone } from '@/features/dashboard/lib/storeTime';
 import { useState } from "react";
 import { request } from "graphql-request";
 import { Button } from "@/components/ui/button";
@@ -73,7 +74,7 @@ export function VerifiedRefundWebhookRecovery() {
         {rows.map((row) => (
           <article key={row.id} className="space-y-2 rounded border p-3 text-sm">
             <p>
-              {row.eventType} · received {row.receivedAt ? new Date(row.receivedAt).toLocaleString() : "time unavailable"}
+              {row.eventType} · received {row.receivedAt ? formatInZone(row.receivedAt, undefined, "datetime") : "time unavailable"}
             </p>
             <p>Event {row.providerEventId || row.id} · previous attempts {row.attempts || 0}</p>
             <Button size="sm" disabled={loading || Boolean(busyId)} onClick={() => void replay(row)}>

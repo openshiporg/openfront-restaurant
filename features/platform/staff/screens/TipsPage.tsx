@@ -1,4 +1,5 @@
 'use client'
+import { ViewerTime } from '@/features/dashboard/components/ViewerTime';
 
 import React, { useState, useEffect, useCallback } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -314,7 +315,7 @@ export function TipsPage() {
                        {/* Date Strip */}
                        <div className="bg-muted/30 px-8 py-6 md:w-48 flex flex-col items-center justify-center border-b md:border-b-0 md:border-r-2 border-dashed">
                           <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-1">Date</span>
-                          <span className="text-lg font-black">{new Date(pool.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
+                          <span className="text-lg font-black"><ViewerTime value={pool.date} style="date" /></span>
                           <span className="text-xs font-bold text-muted-foreground">{new Date(pool.date).getFullYear()}</span>
                        </div>
 

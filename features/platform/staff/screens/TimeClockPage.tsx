@@ -1,4 +1,6 @@
 "use client";
+import { ViewerTime } from '@/features/dashboard/components/ViewerTime';
+import { formatInZone } from '@/features/dashboard/lib/storeTime';
 import { useCallback, useEffect, useRef, useState } from "react";
 import { request } from "graphql-request";
 import { Button } from "@/components/ui/button";
@@ -63,14 +65,14 @@ export function TimeClockPage() {
       <div className="flex gap-3"><Button disabled={busy || !correction.reason.trim() || !Number.isFinite(new Date(correction.clockIn).getTime()) || !Number.isFinite(new Date(correction.clockOut).getTime())} onClick={() => act(CORRECT, { ...correction, clockIn: new Date(correction.clockIn).toISOString(), clockOut: new Date(correction.clockOut).toISOString(), breakMinutes: Number(correction.breakMinutes) })}>Request correction</Button><Button variant="outline" onClick={() => setCorrection(null)}>Cancel</Button></div>
     </CardContent></Card>}
     {data.entries.map((entry: any) => <Card key={entry.id}><CardHeader><CardTitle className="text-base">{entry.staff?.name || "Employee"} · {entry.role}</CardTitle></CardHeader><CardContent className="space-y-3">
-      <p>{new Date(entry.clockIn).toLocaleString()} → {entry.clockOut ? new Date(entry.clockOut).toLocaleString() : "Clocked in"}</p>
+      <p><ViewerTime value={entry.clockIn} style="datetime" /> → {entry.clockOut ? formatInZone(entry.clockOut, undefined, "datetime") : "Clocked in"}</p>
       <p className="text-sm">Unpaid break: {entry.breakMinutes || 0} min · Paid hours: {Number(entry.paidHours).toFixed(2)} · {entry.state.approved ? "Approved" : entry.state.attested ? "Awaiting manager approval" : "Awaiting employee attestation"}</p>
       <div className="flex flex-wrap gap-3">
         {entry.staffId === data.actorId && entry.clockOut && !entry.state.attested && <Button disabled={busy} onClick={() => record("attest", entry.id)}>I attest this time is accurate</Button>}
         {data.canManageStaff && entry.staffId !== data.actorId && entry.state.attested && !entry.state.approved && <Button disabled={busy} onClick={() => record("approve_time", entry.id)}>Approve time</Button>}
         <Button disabled={busy} variant="outline" onClick={() => setCorrection({ entryId: entry.id, clockIn: localTime(entry.clockIn), clockOut: localTime(entry.clockOut || new Date().toISOString()), breakMinutes: entry.breakMinutes || "0", reason: "" })}>Request correction</Button>
       </div>
-      {entry.corrections.map((proposal: any) => <div key={proposal.id} className="border rounded p-3"><p>{proposal.reason}</p><p className="text-sm">{new Date(proposal.proposed.clockIn).toLocaleString()} → {new Date(proposal.proposed.clockOut).toLocaleString()} · unpaid breaks {proposal.proposed.breakMinutes} min</p>{data.canManageStaff && proposal.actorId !== data.actorId && entry.staffId !== data.actorId && <Button disabled={busy} onClick={() => act(APPROVE, { requestId: proposal.id })}>Approve correction</Button>}</div>)}
+      {entry.corrections.map((proposal: any) => <div key={proposal.id} className="border rounded p-3"><p>{proposal.reason}</p><p className="text-sm"><ViewerTime value={proposal.proposed.clockIn} style="datetime" /> → <ViewerTime value={proposal.proposed.clockOut} style="datetime" /> · unpaid breaks {proposal.proposed.breakMinutes} min</p>{data.canManageStaff && proposal.actorId !== data.actorId && entry.staffId !== data.actorId && <Button disabled={busy} onClick={() => act(APPROVE, { requestId: proposal.id })}>Approve correction</Button>}</div>)}
     </CardContent></Card>)}
   </main>;
 }

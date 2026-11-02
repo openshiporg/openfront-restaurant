@@ -1,4 +1,5 @@
 "use client";
+import { ViewerTime } from '@/features/dashboard/components/ViewerTime';
 
 import { CheckAllocationNotice } from "@/features/platform/payments/components/CheckAllocationNotice";
 import { useMemo, useState, useTransition } from "react";
@@ -200,7 +201,7 @@ export function OrderPageClient({ order, currencyCode = "USD", locale = "en-US" 
         <div className="px-5 py-3">
           <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Placed</p>
           <p className="text-sm font-semibold mt-1">
-            {new Date(order.createdAt).toLocaleDateString()} {new Date(order.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+            <ViewerTime value={order.createdAt} style="date" /> <ViewerTime value={order.createdAt} style="datetime" />
           </p>
         </div>
         <div className="px-5 py-3">

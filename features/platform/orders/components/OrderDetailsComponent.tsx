@@ -1,4 +1,5 @@
 "use client";
+import { ViewerTime } from '@/features/dashboard/components/ViewerTime';
 
 import React, { useState, useTransition } from "react";
 import Link from "next/link";
@@ -81,12 +82,7 @@ export function OrderDetailsComponent({
               </Link>
 
               <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">
-                {new Date(order.createdAt).toLocaleDateString("en-US", {
-                  month: "short",
-                  day: "numeric",
-                  hour: "numeric",
-                  minute: "2-digit",
-                })}
+                <ViewerTime value={order.createdAt} style="datetime" />
               </span>
 
               <Badge
