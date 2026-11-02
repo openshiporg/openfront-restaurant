@@ -86,23 +86,27 @@ export function OrderStatusTimeline({ status, orderType }: OrderStatusTimelinePr
   return (
     <div>
       <p className="text-sm font-medium text-primary">Status</p>
-      <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-none xl:grid-flow-col xl:auto-cols-fr">
-        {steps.map((step, index) => {
-          const isCompleted = index <= currentIndex;
-          const isCurrent = index === currentIndex;
-
-          return (
-            <div key={step.status} className="space-y-3">
-              <div className={`h-1.5 w-full ${isCompleted ? "bg-primary" : "bg-muted"}`} />
-              <div>
-                <p className={`text-sm ${isCurrent ? "font-medium text-foreground" : isCompleted ? "text-foreground" : "text-muted-foreground"}`}>
-                  {step.label}
-                </p>
-              </div>
-            </div>
-          );
-        })}
+      {/* One segmented bar at every width; on the phone only the current step is named. */}
+      <div className="mt-4 flex gap-1.5" aria-hidden="true">
+        {steps.map((step, index) => (
+          <div key={step.status} className={`h-1.5 flex-1 rounded-full ${index <= currentIndex ? "bg-primary" : "bg-muted"}`} />
+        ))}
       </div>
+      <p className="mt-3 text-[0.95rem] font-medium text-foreground sm:hidden">
+        {steps[currentIndex]?.label}
+        <span className="font-normal text-muted-foreground"> · step {currentIndex + 1} of {steps.length}</span>
+      </p>
+      <ol className="mt-3 hidden gap-1.5 sm:flex">
+        {steps.map((step, index) => (
+          <li
+            key={step.status}
+            aria-current={index === currentIndex ? "step" : undefined}
+            className={`flex-1 text-sm ${index === currentIndex ? "font-medium text-foreground" : index < currentIndex ? "text-foreground" : "text-muted-foreground"}`}
+          >
+            {step.label}
+          </li>
+        ))}
+      </ol>
     </div>
   );
 }

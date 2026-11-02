@@ -5,11 +5,11 @@ export const metadata: Metadata = { title: "Find your order", description: "Look
 
 export default function FindOrderPage() {
   return (
-    <main className="bg-steel text-ink">
-      <div className="storefront-shell py-10 sm:py-14 lg:py-20">
-        <h1 className="text-balance font-serif text-5xl font-black leading-[0.9] lg:text-7xl">Find your order</h1>
-        <p className="mt-4 max-w-[48ch] text-xl">See where your order is. No account needed.</p>
-        <div className="mt-10 max-w-xl"><FindOrderForm /></div>
+    <main className="bg-white text-ink">
+      <div className="storefront-shell py-6 sm:py-10 lg:py-14">
+        <h1 className="sf-page-title">Find your order</h1>
+        <p className="mt-2 max-w-[52ch] sf-lede sm:mt-3">See where your order is. No account needed.</p>
+        <div className="mt-6 max-w-xl sm:mt-10"><FindOrderForm /></div>
       </div>
     </main>
   )

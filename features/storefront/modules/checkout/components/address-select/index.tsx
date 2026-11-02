@@ -120,12 +120,12 @@ const AddressSelect = ({
                 <span className="flex items-center gap-2 text-sm font-medium">
                   <span>{selectedAddress.name || selectedAddress.address1}</span>
                   {selectedAddress.isDefault ? (
-                    <span className="bg-steel px-2 py-0.5 text-sm font-semibold text-ink">
+                    <span className="rounded-full bg-mint px-2.5 py-0.5 text-[0.78rem] font-medium text-leaf">
                       Default
                     </span>
                   ) : null}
                   {selectedAddress.isBilling ? (
-                    <span className="bg-steel px-2 py-0.5 text-sm font-semibold text-ink">
+                    <span className="rounded-full bg-mint px-2.5 py-0.5 text-[0.78rem] font-medium text-leaf">
                       Billing
                     </span>
                   ) : null}
@@ -162,12 +162,12 @@ const AddressSelect = ({
                 <span className="flex items-center gap-2 text-sm font-medium">
                   <span>{address.name || address.address1}</span>
                   {address.isDefault ? (
-                    <span className="bg-steel px-1.5 py-0.5 text-sm font-semibold text-ink">
+                    <span className="rounded-full bg-mint px-2 py-0.5 text-[0.75rem] font-medium text-leaf">
                       Default
                     </span>
                   ) : null}
                   {address.isBilling ? (
-                    <span className="bg-steel px-1.5 py-0.5 text-sm font-semibold text-ink">
+                    <span className="rounded-full bg-mint px-2 py-0.5 text-[0.75rem] font-medium text-leaf">
                       Billing
                     </span>
                   ) : null}

@@ -68,25 +68,25 @@ export default async function LocationsPage() {
   const phoneHref = settings.phone ? `tel:${String(settings.phone).replace(/[^\d+]/g, "")}` : null
 
   return (
-    <main className="bg-steel text-ink">
-      <div className="storefront-shell py-10 sm:py-14 lg:py-20">
-        <h1 className="text-balance font-serif text-5xl font-black leading-[0.9] lg:text-7xl">
+    <main className="bg-white text-ink">
+      <div className="storefront-shell py-6 sm:py-10 lg:py-14">
+        <h1 className="sf-page-title">
           Hours & location
           <ServiceLamp hours={settings.hours} timezone={timezone} locale={locale} initial={status} />
         </h1>
-        <p className="mt-4 text-xl">
+        <p className="mt-2 sf-lede sm:mt-3">
           <ServiceStatusText hours={settings.hours} timezone={timezone} locale={locale} initial={status} />
         </p>
 
-        <div className="mt-10 grid gap-12 lg:mt-14 lg:grid-cols-12 lg:gap-10">
+        <div className="mt-6 grid gap-8 sm:mt-10 lg:grid-cols-12 lg:gap-10">
           <section className="lg:col-span-6" aria-labelledby="visit-heading">
-            <h2 id="visit-heading" className="font-serif text-3xl font-extrabold">Find us</h2>
+            <h2 id="visit-heading" className="sf-section-title">Find us</h2>
             {settings.address ? (
               <a
                 href={mapsHref(settings.address)}
                 target="_blank"
                 rel="noreferrer"
-                className="pass-link mt-4 block max-w-[28ch] text-2xl leading-snug"
+                className="pass-link mt-3 block max-w-[28ch] text-[1rem] leading-snug sm:text-xl"
               >
                 {settings.address}
               </a>
@@ -94,7 +94,7 @@ export default async function LocationsPage() {
               <p className="mt-4 text-ink-soft">The address hasn&apos;t been published yet.</p>
             )}
 
-            <dl className="mt-6 text-base">
+            <dl className="mt-4 text-[0.9rem] sm:text-base">
               {settings.address ? (
                 <Fact label="Directions">
                   <a href={mapsHref(settings.address)} target="_blank" rel="noreferrer" className="pass-link">
@@ -114,8 +114,8 @@ export default async function LocationsPage() {
               ) : null}
             </dl>
 
-            <h2 className="mt-12 font-serif text-3xl font-extrabold">Pickup and delivery</h2>
-            <dl className="mt-4 text-base">
+            <h2 className="mt-8 sf-section-title sm:mt-12">Pickup and delivery</h2>
+            <dl className="mt-3 text-[0.9rem] sm:text-base">
               <Fact label="Pickup">
                 {settings.estimatedPickup ? `Ready in ${settings.estimatedPickup}` : "Order ahead and collect at the counter"}
                 {settings.pickupDiscount ? `, ${settings.pickupDiscount}% off pickup orders` : ""}
@@ -142,8 +142,8 @@ export default async function LocationsPage() {
           </section>
 
           <section className="lg:col-span-5 lg:col-start-8" aria-labelledby="hours-heading">
-            <h2 id="hours-heading" className="font-serif text-3xl font-extrabold">Opening hours</h2>
-            <dl className="mt-4 text-lg">
+            <h2 id="hours-heading" className="sf-section-title">Opening hours</h2>
+            <dl className="mt-3 text-[0.9rem] sm:text-base">
               {week.map((entry) => (
                 <div
                   key={entry.day}

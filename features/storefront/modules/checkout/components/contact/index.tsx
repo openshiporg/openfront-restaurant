@@ -149,7 +149,7 @@ const Contact = ({
                 <RadioGroupItem value="pickup" id="order-pickup" className="peer sr-only" />
                 <Label
                   htmlFor="order-pickup"
-                  className="flex cursor-pointer flex-col gap-2 bg-muted/35 p-4 transition-colors hover:border-primary/30 peer-data-[state=checked]:border-primary/50 peer-data-[state=checked]:bg-muted"
+                  className="flex cursor-pointer flex-col gap-1.5 rounded-xl border border-border bg-white p-4 transition-colors hover:border-leaf/40 peer-data-[state=checked]:border-leaf peer-data-[state=checked]:bg-mint"
                 >
                   <div className="flex items-center gap-2 text-foreground">
                     <ShoppingBag className="size-4" />
@@ -167,7 +167,7 @@ const Contact = ({
                   <RadioGroupItem value="delivery" id="order-delivery" className="peer sr-only" />
                   <Label
                     htmlFor="order-delivery"
-                    className="flex cursor-pointer flex-col gap-2 bg-muted/35 p-4 transition-colors hover:border-primary/30 peer-data-[state=checked]:border-primary/50 peer-data-[state=checked]:bg-muted"
+                    className="flex cursor-pointer flex-col gap-1.5 rounded-xl border border-border bg-white p-4 transition-colors hover:border-leaf/40 peer-data-[state=checked]:border-leaf peer-data-[state=checked]:bg-mint"
                   >
                     <div className="flex items-center gap-2 text-foreground">
                       <Truck className="size-4" />

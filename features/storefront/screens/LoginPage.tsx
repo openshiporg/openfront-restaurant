@@ -15,8 +15,8 @@ export default function LoginPage() {
 
   return (
     <div className="grid w-full max-w-5xl overflow-hidden bg-card lg:grid-cols-[0.9fr_1.1fr]">
-      <div className="bg-steel-shade p-8 sm:p-10 lg:p-12">
-        <h1 className="text-balance font-serif text-5xl font-black leading-[0.92] text-foreground">
+      <div className="rounded-2xl bg-mint p-6 sm:p-10 lg:p-12">
+        <h1 className="sf-page-title text-foreground">
           {view === "signin" ? "Welcome back." : "Create your account."}
         </h1>
         <p className="mt-4 max-w-[40ch] text-pretty text-lg leading-relaxed text-ink">
@@ -35,7 +35,7 @@ export default function LoginPage() {
       <div className="p-8 sm:p-10 lg:p-12">
         <div className="mb-8 flex items-start justify-between gap-3">
           <div>
-            <p className="font-serif text-2xl font-extrabold text-ink">
+            <p className="sf-card-title">
               {view === "signin" ? "Sign in" : "Create account"}
             </p>
             <p className="mt-1 text-base text-ink-soft">
@@ -46,7 +46,7 @@ export default function LoginPage() {
           </div>
           <Link
             href="/"
-            className="-mr-2 inline-flex h-10 shrink-0 items-center gap-2 px-2 text-base font-medium text-ink transition-colors hover:bg-steel-shade"
+            className="-mr-2 inline-flex h-10 shrink-0 items-center gap-2 px-2 text-base font-medium text-ink transition-colors hover:bg-mint"
           >
             <ArrowLeft className="size-4" aria-hidden="true" />
             <span>Menu</span>

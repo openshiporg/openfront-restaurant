@@ -45,11 +45,11 @@ export default function OrderDetailsTemplate({ order }: OrderDetailsTemplateProp
     <div className="py-8">
       <div className="grid gap-6">
         <div className=" pb-6">
-          <Link href="/account" className="inline-flex items-center gap-2 rounded-full bg-background px-4 py-2 text-sm text-muted-foreground transition-colors hover:border-primary/30 hover:text-primary">
+          <Link href="/account" className="-ml-2 inline-flex items-center gap-2 rounded-full px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-mint hover:text-leaf">
             <ArrowLeft className="size-4" />
             Back to account
           </Link>
-          <h1 className="mt-6 font-serif text-4xl font-semibold text-foreground">Order #{order.orderNumber}</h1>
+          <h1 className="mt-3 break-words sf-section-title text-foreground sm:text-[2rem]">Order #{order.orderNumber}</h1>
           <Link href={`/order/confirmed/${order.id}`} className="mt-2 inline-block text-sm text-primary hover:underline">
             View confirmation
           </Link>
@@ -83,7 +83,7 @@ export default function OrderDetailsTemplate({ order }: OrderDetailsTemplateProp
 
           <div className="space-y-6">
             <div className="storefront-surface bg-background p-6">
-              {order.checkAllocation && <p className="mb-3 bg-steel p-3">Independent check {order.checkAllocation.ordinal} of {order.checkAllocation.guestCount} from service {order.checkAllocation.sourceOrderNumber}. Your allocated charge is shown in the total. Any food details below describe the original service and are not charged again in full.</p>}
+              {order.checkAllocation && <p className="mb-3 rounded-xl bg-muted p-3">Independent check {order.checkAllocation.ordinal} of {order.checkAllocation.guestCount} from service {order.checkAllocation.sourceOrderNumber}. Your allocated charge is shown in the total. Any food details below describe the original service and are not charged again in full.</p>}
               <OrderItemsList items={order.orderItems} />
             </div>
             <div className="storefront-surface bg-background p-6">

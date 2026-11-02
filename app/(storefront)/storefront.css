@@ -215,8 +215,19 @@
   }
 
 
-  .storefront-heading {
-    @apply text-balance font-serif text-4xl font-bold leading-[1.02] md:text-5xl;
+  /* Antares type scale: page titles, section titles, card titles. Phone first. */
+  .storefront-heading,
+  .sf-page-title {
+    @apply text-balance font-serif text-[1.6rem] font-bold leading-[1.05] tracking-[-0.015em] sm:text-[2.4rem] lg:text-[2.8rem];
+  }
+  .sf-section-title {
+    @apply font-serif text-[1.15rem] font-bold leading-tight sm:text-[1.5rem];
+  }
+  .sf-card-title {
+    @apply text-[1rem] font-semibold leading-snug text-ink sm:text-[1.1rem];
+  }
+  .sf-lede {
+    @apply text-pretty text-[0.88rem] text-ink-soft sm:text-[1.05rem];
   }
 
   .storefront-copy {

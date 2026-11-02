@@ -18,7 +18,7 @@ export default async function AccountAddressesPage() {
   return (
     <div className="w-full animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className=" pb-6">
-        <h1 className="mt-4 font-serif text-4xl font-semibold text-foreground">Saved addresses</h1>
+        <h1 className="mt-3 sf-page-title text-foreground">Saved addresses</h1>
         <p className="mt-2 text-base text-muted-foreground">
           Save as many addresses as you need. Delivery availability is still checked at checkout.
         </p>

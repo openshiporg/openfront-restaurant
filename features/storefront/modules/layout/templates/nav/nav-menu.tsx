@@ -23,7 +23,7 @@ export function NavMenu({ links }: { links: Array<{ href: string; label: string 
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent className={`storefront-sheet ${storefrontFont.variable} w-full max-w-sm border-0 bg-white p-0 text-ink`}>
           <SheetHeader className="px-6 pb-2 pt-6 text-left">
-            <SheetTitle className="font-serif text-3xl font-bold text-ink">Menu</SheetTitle>
+            <SheetTitle className="font-serif text-[1.35rem] font-bold text-ink sm:text-3xl">Menu</SheetTitle>
           </SheetHeader>
           <nav className="flex flex-col px-3 pb-6" aria-label="Pages">
             {[{ href: "/account", label: "Account" }, ...links].map((link) => (
@@ -31,7 +31,7 @@ export function NavMenu({ links }: { links: Array<{ href: string; label: string 
                 key={link.href}
                 href={link.href}
                 onClick={() => setOpen(false)}
-                className="rounded-xl px-3 py-3 text-lg font-medium text-ink transition-colors hover:bg-mint"
+                className="rounded-xl px-3 py-2.5 text-[0.95rem] font-medium text-ink sm:text-lg transition-colors hover:bg-mint"
               >
                 {link.label}
               </Link>

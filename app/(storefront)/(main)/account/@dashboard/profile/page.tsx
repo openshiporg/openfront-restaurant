@@ -21,7 +21,7 @@ export default async function AccountProfilePage() {
   return (
     <div className="w-full animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className=" pb-6">
-        <h1 className="mt-4 font-serif text-4xl font-semibold text-foreground">Manage your details</h1>
+        <h1 className="mt-3 sf-page-title text-foreground">Manage your details</h1>
         <p className="mt-2 text-base text-muted-foreground">
           Update your name, email address, phone number, and billing address.
         </p>

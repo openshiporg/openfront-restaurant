@@ -45,7 +45,7 @@ const Review = ({
     <div>
       <div className="flex flex-row items-center justify-between mb-5">
         <div className="flex items-center gap-3">
-          <div className="h-8 w-8 rounded-lg bg-steel flex items-center justify-center">
+          <div className="h-8 w-8 rounded-lg bg-mint text-leaf flex items-center justify-center">
             <ClipboardCheck className="h-4 w-4 text-warm-700" />
           </div>
           <h2

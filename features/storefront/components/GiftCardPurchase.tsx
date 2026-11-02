@@ -80,10 +80,10 @@ export default function GiftCardPurchase({ locale, currencyCode }: { locale: str
   if (issued) {
     return (
       <div role="status" className="space-y-3">
-        <p className="font-serif text-3xl font-extrabold">Thank you.</p>
+        <p className="sf-section-title">Thank you.</p>
         <p className="text-lg">{money(issued.amount)} gift card{issued.recipientEmail ? ` sent to ${issued.recipientEmail}` : ""}.</p>
         <p className="text-sm text-ink-soft">Gift card code</p>
-        <p className="break-all font-serif text-3xl font-black tracking-wider">{issued.code}</p>
+        <p className="break-all font-serif text-[1.4rem] font-bold tracking-wide sm:text-3xl">{issued.code}</p>
         <p className="text-ink-soft">We&apos;ve emailed a copy to you.</p>
       </div>
     )

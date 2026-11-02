@@ -61,12 +61,12 @@ export function CheckoutLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="storefront-ui min-h-dvh w-full bg-steel text-ink">
-      <div className="sticky top-0 z-40 bg-steel text-ink">
+    <div className="storefront-ui min-h-dvh w-full bg-white text-ink">
+      <div className="sticky top-0 z-40 border-b border-border bg-white/95 text-ink backdrop-blur">
         <nav className="storefront-shell flex h-16 items-center justify-between gap-4">
           <Link
             href="/"
-            className="-ml-2 inline-flex items-center gap-2 px-2 py-2 text-base font-medium text-ink transition-colors hover:bg-steel-shade"
+            className="-ml-2 inline-flex items-center gap-2 px-2 py-2 text-base font-medium text-ink transition-colors hover:bg-mint"
             data-testid="back-to-menu-link"
           >
             <ArrowLeft className="size-4" />
@@ -74,7 +74,7 @@ export function CheckoutLayout({
           </Link>
 
           <div className="text-center">
-            <div className="font-serif text-2xl font-extrabold text-ink">Checkout</div>
+            <div className="sf-card-title">Checkout</div>
           </div>
 
           <div className="h-10 min-w-[112px]" />

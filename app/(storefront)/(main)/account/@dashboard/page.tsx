@@ -24,28 +24,28 @@ export default async function AccountOverviewPage() {
   return (
     <div className="w-full animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className=" pb-6">
-        <h1 className="mt-4 font-serif text-4xl font-semibold text-foreground">Hello, {firstName}</h1>
+        <h1 className="mt-3 sf-page-title text-foreground">Hello, {firstName}</h1>
         <p className="mt-2 text-base text-muted-foreground">Welcome back to your account.</p>
       </div>
 
       <div className="grid gap-4 py-6 sm:grid-cols-3">
         <div className="storefront-surface-soft bg-background px-5 py-4">
           <p className="text-sm font-medium text-primary">Profile</p>
-          <p className="mt-3 text-3xl font-semibold text-foreground">{completion}%</p>
+          <p className="mt-2 text-[1.3rem] font-semibold text-foreground sm:text-3xl">{completion}%</p>
           <Link href="/account/profile" className="mt-3 inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-primary">
             Edit profile <ChevronRight size={14} />
           </Link>
         </div>
         <div className="storefront-surface-soft bg-background px-5 py-4">
           <p className="text-sm font-medium text-primary">Addresses</p>
-          <p className="mt-3 text-3xl font-semibold text-foreground">{user.addresses?.length || 0}</p>
+          <p className="mt-2 text-[1.3rem] font-semibold text-foreground sm:text-3xl">{user.addresses?.length || 0}</p>
           <Link href="/account/addresses" className="mt-3 inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-primary">
             Manage <ChevronRight size={14} />
           </Link>
         </div>
         <div className="storefront-surface-soft bg-background px-5 py-4">
           <p className="text-sm font-medium text-primary">Orders</p>
-          <p className="mt-3 text-3xl font-semibold text-foreground">{orders.length}</p>
+          <p className="mt-2 text-[1.3rem] font-semibold text-foreground sm:text-3xl">{orders.length}</p>
           <Link href="/account/orders" className="mt-3 inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-primary">
             View history <ChevronRight size={14} />
           </Link>

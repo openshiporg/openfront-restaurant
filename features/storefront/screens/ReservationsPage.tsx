@@ -19,11 +19,11 @@ export default async function ReservationsPage() {
   const timezone = settings.timezone
   const today = venueDateString(new Date(), timezone)
   return (
-    <main className="bg-steel text-ink">
-      <div className="storefront-shell py-10 sm:py-14 lg:py-20">
-        <h1 className="text-balance font-serif text-5xl font-black leading-[0.9] lg:text-7xl">Reserve a table</h1>
-        <p className="mt-4 max-w-[48ch] text-xl">Pick a day, your party size and a time. You&apos;ll get a confirmation straight away.</p>
-        <div className="mt-10 max-w-3xl">
+    <main className="bg-white text-ink">
+      <div className="storefront-shell py-6 sm:py-10 lg:py-14">
+        <h1 className="sf-page-title">Reserve a table</h1>
+        <p className="mt-2 max-w-[52ch] sf-lede sm:mt-3">Pick a day, your party size and a time. You&apos;ll get a confirmation straight away.</p>
+        <div className="mt-6 max-w-3xl sm:mt-10">
           <ReservationForm today={today} maxDate={addDays(today, 60)} timezone={timezone} locale={getCurrencyConfig(settings).locale} restaurantName={settings.name || "the restaurant"} />
           {settings.phone ? <p className="mt-6 text-ink-soft">Larger group? Call <a className="pass-link" href={`tel:${String(settings.phone).replace(/[^\d+]/g, "")}`}>{settings.phone}</a>.</p> : null}
         </div>

@@ -61,34 +61,34 @@ export default function OrderCompletedTemplate({ order }: OrderCompletedTemplate
   const typeLabel = ORDER_TYPE_LABEL[order.orderType] ?? order.orderType;
 
   return (
-    <div className="py-8 sm:py-10 lg:py-14">
+    <div className="py-5 sm:py-10 lg:py-14">
       <div className="storefront-shell">
-        <Link href="/account/orders" className="inline-flex items-center gap-2 rounded-full bg-background px-4 py-2 text-sm text-muted-foreground transition-colors hover:border-primary/30 hover:text-primary">
+        <Link href="/account/orders" className="-ml-2 inline-flex items-center gap-2 rounded-full px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-mint hover:text-leaf">
           <ArrowLeft size={14} />
           Back to orders
         </Link>
 
         <OrderLiveRefresh status={order.status} />
-        <div className="mt-8 pb-6">
-          <div className="mt-4 flex flex-wrap items-start justify-between gap-4">
+        <div className="mt-3 pb-2 sm:mt-6 sm:pb-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <h1 className="font-serif text-4xl font-semibold text-foreground">Order #{order.orderNumber}</h1>
-              <p className="mt-2 text-base text-muted-foreground">
+              <h1 className="break-words sf-section-title text-foreground sm:text-[2rem]">Order #{order.orderNumber}</h1>
+              <p className="mt-1 text-[0.85rem] text-muted-foreground sm:text-base">
                 {typeLabel} · {new Date(order.createdAt).toLocaleDateString()}
               </p>
             </div>
-            <div className=" bg-background px-4 py-2 text-sm font-medium text-foreground">
+            <div className="rounded-full bg-mint px-3 py-1 text-[0.8rem] font-medium text-leaf">
               {statusLabel}
             </div>
           </div>
         </div>
 
-        <div className="mt-8 grid gap-6 lg:grid-cols-2">
+        <div className="mt-4 grid gap-4 sm:mt-8 sm:gap-6 lg:grid-cols-2">
           <div className="space-y-6">
-            <div className="storefront-surface bg-card p-6">
+            <div className="storefront-surface bg-card p-4 sm:p-6">
               <OrderStatusTimeline status={order.status} orderType={order.orderType} />
             </div>
-            <div className="storefront-surface bg-card p-6">
+            <div className="storefront-surface bg-card p-4 sm:p-6">
               <OrderDetailsCard
                 orderNumber={order.orderNumber}
                 orderType={order.orderType}
@@ -108,11 +108,11 @@ export default function OrderCompletedTemplate({ order }: OrderCompletedTemplate
           </div>
 
           <div className="space-y-6">
-            <div className="storefront-surface bg-card p-6">
-              {order.checkAllocation && <p className="mb-3 bg-steel p-3">Independent check {order.checkAllocation.ordinal} of {order.checkAllocation.guestCount} from service {order.checkAllocation.sourceOrderNumber}. Your allocated charge is shown in the total. Any food details below describe the original service and are not charged again in full.</p>}
+            <div className="storefront-surface bg-card p-4 sm:p-6">
+              {order.checkAllocation && <p className="mb-3 rounded-xl bg-muted p-3">Independent check {order.checkAllocation.ordinal} of {order.checkAllocation.guestCount} from service {order.checkAllocation.sourceOrderNumber}. Your allocated charge is shown in the total. Any food details below describe the original service and are not charged again in full.</p>}
               <OrderItemsList items={order.orderItems} />
             </div>
-            <div className="storefront-surface bg-card p-6">
+            <div className="storefront-surface bg-card p-4 sm:p-6">
               <OrderSummary
                 orderType={order.orderType}
                 subtotal={order.subtotal}

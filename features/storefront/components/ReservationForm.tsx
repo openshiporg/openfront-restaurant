@@ -60,12 +60,12 @@ export default function ReservationForm({ today, maxDate, timezone, locale, rest
     const day = new Intl.DateTimeFormat(locale, { timeZone: booked.timezone, weekday: "long", month: "long", day: "numeric" }).format(new Date(booked.startsAt))
     return (
       <div className="storefront-surface bg-card p-6 sm:p-8" role="status">
-        <p className="font-serif text-3xl font-extrabold text-ink">You&apos;re booked.</p>
+        <p className="sf-section-title text-ink">You&apos;re booked.</p>
         <p className="mt-3 text-lg text-ink">
           Table for {booked.partySize} at {restaurantName}, {day} at {formatTime(booked.startsAt, booked.timezone, locale)}.
         </p>
         <p className="mt-6 text-sm text-ink-soft">Confirmation code</p>
-        <p className="font-serif text-4xl font-black tracking-wider text-ink">{booked.code}</p>
+        <p className="font-serif text-[1.5rem] font-bold tracking-wide text-ink sm:text-4xl">{booked.code}</p>
         <p className="mt-4 text-ink-soft">We&apos;ve emailed the details. Quote the code if you need to change anything.</p>
       </div>
     )

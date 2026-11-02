@@ -26,7 +26,7 @@ export default function GiftCardBalance({ locale }: { locale: string }) {
     >
       <Field id="gc-code" label="Gift card code"><Input id="gc-code" name="code" required autoComplete="off" autoCapitalize="characters" className={inputClass} /></Field>
       <FormError message={error} />
-      {result ? <p role="status" className="font-serif text-3xl font-extrabold">{formatCurrency(result.balance, { currencyCode: result.currencyCode, locale })} left</p> : null}
+      {result ? <p role="status" className="sf-section-title">{formatCurrency(result.balance, { currencyCode: result.currencyCode, locale })} left</p> : null}
       <button type="submit" disabled={pending} className="pass-action w-full sm:w-auto sm:min-w-[14rem]">{pending ? "Checking…" : "Check balance"}</button>
     </form>
   )

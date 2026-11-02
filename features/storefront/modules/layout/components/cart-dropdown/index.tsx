@@ -115,8 +115,8 @@ export default function CartDropdown({ cart, currencyCode, locale, brandHue }: C
           className={`storefront-sheet ${storefrontFont.variable} flex w-full max-w-md flex-col gap-0 border-0 bg-white p-0 text-ink sm:max-w-md`}
         >
           <SheetHeader className="px-6 pb-4 pt-6 text-left">
-            <SheetTitle className="flex items-center gap-3 font-serif text-3xl font-bold leading-none text-ink">
-              <ShoppingBag className="size-7" strokeWidth={1.75} aria-hidden="true" />
+            <SheetTitle className="flex items-center gap-2.5 font-serif text-[1.35rem] font-bold leading-none text-ink sm:text-3xl">
+              <ShoppingBag className="size-6" strokeWidth={1.75} aria-hidden="true" />
               Your order bag
             </SheetTitle>
             {itemCount > 0 ? (
