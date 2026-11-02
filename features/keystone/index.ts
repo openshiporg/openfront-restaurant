@@ -9,7 +9,6 @@ import { permissions } from "./access";
 import Iron from "@hapi/iron";
 import * as cookie from "cookie";
 import { getRuntimeConfig } from "./runtimeConfig";
-import { withDemoGuard } from "./lib/demo-guard";
 import { authenticateApiKey, refreshHumanSession } from "./utils/requestAuthentication";
 
 const runtimeConfig = getRuntimeConfig();
@@ -217,7 +216,7 @@ export default withAuth(
       provider: "postgresql",
       url: databaseURL,
     },
-    lists: withDemoGuard(models),
+    lists: models,
     storage: {
       my_images: {
         kind: "s3",
