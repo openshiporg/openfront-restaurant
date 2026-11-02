@@ -605,9 +605,9 @@ export function PaymentClient({ orderId }: PaymentClientProps) {
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle className="min-w-0 break-all md:break-normal">Order #{order.orderNumber}</CardTitle>
-            <Badge variant={order.status === 'completed' ? 'default' : 'secondary'}>
-              {order.status}
-            </Badge>
+            <p className="shrink-0 text-sm text-muted-foreground">
+              {order.status.charAt(0).toUpperCase() + order.status.slice(1).replace(/_/g, ' ')}
+            </p>
           </div>
           {order.tables?.length > 0 && (
             <p className="text-sm text-muted-foreground">Table: {order.tables.map((table) => table.tableNumber).join(', ')}</p>
