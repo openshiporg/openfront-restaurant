@@ -5,7 +5,7 @@ import { appendAuditEventWithClient } from "./audit";
 import { eligibleCampaignRecipient } from "./restaurantCampaigns";
 
 export type NotificationMessage = { to: string; subject: string; text: string; messageId: string };
-export type NotificationTransport = (message: NotificationMessage) => Promise<{ accepted: boolean; reference?: string }>;
+export type NotificationTransport = (message: NotificationMessage) => Promise<{ accepted: boolean; reference?: string; providerResponse?: string }>;
 export async function enqueueRestaurantNotification(tx: any, actorId: string | null | undefined, input: { eventKey: string; entityType: string; entityId: string; to: string; subject: string; text: string; marketing?: { customerId: string; campaignId: string; consentEventId: string } }) {
   if (!input.to) return null;
   const invalidRecipient = !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.to);
@@ -67,7 +67,7 @@ export async function deliverQueuedNotification(context: Context, notificationId
     return { ...state, sequence: state.sequence + 1, attemptId, replay: false };
   }, { isolationLevel: "Serializable" });
   if (claim.replay) return { id: notificationId, status: claim.status, error: null };
-  let status = "unknown", reference = "", error: string | null = null;
+  let status = "unknown", reference = "", providerResponse = "", error: string | null = null;
   try {
     // Recheck after the claim and immediately before the transport boundary.
     if (claim.row.metadata?.marketing && !await eligibleCampaignRecipient(prisma, claim.row.metadata.marketing.customerId, claim.row.metadata.to)) {
@@ -76,13 +76,14 @@ export async function deliverQueuedNotification(context: Context, notificationId
     const result = claim.row.metadata?.invalidRecipient ? { accepted: false } : await transport({ ...claim.row.metadata, messageId: `<restaurant-${notificationId}@notifications.local>` });
     status = result.accepted ? "accepted" : "failed";
     reference = result.reference || "";
+    providerResponse = result.providerResponse || "";
     if (!result.accepted) error = "Transport rejected the notification";
     }
   } catch { error = "Delivery outcome is unknown; reconcile the original attempt before retrying"; }
   await prisma.$transaction(async (tx: any) => {
     const current = await notificationState(tx, notificationId);
     if (current.sequence !== claim.sequence || current.status !== "processing") throw new Error("Notification state changed during delivery; reconcile the original attempt");
-    await recordState(tx, context.session?.itemId, notificationId, current.sequence + 1, status, { attemptId: claim.attemptId, reference, error });
+    await recordState(tx, context.session?.itemId, notificationId, current.sequence + 1, status, { attemptId: claim.attemptId, reference, ...(providerResponse ? { providerResponse } : {}), error });
   }, { isolationLevel: "Serializable" });
   return { id: notificationId, status, error };
 }

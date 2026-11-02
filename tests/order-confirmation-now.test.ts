@@ -28,12 +28,13 @@ const status = (rows: any[], id: string) => rows.filter((r) => r.entityType === 
 
 test("sends this order's confirmation once and records accepted with the provider reference", async () => {
   const { rows, context } = fixture(); const sent: any[] = [];
-  const transport = async (m: any) => { sent.push(m); return { accepted: true, reference: "<ref@resend>" }; };
+  const transport = async (m: any) => { sent.push(m); return { accepted: true, reference: "<ref@resend>", providerResponse: "250 Accepted resend-id-123" }; };
   const out = await deliverOrderConfirmationNow(context, "o1", transport);
   assert.equal(out.status, "accepted");
   assert.equal(sent.length, 1); assert.equal(sent[0].to, "delivered@resend.dev");
   assert.equal(status(rows, "n1"), "accepted");
   assert.equal(rows.find((r) => r.eventType === "notification.accepted").metadata.reference, "<ref@resend>");
+  assert.equal(rows.find((r) => r.eventType === "notification.accepted").metadata.providerResponse, "250 Accepted resend-id-123");
 });
 
 test("a second call (replay) and the staff Send button do not resend an accepted row", async () => {
@@ -67,4 +68,20 @@ test("a rejected or throwing transport never throws and is recorded for staff re
 test("no queued row for the order is a no-op", async () => {
   const { context } = fixture();
   assert.equal((await deliverOrderConfirmationNow(context, "missing", async () => ({ accepted: true }))).status, "no_event");
+});
+
+test("the SMTP transport returns the provider response line next to its locally generated reference", async () => {
+  const Module = require("node:module");
+  const orig = Module._load;
+  Module._load = function (request: string, ...rest: any[]) {
+    if (request === "nodemailer") return { createTransport: () => ({ sendMail: async (m: any) => ({ accepted: [m.to], rejected: [], messageId: "<local@x>", response: "250 Accepted\r\n resend-id-123 " }) }) };
+    return orig.call(this, request, ...rest);
+  };
+  Object.assign(process.env, { SMTP_HOST: "smtp.test", SMTP_FROM: "a@b.test" });
+  try {
+    delete require.cache[require.resolve("../features/integrations/notifications/smtp")];
+    const { smtpNotificationTransport } = require("../features/integrations/notifications/smtp");
+    const out = await smtpNotificationTransport({ to: "x@resend.dev", subject: "s", text: "t", messageId: "<m>" });
+    assert.deepEqual(out, { accepted: true, reference: "<local@x>", providerResponse: "250 Accepted  resend-id-123" });
+  } finally { Module._load = orig; }
 });

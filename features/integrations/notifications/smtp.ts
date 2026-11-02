@@ -5,5 +5,7 @@ export const smtpNotificationTransport: NotificationTransport = async message =>
   if (!process.env.SMTP_HOST || !process.env.SMTP_FROM) return { accepted: false };
   const transport = createTransport({ host: process.env.SMTP_HOST, port: process.env.SMTP_PORT ? Number(process.env.SMTP_PORT) : undefined, connectionTimeout: 10000, socketTimeout: 20000, auth: process.env.SMTP_USER ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASSWORD } : undefined });
   const result = await transport.sendMail({ ...message, from: process.env.SMTP_FROM });
-  return { accepted: !!result.accepted?.length, reference: result.messageId };
+  // nodemailer's messageId is generated locally; the SMTP reply line is what carries the provider's own id.
+  const providerResponse = typeof result.response === "string" ? result.response.replace(/[\r\n]+/g, " ").trim().slice(0, 300) : "";
+  return { accepted: !!result.accepted?.length, reference: result.messageId, ...(providerResponse ? { providerResponse } : {}) };
 };
