@@ -24,12 +24,29 @@ async function notificationState(tx: any, notificationId: string) {
 async function recordState(tx: any, actorId: string | undefined, notificationId: string, sequence: number, status: string, metadata: Record<string, unknown> = {}) {
   return appendAuditEventWithClient(tx, actorId, { eventKey: `notification-state:${notificationId}:${sequence}`, eventType: `notification.${status}`, entityType: "RestaurantNotification", entityId: notificationId, metadata: { ...metadata, sequence, status } });
 }
-export async function deliverQueuedNotification(context: Context, notificationId: string, transport: NotificationTransport, retryUnknown = false) {
-  authorize(context);
+const ORDER_CONFIRMATION_PREFIX = "notification:order-confirmed:";
+/**
+ * In-process delivery of ONE order's "received" confirmation right after checkout commits, so a guest
+ * checkout does not depend on staff pressing Send. It can only deliver the row whose event key is
+ * notification:order-confirmed:<orderId>, and it uses the same claim/processing/accepted state machine
+ * as the staff button, so the button cannot resend a row this already accepted. Never throws.
+ */
+export async function deliverOrderConfirmationNow(context: Context, orderId: string, transport: NotificationTransport) {
+  try {
+    const row = await (context.prisma as any).auditEvent.findUnique({ where: { eventKey: `${ORDER_CONFIRMATION_PREFIX}${orderId}` } });
+    if (!row || row.eventType !== "notification.queued" || row.entityType !== "RestaurantOrder" || row.entityId !== orderId) return { id: "", status: "no_event", error: null };
+    return await deliverQueuedNotification(context, row.id, transport, false, true);
+  } catch {
+    return { id: "", status: "failed", error: "Order confirmation was not delivered; staff can send it from Notifications" };
+  }
+}
+export async function deliverQueuedNotification(context: Context, notificationId: string, transport: NotificationTransport, retryUnknown = false, system = false) {
+  if (!system) authorize(context);
   const prisma = context.prisma as any;
   const claim = await prisma.$transaction(async (tx: any) => {
     const state = await notificationState(tx, notificationId);
-    if (state.row.metadata?.marketing && !permissions.canManageUsers(context)) throw new Error("User management is required to dispatch marketing");
+    if (system && !String(state.row.eventKey || "").startsWith(ORDER_CONFIRMATION_PREFIX)) throw new Error("System delivery is limited to order confirmations");
+    if (state.row.metadata?.marketing && !system && !permissions.canManageUsers(context)) throw new Error("User management is required to dispatch marketing");
     if (["accepted", "acknowledged", "suppressed"].includes(state.status)) return { ...state, replay: true };
     if (state.row.eventKey?.startsWith("gift-delivery:")) {
       const gift = await tx.giftCard.findUnique({ where: { id: state.row.entityId } });

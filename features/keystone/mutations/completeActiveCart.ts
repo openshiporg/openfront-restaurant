@@ -16,7 +16,8 @@ import { validateCartItemInput } from "../utils/cartItemValidation";
 import { appendAuditEventWithClient } from "../utils/audit";
 import { freezeOrderPricingPolicy, getOrderPricingPolicy } from "../utils/orderPricingPolicy";
 import { attachCheckoutRecipeWithClient } from "../utils/inventoryRecipeSnapshot";
-import { enqueueRestaurantNotification } from "../utils/restaurantNotifications";
+import { enqueueRestaurantNotification, deliverOrderConfirmationNow } from "../utils/restaurantNotifications";
+import { smtpNotificationTransport } from "../../integrations/notifications/smtp";
 import { issueReceiptWithClient } from "../utils/receipt";
 import { assertCapturedCheckoutPayment, assertCheckoutProviderObservation } from "../utils/checkoutProviderObservation";
 import { assertCheckoutQuoteState } from "../utils/checkoutReservation";
@@ -456,6 +457,11 @@ export default async function completeActiveCart(
 
   if (isKitchenActiveOrderStatus(result.order.status)) {
     await syncKitchenTicketsForOrder(result.order.id, context);
+  }
+  // The order is committed: send its queued "received" email now (never throws; a replay is a no-op
+  // because an accepted row is not sent again). Without SMTP the row stays queued for staff.
+  if (!result.replay && process.env.SMTP_HOST && process.env.SMTP_FROM) {
+    await deliverOrderConfirmationNow(context, result.order.id, smtpNotificationTransport);
   }
   return {
     id: result.order.id,
