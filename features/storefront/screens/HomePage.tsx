@@ -156,7 +156,7 @@ export default async function HomePage() {
         <div className="mt-4 flex items-center gap-3">
           <StoreMark name={storeName} />
           <div className="min-w-0 flex-1 leading-snug">
-            <h1 className="truncate font-serif text-[0.86rem] font-bold">{storeName}</h1>
+            <h1 className="storefront-store-name truncate font-serif text-[0.86rem] font-bold">{storeName}</h1>
             {storeSettings.address ? <p className="truncate text-[0.75rem] text-ink-soft">{storeSettings.address}</p> : null}
             <p className={status.isOpen ? "text-[0.75rem] font-medium text-leaf" : "text-[0.75rem] font-medium text-ink-soft"}>
               {status.isOpen ? "Open" : "Closed"}

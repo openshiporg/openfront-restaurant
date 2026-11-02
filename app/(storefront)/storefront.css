@@ -153,6 +153,15 @@
   --chart-2: oklch(0.7 0.17 var(--store-brand-hue));
 }
 
+/* The store name (header, footer, phone store row): Newsreader 500, outside the layers so it wins over utilities. */
+.storefront-wordmark,
+.storefront-ui a[href="/"] > span > span.font-serif:first-child,
+.storefront-ui section h1.storefront-store-name {
+  font-family: var(--font-storefront-wordmark), var(--font-storefront-serif), ui-serif, Georgia, serif;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
