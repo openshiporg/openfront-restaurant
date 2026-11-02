@@ -665,16 +665,21 @@ export function StoreSettingsPage({ initialSettings }: { initialSettings: StoreS
             </div>
           </Section>
 
-          <div className="space-y-2 mb-4">
-            <Label>Stop new orders this many minutes before closing</Label>
-            <Label>Maximum active online orders (0 = no automatic limit)</Label>
-            <Input aria-label="Maximum active online orders" type="number" min="0" max="1000" value={maxActiveOnlineOrders} onChange={e => setMaxActiveOnlineOrders(e.target.value)} />
-            <p className="text-sm text-muted-foreground">Counts open online orders and reserved checkouts, including uncertain payments. Served orders release capacity. Operators can still take POS orders.</p>
-            <Label>Ordering cutoff minutes before closing</Label>
-            <Input type="number" min="0" max="240" value={orderingCutoff} onChange={e => setOrderingCutoff(e.target.value)} />
-            <Label>Menu service windows (venue-local open/close times)</Label>
-            <textarea className="w-full border rounded p-2" value={mealWindows} onChange={e => setMealWindows(e.target.value)} aria-label="Menu service windows" />
-            <p className="text-sm text-muted-foreground">All-day menu items remain available during operating hours. Other items must match their item and category service windows. Overnight windows are supported.</p>
+          <div className="mb-4 space-y-5">
+            <div className="space-y-2">
+              <Label htmlFor="max-active-online-orders">Maximum active online orders (0 = no automatic limit)</Label>
+              <Input id="max-active-online-orders" type="number" min="0" max="1000" value={maxActiveOnlineOrders} onChange={e => setMaxActiveOnlineOrders(e.target.value)} />
+              <p className="text-sm text-muted-foreground">Counts open online orders and reserved checkouts, including uncertain payments. Served orders release capacity. Operators can still take POS orders.</p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="ordering-cutoff">Stop new orders this many minutes before closing</Label>
+              <Input id="ordering-cutoff" type="number" min="0" max="240" value={orderingCutoff} onChange={e => setOrderingCutoff(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="meal-windows">Menu service windows (venue-local open/close times)</Label>
+              <textarea id="meal-windows" rows={4} className="w-full rounded-md border border-input bg-transparent px-3 py-2 font-mono text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50" value={mealWindows} onChange={e => setMealWindows(e.target.value)} />
+              <p className="text-sm text-muted-foreground">All-day menu items remain available during operating hours. Other items must match their item and category service windows. Overnight windows are supported.</p>
+            </div>
           </div>
           <WeeklyHoursEditor
             days={days}
