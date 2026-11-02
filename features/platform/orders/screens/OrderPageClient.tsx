@@ -229,7 +229,7 @@ export function OrderPageClient({ order, currencyCode = "USD", locale = "en-US" 
                         {item.quantity}×
                       </span>
                       <div className="min-w-0">
-                        <p className="text-sm font-medium">{item.menuItem?.name || "—"}</p>
+                        <p className="text-sm font-medium">{item.itemNameSnapshot || item.menuItem?.name || "—"}</p>
                         {item.specialInstructions && (
                           <p className="text-xs text-amber-600 mt-0.5">↳ {item.specialInstructions}</p>
                         )}
