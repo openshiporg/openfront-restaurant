@@ -108,43 +108,43 @@ export default async function MenuItemPage(props: Props) {
 
         <div className="storefront-shell !max-w-none pt-5 lg:pt-8 xl:grid xl:grid-cols-[minmax(0,1fr)_22rem] xl:gap-8">
           <div className="min-w-0">
-            <nav aria-label="Breadcrumb" className="flex flex-wrap items-center gap-2 text-[0.95rem] text-ink-soft">
+            <nav aria-label="Breadcrumb" className="flex flex-wrap items-center gap-1.5 text-[0.78rem] text-ink-soft sm:gap-2 sm:text-[0.95rem]">
               <Link href="/" className="hover:text-ink">Home</Link>
               {category ? (
                 <>
-                  <ChevronRight className="size-4" aria-hidden="true" />
+                  <ChevronRight className="size-3.5 sm:size-4" aria-hidden="true" />
                   <Link href={`/?category=${category.id}#menu`} className="hover:text-ink">{category.name}</Link>
                 </>
               ) : null}
-              <ChevronRight className="size-4" aria-hidden="true" />
+              <ChevronRight className="size-3.5 sm:size-4" aria-hidden="true" />
               <span className="text-ink">{item.name}</span>
             </nav>
 
-            <div className="mt-5 grid gap-8 md:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] md:gap-10">
-              <div className="relative aspect-[5/4] overflow-hidden rounded-3xl bg-muted">
+            <div className="mt-3 grid gap-5 sm:mt-5 sm:gap-8 md:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] md:gap-10">
+              <div className="relative aspect-[5/4] overflow-hidden rounded-2xl bg-muted sm:rounded-3xl">
                 {item.thumbnail ? <Image src={item.thumbnail} alt={item.name} fill priority sizes="(max-width: 768px) 100vw, 36vw" className="object-cover" /> : null}
               </div>
 
               <div>
-                <h1 className="text-balance text-[2.1rem] font-semibold leading-tight tracking-[-0.01em] sm:text-[2.5rem]">{item.name}</h1>
-                <p className="mt-1 text-[2rem] font-semibold text-leaf">
+                <h1 className="text-balance text-[1.4rem] font-semibold leading-tight tracking-[-0.01em] sm:text-[2.5rem]">{item.name}</h1>
+                <p className="mt-0.5 text-[1.3rem] font-semibold text-leaf sm:mt-1 sm:text-[2rem]">
                   {item.available === false ? "Sold out" : formatCurrency(item.price, currency)}
                 </p>
-                {description ? <p className="mt-4 max-w-[52ch] text-pretty text-[1.08rem] leading-relaxed text-ink">{description}</p> : null}
-                <MenuItemPurchaseForm item={item} currencyCode={currency.currencyCode} locale={currency.locale} className="mt-6 px-0 py-0 sm:px-0" />
+                {description ? <p className="mt-3 max-w-[52ch] text-pretty text-[0.88rem] leading-relaxed text-ink sm:mt-4 sm:text-[1.08rem]">{description}</p> : null}
+                <MenuItemPurchaseForm item={item} currencyCode={currency.currencyCode} locale={currency.locale} className="mt-4 px-0 py-0 sm:mt-6 sm:px-0" />
               </div>
             </div>
 
             {related.length > 0 ? (
-              <section className="mt-12" aria-labelledby="also-like">
-                <h2 id="also-like" className="text-[1.6rem] font-medium">You may also like</h2>
+              <section className="mt-9 sm:mt-12" aria-labelledby="also-like">
+                <h2 id="also-like" className="text-[1.05rem] font-medium sm:text-[1.6rem]">You may also like</h2>
                 <ul className="mt-4 grid grid-cols-2 gap-4 md:grid-cols-4">
                   {related.map((entry) => (
                     <li key={entry.id}>
                       <Link href={getMenuItemHref(entry.id)} prefetch={false} className="relative block aspect-[4/3] overflow-hidden rounded-2xl bg-muted">
                         <Image src={entry.thumbnail!} alt="" fill sizes="(max-width: 768px) 50vw, 18vw" className="object-cover" />
                         <span aria-hidden="true" className="absolute inset-x-0 bottom-0 h-3/5 bg-gradient-to-t from-black/60 to-transparent" />
-                        <span className="absolute bottom-3 left-3 right-12 text-[1.05rem] leading-tight text-white">
+                        <span className="absolute bottom-2.5 left-2.5 right-10 text-[0.8rem] leading-tight text-white sm:bottom-3 sm:left-3 sm:right-12 sm:text-[1.05rem]">
                           {entry.name} <span className="whitespace-nowrap">{formatCurrency(entry.price, currency)}</span>
                         </span>
                         <span className="absolute right-3 top-3">
@@ -161,10 +161,10 @@ export default async function MenuItemPage(props: Props) {
               <ul className="mt-10 grid grid-cols-2 gap-6 border-t border-border pt-8 md:grid-cols-4">
                 {facts.map(({ icon: Icon, title, detail }) => (
                   <li key={title} className="flex items-start gap-3">
-                    <Icon className="size-8 shrink-0 text-leaf" strokeWidth={1.6} aria-hidden="true" />
+                    <Icon className="size-6 shrink-0 text-leaf sm:size-8" strokeWidth={1.6} aria-hidden="true" />
                     <span>
-                      <span className="block text-[1.05rem] text-ink">{title}</span>
-                      <span className="block text-sm text-ink-soft">{detail}</span>
+                      <span className="block text-[0.85rem] text-ink sm:text-[1.05rem]">{title}</span>
+                      <span className="block text-[0.75rem] text-ink-soft sm:text-sm">{detail}</span>
                     </span>
                   </li>
                 ))}

@@ -32,7 +32,7 @@ export async function MainLayout({ children }: { children: React.ReactNode }) {
           <Footer storeSettings={storeSettings} />
           <TabBar />
           {/* Room for the phone tab bar under the footer. */}
-          <div className="h-[calc(3.4rem+env(safe-area-inset-bottom))] md:hidden" aria-hidden="true" />
+          <div className="h-[calc(3.1rem+env(safe-area-inset-bottom))] md:hidden" aria-hidden="true" />
         </div>
       </StorefrontServer>
     </div>

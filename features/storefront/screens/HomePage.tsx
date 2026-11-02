@@ -146,19 +146,19 @@ export default async function HomePage() {
       <section className="storefront-shell pt-4 md:hidden">
         {ready ? (
           <p className="flex items-start gap-2.5">
-            <Clock className="mt-0.5 size-6 shrink-0 text-leaf" strokeWidth={1.75} aria-hidden="true" />
+            <Clock className="mt-px size-5 shrink-0 text-leaf" strokeWidth={1.75} aria-hidden="true" />
             <span className="leading-tight">
-              <span className="block text-[1rem] font-semibold text-leaf">Ready in {ready}</span>
-              <span className="text-[0.82rem] text-ink-soft">Pickup</span>
+              <span className="block text-[0.8rem] font-semibold text-leaf">Ready in {ready}</span>
+              <span className="text-[0.75rem] text-ink-soft">Pickup</span>
             </span>
           </p>
         ) : null}
         <div className="mt-4 flex items-center gap-3">
           <StoreMark name={storeName} />
           <div className="min-w-0 flex-1 leading-snug">
-            <h1 className="truncate font-serif text-[1.15rem] font-bold">{storeName}</h1>
-            {storeSettings.address ? <p className="truncate text-[0.82rem] text-ink-soft">{storeSettings.address}</p> : null}
-            <p className={status.isOpen ? "text-[0.82rem] font-medium text-leaf" : "text-[0.82rem] font-medium text-ink-soft"}>
+            <h1 className="truncate font-serif text-[0.97rem] font-bold">{storeName}</h1>
+            {storeSettings.address ? <p className="truncate text-[0.75rem] text-ink-soft">{storeSettings.address}</p> : null}
+            <p className={status.isOpen ? "text-[0.75rem] font-medium text-leaf" : "text-[0.75rem] font-medium text-ink-soft"}>
               {status.isOpen ? "Open" : "Closed"}
               {status.detail ? <span className="font-normal text-ink-soft"> · {status.detail}</span> : null}
             </p>

@@ -187,7 +187,7 @@ export function MenuItemPurchaseForm({
           {modifierGroups.map((group) => (
             <fieldset key={group.id}>
               <legend className="flex w-full items-baseline justify-between gap-3">
-                <span className="text-[1.2rem] font-medium">{group.name}</span>
+                <span className="text-[0.95rem] font-medium sm:text-[1.2rem]">{group.name}</span>
                 <span className={cn("text-[0.95rem]", group.required ? "font-semibold text-ink" : "text-ink-soft")}>
                   {group.required ? "Required" : "Optional"}
                   {group.max > 1 ? `, up to ${group.max}` : ""}
@@ -207,7 +207,7 @@ export function MenuItemPurchaseForm({
                       aria-checked={isSelected}
                       onClick={() => toggleModifier(group, modifier.id)}
                       className={cn(
-                        "inline-flex min-h-11 items-center gap-2.5 rounded-full border px-4 py-2 text-left transition-colors duration-150 active:scale-[0.98]",
+                        "inline-flex min-h-9 items-center gap-2 rounded-full border px-3 py-1.5 text-left sm:min-h-11 sm:gap-2.5 sm:px-4 sm:py-2 transition-colors duration-150 active:scale-[0.98]",
                         isSelected ? "border-leaf bg-mint text-leaf" : "border-border bg-white text-ink hover:border-leaf/40",
                       )}
                     >
@@ -224,7 +224,7 @@ export function MenuItemPurchaseForm({
                             <span className={cn("size-1.5 bg-white", allowsMultiple ? "rounded-[2px]" : "rounded-full")} />
                           ) : null}
                         </span>
-                        <span className="text-[0.98rem]">{modifier.name}</span>
+                        <span className="text-[0.85rem] sm:text-[0.98rem]">{modifier.name}</span>
                       </span>
 
                       {modifier.price > 0 ? (
@@ -242,7 +242,7 @@ export function MenuItemPurchaseForm({
       ) : null}
 
       <div>
-        <label htmlFor={`instructions-${item.id}`} className="text-[1.2rem] font-medium">
+        <label htmlFor={`instructions-${item.id}`} className="text-[0.95rem] font-medium sm:text-[1.2rem]">
           Note for the kitchen
         </label>
         <Textarea
@@ -250,7 +250,7 @@ export function MenuItemPurchaseForm({
           placeholder="Optional"
           value={specialInstructions}
           onChange={(event) => setSpecialInstructions(event.target.value)}
-          className="mt-3 min-h-16 resize-none rounded-2xl border border-border bg-white text-base text-ink shadow-none placeholder:text-ink-soft focus-visible:ring-2 focus-visible:ring-ring"
+          className="mt-2 min-h-14 resize-none rounded-2xl text-[0.88rem] sm:mt-3 sm:min-h-16 sm:text-base border border-border bg-white text-base text-ink shadow-none placeholder:text-ink-soft focus-visible:ring-2 focus-visible:ring-ring"
           rows={2}
         />
       </div>
@@ -269,7 +269,7 @@ export function MenuItemPurchaseForm({
       ) : null}
 
       <div className="flex items-center gap-4">
-        <span className="text-[1.2rem] font-medium">Quantity</span>
+        <span className="text-[0.95rem] font-medium sm:text-[1.2rem]">Quantity</span>
         <div className="inline-flex shrink-0 items-center rounded-xl border border-border">
           <button
             type="button"
@@ -298,7 +298,7 @@ export function MenuItemPurchaseForm({
       <div>
         <button
           type="button"
-          className="pass-action h-14 w-full gap-2 whitespace-nowrap px-5 text-[1.1rem] font-medium"
+          className="pass-action h-11 w-full gap-2 whitespace-nowrap px-5 text-[0.95rem] font-medium sm:h-14 sm:text-[1.1rem]"
           onClick={handleAddToCart}
           disabled={isAdding || item.available === false}
         >

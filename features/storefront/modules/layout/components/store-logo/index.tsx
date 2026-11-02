@@ -41,7 +41,7 @@ export function StoreBrand({ name, logoIcon, logoColor, className }: StoreBrandP
         />
       ) : null}
       <span className="flex min-w-0 flex-col items-start gap-1 sm:gap-1.5">
-        <span className="block truncate whitespace-nowrap font-serif text-[1.15rem] font-bold leading-none text-ink sm:text-[1.75rem]">
+        <span className="block truncate whitespace-nowrap font-serif text-[1.05rem] font-bold leading-none text-ink sm:text-[1.75rem]">
           {name.trim()}
         </span>
         <span aria-hidden="true" className="block h-[2px] w-6 rounded-full bg-leaf sm:h-[3px] sm:w-8" />
@@ -54,8 +54,8 @@ export function StoreBrand({ name, logoIcon, logoColor, className }: StoreBrandP
 export function StoreMark({ name }: { name: string }) {
   const initials = name.split(/\s+/).filter(Boolean).slice(0, 2).map((word) => word[0]).join("").toUpperCase()
   return (
-    <span className="grid size-14 shrink-0 place-items-center rounded-2xl border border-border bg-white" aria-hidden="true">
-      <span className="font-serif text-[1.35rem] font-bold leading-none text-leaf">{initials}</span>
+    <span className="grid size-12 shrink-0 place-items-center rounded-[0.9rem] border border-border bg-white" aria-hidden="true">
+      <span className="font-serif text-[1.15rem] font-bold leading-none text-leaf">{initials}</span>
     </span>
   )
 }

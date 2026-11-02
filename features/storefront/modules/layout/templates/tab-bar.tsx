@@ -29,9 +29,9 @@ export function TabBar() {
               <Link
                 href={href}
                 aria-current={on ? "page" : undefined}
-                className={cn("flex h-[3.4rem] flex-col items-center justify-center gap-0.5 text-[0.7rem]", on ? "font-medium text-leaf" : "text-ink-soft")}
+                className={cn("flex h-[3.1rem] flex-col items-center justify-center gap-0.5 text-[0.75rem] leading-none", on ? "font-medium text-leaf" : "text-ink-soft")}
               >
-                <Icon className="size-5" strokeWidth={1.6} aria-hidden="true" />
+                <Icon className="size-[1.125rem]" strokeWidth={1.6} aria-hidden="true" />
                 {label}
               </Link>
             </li>
