@@ -3,8 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "keystone build --no-ui && npm run migrate && next dev",
-    "build": "keystone build --no-ui && npm run migrate && next build",
+    "dev": "keystone build --no-ui && npm run views:generate && npm run migrate && next dev",
+    "build": "keystone build --no-ui && npm run views:generate && npm run migrate && next build",
+    "views:generate": "tsx features/keystone/view-order/generate-view-order.ts",
     "start": "next start",
     "lint": "eslint .",
     "test:offline": "node --import tsx --test tests/*.test.ts",

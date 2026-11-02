@@ -164,7 +164,7 @@ ${uniqueViews.map(view => `  "${view}"`).join(',\n')}
   console.log(`Generated view order with ${uniqueViews.length} field types: ${uniqueViews.join(', ')}`);
 }
 
-function extractUniqueViews(jsonData: any) {
+export function extractUniqueViews(jsonData: any) {
   let viewsArray: string[] = [];
   
   for (const key in jsonData) {
