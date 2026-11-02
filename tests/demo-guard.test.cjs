@@ -70,22 +70,11 @@ test('3. a demo user cannot create, delete or update users, including the real a
   await refused(run('User', 'update', DEMO, { item: { id: 'admin' }, inputData: { name: 'Hacked' } }));
 });
 
-test('4. a demo user cannot change the store name, logo or URL settings', async () => {
-  for (const field of ['name', 'tagline', 'logoIcon', 'logoColor']) {
-    await refused(run('StoreSettings', 'update', DEMO, { item: { id: 's' }, inputData: { [field]: 'x' } }));
-  }
-  await refused(run('StoreSettings', 'create', DEMO, { inputData: {} }));
-  await refused(run('StoreSettings', 'delete', DEMO, { item: { id: 's' } }));
-});
-
-test('4b. unchanged protected values pass, changed ones are refused', async () => {
+test('4. changed name, tagline and logo ALLOWED; roles stay locked', async () => {
   const item = { id: 's', name: 'Stack', tagline: null, logoIcon: 'a', logoColor: '#f59e0b' };
-  await run('StoreSettings', 'update', DEMO, { item, inputData: { name: ' Stack ', tagline: '', logoIcon: 'a', logoColor: '#f59e0b', hours: { tuesday: '11:00-22:00' }, taxRate: 8 } });
-  await run('StoreSettings', 'update', DEMO, { item, inputData: { tagline: undefined } });
-  await refused(run('StoreSettings', 'update', DEMO, { item, inputData: { name: 'Other', hours: {} } }));
-  await refused(run('StoreSettings', 'update', DEMO, { item, inputData: { name: 'Stack', logoColor: '#000000' } }));
-  await refused(run('StoreSettings', 'update', DEMO, { item, inputData: { tagline: 'New' } }));
-  await refused(run('StoreSettings', 'update', DEMO, { inputData: { name: 'Stack' } }));
+  await run('StoreSettings', 'update', DEMO, { item, inputData: { name: 'Stack QA', tagline: 'New', logoIcon: 'b', logoColor: '#000000' } });
+  await run('StoreSettings', 'update', DEMO, { inputData: { name: 'No stored item' } });
+  await refused(run('Role', 'update', DEMO, { item: { id: 'r' }, inputData: { name: 'Y' } }));
   await refused(run('User', 'update', DEMO, { item: { id: 'demo', password: 'x' }, inputData: { password: 'x' } }));
 });
 

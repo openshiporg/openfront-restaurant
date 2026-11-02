@@ -4,7 +4,7 @@
  *   1. change any user's password or email (their own included),
  *   2. change roles or permissions,
  *   3. create, delete or update users,
- *   4. change the store's name, logo, domain or URL settings.
+ *   4. change domain or URL settings.
  *
  * Enforced server-side as a `beforeOperation` hook wrapped around the lists named in
  * DEMO_GUARD_POLICY. List hooks also run for `context.sudo()` writes (the session is
@@ -38,7 +38,6 @@ export const IDENTITY_FIELDS = ['email', 'password', 'role', 'name']
 export const DEMO_GUARD_POLICY: DemoGuardPolicy = {
   User: { kind: 'identity' },
   Role: { kind: 'locked' },
-  StoreSettings: { kind: 'fields', fields: ['name', 'tagline', 'logoIcon', 'logoColor'] },
 }
 
 export function demoUserEmails(env: Record<string, string | undefined> = process.env): Set<string> {
