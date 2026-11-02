@@ -53,7 +53,7 @@ export function assertOrderingAvailable(settings: any, item?: any, now = new Dat
   if (!orderingWindow(settings.hours, settings.timezone, now, lead)) {
     const opensAt = nextOrderingOpening(settings.hours, settings.timezone, now, lead);
     const localTime = opensAt && new Intl.DateTimeFormat('en-US', { timeZone: settings.timezone, weekday: 'short', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' }).format(opensAt);
-    throw new GraphQLError(`${settings.name || 'The restaurant'} is closed right now.${localTime ? ` Ordering opens at ${localTime}.` : ''}`, {
+    throw new GraphQLError(`${settings.name?.trim() || 'The restaurant'} is closed right now.${localTime ? ` Ordering opens at ${localTime}.` : ''}`, {
       extensions: { code: 'RESTAURANT_CLOSED', ...(opensAt ? { opensAt: opensAt.toISOString() } : {}) },
     });
   }

@@ -17,6 +17,13 @@ test('closed rule gives source name, local opening and ISO across DST fallback',
   });
 });
 
+test('closed message trims a trailing space in the store name', () => {
+  assert.throws(() => assertOrderingAvailable({ ...settings, name: 'Craft Burgers ' }, undefined, new Date('2026-11-01T06:00:00Z')), (error: any) => {
+    assert.match(error.message, /^Craft Burgers is closed right now\./);
+    return true;
+  });
+});
+
 test('service period is public; schedule configuration stays internal', () => {
   assert.throws(() => assertOrderingAvailable(settings, { mealPeriods: ['lunch'] }, new Date('2026-11-02T22:00:00Z')), (error: any) => error.extensions.code === 'OUTSIDE_SERVICE_PERIOD');
   assert.throws(() => assertOrderingAvailable({}), (error: any) => !(error instanceof GraphQLError));
