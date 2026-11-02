@@ -9,7 +9,13 @@ import React, { Component, ErrorInfo, ReactNode } from 'react'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { AlertTriangle } from 'lucide-react'
-import { isNextRouterError } from 'next/dist/client/components/is-next-router-error'
+
+// notFound() and redirect() signal Next through errors tagged with a digest. They are control
+// flow, not failures, and must reach Next's own boundaries (public, documented digests).
+function isNextRouterError(error: unknown): boolean {
+  const digest = (error as { digest?: unknown } | null)?.digest
+  return typeof digest === 'string' && (digest.startsWith('NEXT_REDIRECT') || digest.startsWith('NEXT_HTTP_ERROR_FALLBACK'))
+}
 
 interface Props {
   children: ReactNode
