@@ -1,5 +1,5 @@
 "use client";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { request } from "graphql-request";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,6 +14,17 @@ export function CorrectionActions({ actionType, targetId, onExecute, onComplete 
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const key = useRef<string | null>(null);
+  useEffect(() => {
+    let live = true;
+    request("/api/graphql", `query($actionType:String!,$targetId:String!){managerApprovals(where:{actionType:{equals:$actionType},targetId:{equals:$targetId},status:{in:["pending","approved"]}},orderBy:[{requestedAt:desc}],take:1){id status reason amount}}`, { actionType, targetId }).then((data: any) => {
+      const found = data?.managerApprovals?.[0];
+      if (!live || !found) return;
+      key.current ||= crypto.randomUUID();
+      setApproval(found); setReason(found.reason || ""); setAmount(found.amount == null ? "" : String(found.amount));
+      setMessage(found.status === "approved" ? "Approval restored" : "Awaiting a different manager with staff-management permission.");
+    }).catch(() => {});
+    return () => { live = false; };
+  }, [actionType, targetId]);
   const run = async (work: () => Promise<void>) => { setBusy(true); try { await work(); } catch (error) { setMessage(error instanceof Error ? error.message : "Correction failed"); } finally { setBusy(false); } };
   const requestedAmount = amount === "" ? null : Number(amount);
   const requestApproval = () => run(async () => {
