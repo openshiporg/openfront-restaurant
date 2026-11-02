@@ -62,7 +62,7 @@ export function OrderDetailsComponent({
 
   const itemsPreview = (order.orderItems || [])
     .slice(0, 2)
-    .map((i: any) => i.menuItem?.name)
+    .map((i: any) => i.itemNameSnapshot || i.menuItem?.name)
     .filter(Boolean)
     .join(", ");
   const extraCount = Math.max(0, (order.orderItems?.length || 0) - 2);
@@ -70,12 +70,12 @@ export function OrderDetailsComponent({
   return (
     <Accordion type="single" collapsible className="w-full">
       <AccordionItem value={order.id} className="border-0">
-        <div className="px-4 md:px-6 py-4 flex items-start justify-between gap-4 hover:bg-muted/30 transition-colors">
+        <div className="px-4 md:px-6 py-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4 hover:bg-muted/30 transition-colors">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-3">
               <Link
                 href={`/dashboard/platform/orders/${order.id}`}
-                className="font-semibold text-lg tracking-tight hover:text-blue-600 transition-colors"
+                className="break-all font-semibold text-base tracking-tight hover:text-blue-600 transition-colors sm:text-lg"
               >
                 #{order.orderNumber}
               </Link>
@@ -130,7 +130,7 @@ export function OrderDetailsComponent({
             </div>
           </div>
 
-          <div className="flex flex-col items-end gap-2 shrink-0">
+          <div className="flex flex-row items-center justify-between gap-2 shrink-0 sm:flex-col sm:items-end">
             <div className="flex items-center gap-3">
               <span className="font-bold text-xl text-foreground">
                 {formatCurrency(order.total, { currencyCode, locale })}

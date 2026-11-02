@@ -134,6 +134,12 @@ function stripeClient() {
   return new Stripe(process.env.STRIPE_SECRET_KEY as string);
 }
 
+/** A short order number for a gift-card sale, stable per payment like the card code. */
+function giftOrderNumber(paymentIntentId: string) {
+  const digest = crypto.createHash("sha256").update(`gift-order:${paymentIntentId}`).digest("hex").toUpperCase();
+  return `GC-${digest.slice(0, 8)}-${digest.slice(8, 14)}`;
+}
+
 function giftCode(paymentIntentId: string) {
   const digest = crypto.createHash("sha256").update(`gift:${paymentIntentId}`).digest("hex").toUpperCase();
   return `GC-${digest.slice(0, 4)}-${digest.slice(4, 8)}-${digest.slice(8, 12)}`;
@@ -174,7 +180,7 @@ async function completeGiftCardPurchaseRaw(_root: unknown, { paymentIntentId }: 
   const card = await serviceTransaction(prisma, async (tx) => {
     const existing = await tx.giftCardTransaction.findUnique({ where: { idempotencyKey: key }, include: { giftCard: true } });
     if (existing) return existing.giftCard;
-    const order = await tx.restaurantOrder.create({ data: { orderNumber: `GC-${crypto.randomUUID()}`, orderType: "takeout", orderSource: "gift_card", status: "completed", subtotal: amount, tax: 0, tip: 0, discount: 0, total: amount, currencyCode, guestCount: 1, customerEmail: intent.metadata.purchaserEmail || "" } });
+    const order = await tx.restaurantOrder.create({ data: { orderNumber: giftOrderNumber(intent.id), orderType: "takeout", orderSource: "gift_card", status: "completed", subtotal: amount, tax: 0, tip: 0, discount: 0, total: amount, currencyCode, guestCount: 1, customerEmail: intent.metadata.purchaserEmail || "" } });
     const giftCard = await tx.giftCard.create({ data: { code, value: amount, balance: amount, isDisabled: false, orderId: order.id, metadata: { fundingMethod: "stripe", liability: true, currencyCode, paymentIntentId: intent.id, purchaserEmail: intent.metadata.purchaserEmail || "", recipientName: intent.metadata.recipientName || "" } } });
     const tender = await tx.payment.create({ data: { idempotencyKey: key, orderId: order.id, amount, paymentMethod: "credit_card", status: "succeeded", currencyCode, reservedAt: new Date(), processedAt: new Date(), providerPaymentId: intent.id, data: { giftCardId: giftCard.id, purpose: "stored_value_issuance", paymentIntentId: intent.id } } });
     await tx.giftCardTransaction.create({ data: { idempotencyKey: key, type: "issue", amount, balanceAfter: amount, giftCardId: giftCard.id, orderId: order.id } });
