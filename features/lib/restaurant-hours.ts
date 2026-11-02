@@ -1,3 +1,5 @@
+import { GraphQLError } from 'graphql';
+
 const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 export function clockMinutes(value: unknown): number | null {
   const m = String(value || '').trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
@@ -31,10 +33,29 @@ export function mealAvailable(periods: unknown, hours: any, timezone: string, no
   if (!windows) return true;
   return periods.some(p => dayRanges(windows[p]).some(r => r.close > r.open ? minute >= r.open && minute < r.close : minute >= r.open || minute < r.close));
 }
+/** Search actual instants, not host-local dates, so DST gaps and repeats remain correct. */
+export function nextOrderingOpening(hours: any, timezone: string, now: Date, leadMinutes = 0): Date | null {
+  const formatter = new Intl.DateTimeFormat('en-US', { timeZone: timezone, weekday: 'long', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+  const start = Math.floor(now.getTime() / 60000) * 60000 + 60000;
+  for (let offset = 0; offset < 8 * 1440; offset++) {
+    const instant = new Date(start + offset * 60000);
+    const parts = Object.fromEntries(formatter.formatToParts(instant).map(p => [p.type, p.value]));
+    const minute = Number(parts.hour) * 60 + Number(parts.minute);
+    if (dayRanges(hours?.[parts.weekday.toLowerCase()]).some(r => r.open === minute) && orderingWindow(hours, timezone, instant, leadMinutes)) return instant;
+  }
+  return null;
+}
+
 export function assertOrderingAvailable(settings: any, item?: any, now = new Date()) {
   if (!settings?.timezone || !settings?.hours) throw new Error('Restaurant ordering schedule is not configured');
   const lead = Number(settings.hours._ordering?.cutoffMinutes || 0);
   if (!Number.isInteger(lead) || lead < 0 || lead > 240) throw new Error('Invalid ordering cutoff configuration');
-  if (!orderingWindow(settings.hours, settings.timezone, now, lead)) throw new Error('Restaurant is closed for new orders');
-  if (item && (!mealAvailable(item.mealPeriods, settings.hours, settings.timezone, now) || !mealAvailable(item.category?.mealPeriods, settings.hours, settings.timezone, now))) throw new Error('This item is outside its menu service period');
+  if (!orderingWindow(settings.hours, settings.timezone, now, lead)) {
+    const opensAt = nextOrderingOpening(settings.hours, settings.timezone, now, lead);
+    const localTime = opensAt && new Intl.DateTimeFormat('en-US', { timeZone: settings.timezone, weekday: 'short', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' }).format(opensAt);
+    throw new GraphQLError(`${settings.name || 'The restaurant'} is closed right now.${localTime ? ` Ordering opens at ${localTime}.` : ''}`, {
+      extensions: { code: 'RESTAURANT_CLOSED', ...(opensAt ? { opensAt: opensAt.toISOString() } : {}) },
+    });
+  }
+  if (item && (!mealAvailable(item.mealPeriods, settings.hours, settings.timezone, now) || !mealAvailable(item.category?.mealPeriods, settings.hours, settings.timezone, now))) throw new GraphQLError('This item is outside its menu service period.', { extensions: { code: 'OUTSIDE_SERVICE_PERIOD' } });
 }

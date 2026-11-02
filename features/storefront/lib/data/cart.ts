@@ -6,8 +6,7 @@ import { openfrontClient } from "../config";
 import { getAuthHeaders, getCartId, removeCartId, setCartId } from "./cookies";
 import { normalizeCountryCode, normalizePostalCode } from "@/features/lib/delivery-zones";
 import { createGuestUser, getUser, setExclusiveAddressFlagsForUser } from "./user";
-import { getStoreSettings } from "./menu";
-import { getServiceStatus } from "../store-hours-display";
+import { customerErrorMessage } from "../../../lib/customer-errors";
 
 const DEFAULT_TIP_PERCENT = "0";
 const ALLOWED_TIP_PERCENTS = new Set(["0", "15", "18", "20", "25"]);
@@ -554,14 +553,7 @@ export async function addToCart(params: {
     updateTag("cart");
     return { success: true as const, item: addActiveCartItem };
   } catch (error) {
-    // The API masks ordering-rule errors in production, so explain the closed kitchen from the posted hours.
-    const settings = await getStoreSettings().catch(() => null);
-    const status = settings?.hours ? getServiceStatus(settings.hours, settings.timezone || "UTC", settings.locale || "en-US") : null;
-    if (status && !status.isOpen) {
-      return { success: false as const, message: `We're not taking orders right now.${status.detail ? ` ${status.detail}.` : ""}` };
-    }
-    console.error("Error adding to cart:", error);
-    return { success: false as const, message: "This item couldn't be added to your order. Try again." };
+    return { success: false as const, message: customerErrorMessage(error, "This item couldn't be added to your order. Try again.") };
   }
 }
 
@@ -630,7 +622,9 @@ export async function placeOrder(paymentSessionId?: string) {
   if (!cartId) throw new Error("No cartId cookie found");
 
   const headers = await getAuthHeaders();
-  const { completeActiveCart } = await openfrontClient.requestPatient(
+  let completed: any;
+  try {
+    completed = await openfrontClient.requestPatient(
     gql`
       mutation CompleteActiveCart($cartId: ID!, $paymentSessionId: ID) {
         completeActiveCart(cartId: $cartId, paymentSessionId: $paymentSessionId) {
@@ -646,7 +640,11 @@ export async function placeOrder(paymentSessionId?: string) {
       paymentSessionId,
     },
     headers
-  );
+    );
+  } catch (error) {
+    return { success: false, error: customerErrorMessage(error, "Unable to complete checkout.") };
+  }
+  const { completeActiveCart } = completed;
 
   if (completeActiveCart?.id) {
     await removeCartId();

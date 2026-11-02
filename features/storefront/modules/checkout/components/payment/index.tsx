@@ -146,7 +146,8 @@ const Payment = ({ cart, availablePaymentMethods, storeSettings }: PaymentProps)
       }
 
       if (!selectedSessionMatchesTotal) {
-        await initiatePaymentSession(cart.id, selectedPaymentMethod);
+        const result = await initiatePaymentSession(cart.id, selectedPaymentMethod);
+        if (!result.success) { setError(result.error); return; }
         router.replace(pathname + "?" + createQueryString("step", "payment"), {
           scroll: false,
         });

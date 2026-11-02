@@ -139,6 +139,7 @@ const StripePaymentButton: React.FC<PaymentButtonProps> = ({
 
       if (paymentIntent?.status === "succeeded" || paymentIntent?.status === "requires_capture") {
         const result = await placeOrder(session.id)
+        if (result?.success === false && result.error) throw new Error(result.error)
         if (result && typeof result === "object" && "success" in result && result.success && "redirectTo" in result) {
           router.push(result.redirectTo as string)
           return
@@ -194,6 +195,7 @@ const ManualPaymentButton: React.FC<PaymentButtonProps> = ({
       }
 
       const result = await placeOrder(session.id)
+      if (result?.success === false && result.error) throw new Error(result.error)
       if (result && typeof result === "object" && "success" in result && result.success && "redirectTo" in result) {
         router.push(result.redirectTo as string)
       }
@@ -247,6 +249,7 @@ const PayPalPaymentButton: React.FC<PaymentButtonProps> = ({
       }
 
       const result = await placeOrder(session.id)
+      if (result?.success === false && result.error) throw new Error(result.error)
       if (result && typeof result === "object" && "success" in result && result.success && "redirectTo" in result) {
         router.push(result.redirectTo as string)
       }

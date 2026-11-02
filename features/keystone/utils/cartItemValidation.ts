@@ -123,7 +123,7 @@ export async function validateCartItemInput(
 
   if (!menuItem) throw new Error("Menu item not found");
   if (!menuItem.available) throw new Error(`${menuItem.name || "Selected item"} is unavailable`);
-  const settings = await context.sudo().query.StoreSettings.findOne({ where: { id: "1" }, query: "timezone hours" });
+  const settings = await context.sudo().query.StoreSettings.findOne({ where: { id: "1" }, query: "name timezone hours" });
   assertOrderingAvailable(settings, menuItem);
 
   const quantity = normalizeCartQuantity(input.quantity);
