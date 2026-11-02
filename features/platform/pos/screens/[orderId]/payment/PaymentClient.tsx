@@ -591,8 +591,8 @@ export function PaymentClient({ orderId }: PaymentClientProps) {
   const remaining = getRemainingBalance()
 
   return (
-    <div className="flex h-[calc(100vh-200px)] gap-4 p-4">
-      <aside className="w-80 shrink-0 space-y-3 overflow-y-auto">
+    <div className="flex flex-col gap-4 p-4 md:flex-row md:h-[calc(100vh-200px)]">
+      <aside className="w-full min-w-0 space-y-3 md:w-80 md:shrink-0 md:overflow-y-auto">
       <CheckoutRecovery />
       <RefundRecovery />
       <CheckAllocationNotice orderId={order.id} />
@@ -601,10 +601,10 @@ export function PaymentClient({ orderId }: PaymentClientProps) {
       </aside>
 
       {/* Order Summary */}
-      <Card className="w-96 flex flex-col">
+      <Card className="w-full min-w-0 flex flex-col md:w-96">
         <CardHeader>
           <div className="flex items-center justify-between">
-            <CardTitle>Order #{order.orderNumber}</CardTitle>
+            <CardTitle className="min-w-0 break-all md:break-normal">Order #{order.orderNumber}</CardTitle>
             <Badge variant={order.status === 'completed' ? 'default' : 'secondary'}>
               {order.status}
             </Badge>
@@ -679,7 +679,7 @@ export function PaymentClient({ orderId }: PaymentClientProps) {
       </Card>
 
       {/* Payment Methods */}
-      <Card className="flex-1 flex flex-col">
+      <Card className="w-full min-w-0 flex flex-col md:flex-1">
         <CardHeader>
           <CardTitle>Payment Method</CardTitle>
         </CardHeader>
