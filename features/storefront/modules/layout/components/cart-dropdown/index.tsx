@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
+import { createPortal } from "react-dom"
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { formatCurrency } from "@/features/storefront/lib/currency"
@@ -45,6 +46,9 @@ export default function CartDropdown({ cart, currencyCode, locale, brandHue }: C
   const router = useRouter()
   const [isCartOpen, setIsCartOpen] = useState(false)
   const [isUpdating, setIsUpdating] = useState(false)
+  // The header blurs what's behind it, which traps fixed children; the floating total lives on <body>.
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => setMounted(true), [])
 
   const items = cart?.items || []
   const itemCount = items.reduce((sum, item) => sum + item.quantity, 0)
@@ -98,16 +102,17 @@ export default function CartDropdown({ cart, currencyCode, locale, brandHue }: C
         ) : null}
       </button>
 
-      {itemCount > 0 ? (
+      {mounted && itemCount > 0 ? createPortal(
         <button
           type="button"
           onClick={() => setIsCartOpen(true)}
-          className="fixed bottom-[calc(3.85rem+env(safe-area-inset-bottom))] right-4 z-40 inline-flex h-11 items-center gap-2.5 rounded-full bg-white pl-5 pr-4 text-[0.95rem] font-medium tabular-nums text-ink shadow-[0_8px_30px_rgb(0_0_0/0.14)] transition-transform active:scale-95 md:hidden"
+          className={`storefront-sheet ${storefrontFont.variable} fixed bottom-[calc(3.85rem+env(safe-area-inset-bottom))] right-4 z-40 inline-flex h-11 items-center gap-2.5 rounded-full bg-white pl-5 pr-4 text-[0.95rem] font-medium tabular-nums text-ink shadow-[0_8px_30px_rgb(0_0_0/0.14)] transition-transform active:scale-95 md:hidden`}
           aria-label={`Open order bag, ${formatCurrency(subtotal, { currencyCode, locale })}`}
         >
           {formatCurrency(subtotal, { currencyCode, locale })}
           <ShoppingCart className="size-5 text-leaf" strokeWidth={2} aria-hidden="true" />
-        </button>
+        </button>,
+        document.body,
       ) : null}
 
       <Sheet open={isCartOpen} onOpenChange={setIsCartOpen}>
