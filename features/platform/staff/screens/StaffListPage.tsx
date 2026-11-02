@@ -124,19 +124,19 @@ export function StaffListPage() {
       {/* Stat strip */}
       <div className="grid grid-cols-2 md:grid-cols-4 divide-x border-b border-border">
         <div className="px-5 py-3">
-          <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Total Staff</p>
+          <p className="text-xs md:text-[11px] uppercase tracking-wider text-muted-foreground">Total Staff</p>
           <p className="text-xl font-semibold mt-1">{total}</p>
         </div>
         <div className="px-5 py-3">
-          <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Active</p>
+          <p className="text-xs md:text-[11px] uppercase tracking-wider text-muted-foreground">Active</p>
           <p className={cn('text-xl font-semibold mt-1', active > 0 && 'text-emerald-600')}>{active}</p>
         </div>
         <div className="px-5 py-3">
-          <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Inactive</p>
+          <p className="text-xs md:text-[11px] uppercase tracking-wider text-muted-foreground">Inactive</p>
           <p className={cn('text-xl font-semibold mt-1', inactive > 0 && 'text-zinc-500')}>{inactive}</p>
         </div>
         <div className="px-5 py-3">
-          <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Roles</p>
+          <p className="text-xs md:text-[11px] uppercase tracking-wider text-muted-foreground">Roles</p>
           <p className="text-xl font-semibold mt-1">
             {STAFF_ROLES.filter((r) => roleCounts[r] > 0).length}
           </p>
@@ -156,7 +156,7 @@ export function StaffListPage() {
             )}
           >
             All
-            <span className="ml-1.5 text-[10px] text-muted-foreground">{total}</span>
+            <span className="ml-1.5 text-xs md:text-[10px] text-muted-foreground">{total}</span>
           </button>
           {STAFF_ROLES.filter((r) => roleCounts[r] > 0).map((role) => (
             <button
@@ -170,13 +170,13 @@ export function StaffListPage() {
               )}
             >
               {ROLE_CONFIG[role]?.label ?? role}
-              <span className="ml-1.5 text-[10px] text-muted-foreground">{roleCounts[role]}</span>
+              <span className="ml-1.5 text-xs md:text-[10px] text-muted-foreground">{roleCounts[role]}</span>
             </button>
           ))}
 
           {/* Status toggle on right */}
           <div className="ml-auto flex items-center gap-0 pl-4 shrink-0">
-            <div className="border border-border rounded overflow-hidden flex text-[11px] uppercase tracking-wider font-semibold">
+            <div className="border border-border rounded overflow-hidden flex text-xs md:text-[11px] uppercase tracking-wider font-semibold">
               {(['all', 'active', 'inactive'] as const).map((s) => (
                 <button
                   key={s}
@@ -233,7 +233,7 @@ export function StaffListPage() {
         ) : (
           <>
             {/* Column header */}
-            <div className="grid grid-cols-[1fr_160px_120px_100px_80px_44px] border-b border-border px-4 md:px-6 py-2 bg-muted/20">
+            <div className="hidden md:grid grid-cols-[1fr_160px_120px_100px_80px_44px] border-b border-border px-4 md:px-6 py-2 bg-muted/20">
               {['Name', 'Email', 'Role', 'Employee ID', 'Status', ''].map((h, i) => (
                 <span key={i} className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium">
                   {h}
@@ -248,10 +248,10 @@ export function StaffListPage() {
                 return (
                   <div
                     key={member.id}
-                    className="grid grid-cols-[1fr_160px_120px_100px_80px_44px] px-4 md:px-6 py-3 items-center hover:bg-muted/20 transition-colors group"
+                    className="grid grid-cols-[minmax(0,1fr)_auto] gap-y-1 md:gap-y-0 md:grid-cols-[1fr_160px_120px_100px_80px_44px] px-4 md:px-6 py-3 items-center hover:bg-muted/20 transition-colors group"
                   >
                     {/* Name + hire date */}
-                    <div className="min-w-0">
+                    <div className="min-w-0 max-md:order-1">
                       <div className="flex items-center gap-2">
                         <div className="w-7 h-7 rounded-full bg-muted flex items-center justify-center text-xs font-semibold text-muted-foreground shrink-0">
                           {member.name.charAt(0).toUpperCase()}
@@ -260,11 +260,12 @@ export function StaffListPage() {
                       </div>
                     </div>
 
-                    <span className="text-xs text-muted-foreground truncate">{member.email}</span>
+                    <span className="text-xs text-muted-foreground truncate max-md:order-3 max-md:col-span-2">{member.email}</span>
 
-                    <span>
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 max-md:order-4 max-md:col-span-2 md:contents">
+                    <span className={cn(!rc && 'max-md:hidden')}>
                       {rc ? (
-                        <span className={cn('text-[11px] uppercase tracking-wider font-semibold px-2 py-0.5 rounded', rc.bg, rc.text)}>
+                        <span className={cn('text-xs md:text-[11px] uppercase tracking-wider font-semibold px-2 py-0.5 rounded', rc.bg, rc.text)}>
                           {rc.label}
                         </span>
                       ) : (
@@ -272,7 +273,7 @@ export function StaffListPage() {
                       )}
                     </span>
 
-                    <span className="text-xs text-muted-foreground font-mono">{member.employeeId ?? '—'}</span>
+                    <span className={cn('text-xs text-muted-foreground font-mono', !member.employeeId && 'max-md:hidden')}>{member.employeeId ?? '—'}</span>
 
                     <span className="flex items-center gap-1">
                       {isActive ? (
@@ -280,12 +281,13 @@ export function StaffListPage() {
                       ) : (
                         <XCircle size={14} className="text-zinc-400" />
                       )}
-                      <span className={cn('text-[11px]', isActive ? 'text-emerald-600' : 'text-zinc-400')}>
+                      <span className={cn('text-xs md:text-[11px]', isActive ? 'text-emerald-600' : 'text-zinc-400')}>
                         {isActive ? 'Active' : 'Inactive'}
                       </span>
                     </span>
+                    </div>
 
-                    <div className="flex items-center justify-end opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="flex items-center justify-end max-md:order-2 max-md:opacity-100 opacity-0 group-hover:opacity-100 transition-opacity">
                       <button
                         onClick={() => setEditingId(member.id)}
                         className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
