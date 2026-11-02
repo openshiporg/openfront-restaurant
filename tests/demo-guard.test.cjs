@@ -78,6 +78,17 @@ test('4. a demo user cannot change the store name, logo or URL settings', async 
   await refused(run('StoreSettings', 'delete', DEMO, { item: { id: 's' } }));
 });
 
+test('4b. unchanged protected values pass, changed ones are refused', async () => {
+  const item = { id: 's', name: 'Stack', tagline: null, logoIcon: 'a', logoColor: '#f59e0b' };
+  await run('StoreSettings', 'update', DEMO, { item, inputData: { name: ' Stack ', tagline: '', logoIcon: 'a', logoColor: '#f59e0b', hours: { tuesday: '11:00-22:00' }, taxRate: 8 } });
+  await run('StoreSettings', 'update', DEMO, { item, inputData: { tagline: undefined } });
+  await refused(run('StoreSettings', 'update', DEMO, { item, inputData: { name: 'Other', hours: {} } }));
+  await refused(run('StoreSettings', 'update', DEMO, { item, inputData: { name: 'Stack', logoColor: '#000000' } }));
+  await refused(run('StoreSettings', 'update', DEMO, { item, inputData: { tagline: 'New' } }));
+  await refused(run('StoreSettings', 'update', DEMO, { inputData: { name: 'Stack' } }));
+  await refused(run('User', 'update', DEMO, { item: { id: 'demo', password: 'x' }, inputData: { password: 'x' } }));
+});
+
 test('a demo user can still edit a menu item and its own onboarding state', async () => {
   await run('MenuItem', 'update', DEMO, { item: { id: 'p' }, inputData: { name: 'Edited' } });
   assert.equal(productHookRan, 1, 'the existing MenuItem hook still runs');
