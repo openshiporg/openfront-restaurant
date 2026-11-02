@@ -76,14 +76,18 @@ export function StaffListPage() {
   const total = staff.length
   const active = staff.filter((s) => s.isActive !== false).length
   const inactive = total - active
-  const roleCounts = STAFF_ROLES.reduce<Record<string, number>>((acc, r) => {
-    acc[r] = staff.filter((s) => s.staffRole === r).length
+  const roleLabel = (m: StaffMember): string | null =>
+    m.staffRole ? (ROLE_CONFIG[m.staffRole]?.label ?? m.staffRole) : (m.role?.name ?? null)
+  const roleCounts = staff.reduce<Record<string, number>>((acc, m) => {
+    const l = roleLabel(m)
+    if (l) acc[l] = (acc[l] || 0) + 1
     return acc
   }, {})
+  const roleNames = Object.keys(roleCounts).sort()
 
   // Filter
   const filtered = staff.filter((member) => {
-    const matchRole = activeRole === 'all' || member.staffRole === activeRole
+    const matchRole = activeRole === 'all' || roleLabel(member) === activeRole
     const matchStatus =
       activeStatus === 'all' ||
       (activeStatus === 'active' && member.isActive !== false) ||
@@ -138,7 +142,7 @@ export function StaffListPage() {
         <div className="px-5 py-3">
           <p className="text-xs md:text-[11px] uppercase tracking-wider text-muted-foreground">Roles</p>
           <p className="text-xl font-semibold mt-1">
-            {STAFF_ROLES.filter((r) => roleCounts[r] > 0).length}
+            {roleNames.length}
           </p>
         </div>
       </div>
@@ -158,7 +162,7 @@ export function StaffListPage() {
             All
             <span className="ml-1.5 text-xs md:text-[10px] text-muted-foreground">{total}</span>
           </button>
-          {STAFF_ROLES.filter((r) => roleCounts[r] > 0).map((role) => (
+          {roleNames.map((role) => (
             <button
               key={role}
               onClick={() => setActiveRole(role)}
@@ -169,7 +173,7 @@ export function StaffListPage() {
                   : 'border-transparent text-muted-foreground hover:text-foreground'
               )}
             >
-              {ROLE_CONFIG[role]?.label ?? role}
+              {role}
               <span className="ml-1.5 text-xs md:text-[10px] text-muted-foreground">{roleCounts[role]}</span>
             </button>
           ))}
@@ -244,6 +248,7 @@ export function StaffListPage() {
             <div className="divide-y divide-border">
               {filtered.map((member) => {
                 const rc = member.staffRole ? ROLE_CONFIG[member.staffRole] : null
+                const fallbackRole = member.staffRole ? null : member.role?.name ?? null
                 const isActive = member.isActive !== false
                 return (
                   <div
@@ -263,11 +268,13 @@ export function StaffListPage() {
                     <span className="text-xs text-muted-foreground truncate max-md:order-3 max-md:col-span-2">{member.email}</span>
 
                     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 max-md:order-4 max-md:col-span-2 md:contents">
-                    <span className={cn(!rc && 'max-md:hidden')}>
+                    <span className={cn(!rc && !fallbackRole && 'max-md:hidden')}>
                       {rc ? (
                         <span className={cn('text-xs md:text-[11px] uppercase tracking-wider font-semibold px-2 py-0.5 rounded', rc.bg, rc.text)}>
                           {rc.label}
                         </span>
+                      ) : fallbackRole ? (
+                        <span className="text-xs text-muted-foreground">{fallbackRole}</span>
                       ) : (
                         <span className="text-xs text-muted-foreground">—</span>
                       )}
