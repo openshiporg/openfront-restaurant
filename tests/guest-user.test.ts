@@ -93,7 +93,9 @@ test("source contracts: sign-up sends hasAccount true, the model hook retires re
   assert.doesNotMatch(sql, /^\s*(UPDATE|DELETE|DROP)/m);
   assert.ok(existsSync(join(root, "features/keystone/security/guest-user.ts")));
   const cart = read("features/keystone/mutations/completeActiveCart.ts");
-  assert.match(cart, /resolveOrderCustomer\(cart\)/);
+  assert.match(cart, /resolveOrderCustomer\(liveCustomerContext\)/);
+  // The quote snapshot is merged over the cart (and only has user { id }); classification must read the live values.
+  assert.ok(cart.indexOf("const liveCustomerContext = { createdAt: cart.createdAt, user: cart.user }") < cart.indexOf("cart = { ...cart, ...quote.cart"));
   assert.match(cart, /isGuestOrder: isGuest/);
   assert.match(cart, /user \{ id hasAccount createdAt \}/);
 });

@@ -147,6 +147,9 @@ export default async function completeActiveCart(
   // The durable server-priced quote predates provider confirmation. Never
   // reprice or reject its purchased menu snapshots after money has moved.
   const quote = sessionData.checkoutQuote;
+  // The quote snapshot only carries `user { id }` and no cart creation time, so guest classification
+  // reads the live cart's user and createdAt, never the merged snapshot.
+  const liveCustomerContext = { createdAt: cart.createdAt, user: cart.user };
   if (quote?.version === 1) cart = { ...cart, ...quote.cart, paymentCollection: cart.paymentCollection };
   const validatedItems = quote?.version === 1 ? quote.items : await Promise.all(
     cart.items.map((item: any) =>
@@ -224,7 +227,7 @@ export default async function completeActiveCart(
   };
 
   const orderNumber = `ORD-${Date.now().toString(36).toUpperCase()}-${require("crypto").randomBytes(3).toString("hex").toUpperCase()}`;
-  const { customerId, isGuest } = resolveOrderCustomer(cart);
+  const { customerId, isGuest } = resolveOrderCustomer(liveCustomerContext);
   const secretKey = !customerId ? require("crypto").randomBytes(32).toString("hex") : "";
   const isDeliveryOrder = cart.orderType === "delivery";
   if (Number(selectedSession.amount || 0) !== total && !isManual) {
