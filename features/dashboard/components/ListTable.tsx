@@ -234,11 +234,12 @@ export function ListTable({
 
       {/* Single scrollable container with sticky header */}
       <div className="relative w-full border-y bg-background mb-18">
-        <div className="relative overflow-auto" style={{ position: 'relative' }}>
+        {/* On a phone the table scrolls inside this frame; the page itself never scrolls sideways. */}
+        <div className="relative overflow-auto overscroll-x-contain [-webkit-overflow-scrolling:touch]" style={{ position: 'relative' }} role="region" aria-label={`${list.label || list.key} table`} tabIndex={0}>
           <table className="w-full border-collapse min-w-full">
             <thead className="sticky top-0 bg-background border-b">
               <tr>
-                <th className="w-[64px] pl-6 bg-background text-left font-normal">
+                <th className="w-[44px] pl-4 bg-background text-left font-normal md:w-[64px] md:pl-6">
                   <Checkbox
                     checked={selectedItemsState.selectedItems.size === data.items.length}
                     onCheckedChange={(checked) => {
@@ -323,7 +324,7 @@ export function ListTable({
                   )}
                   style={{ userSelect: 'text' }}
                 >
-                  <td className="relative w-[64px] pl-6 py-3">
+                  <td className="relative w-[44px] pl-4 py-3 md:w-[64px] md:pl-6">
                     {selectedItemsState.selectedItems.has(item.id) && (
                       <div className="absolute inset-y-0 left-0 w-0.5 bg-blue-500 dark:bg-blue-500" />
                     )}
@@ -347,7 +348,10 @@ export function ListTable({
                     <td
                       key={`${item.id}-${fieldKey}`}
                       className={cn(
-                        "whitespace-nowrap py-3 px-5",
+                        // On phones long values wrap by word and the first column (the id link) is shortened
+                        // to one line, so the table scrolls inside its frame instead of the page.
+                        "py-3 px-3 md:px-5 md:whitespace-nowrap",
+                        index === 0 ? "max-md:max-w-[7.5rem] max-md:truncate" : "max-md:min-w-[6rem] max-md:max-w-[11rem]",
                         "text-gray-600 dark:text-gray-400 text-sm select-text"
                       )}
                       style={{ userSelect: 'text' }}
