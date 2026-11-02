@@ -2,15 +2,12 @@
 import {
   isStripe,
   paymentInfoMap,
-  isStripeSandbox,
-  isPayPalSandbox,
 } from "@/features/storefront/lib/constants";
 import { initiatePaymentSession } from "@/features/storefront/lib/data/payment";
-import { CircleCheck, CreditCard, FlaskConical, Wallet, Loader2 } from "lucide-react";
+import { CircleCheck, CreditCard, Wallet, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import ErrorMessage from "../error-message";
 import { StripeContext } from "../payment-wrapper/stripe-wrapper";
 import { CardElement } from "@stripe/react-stripe-js";
@@ -76,7 +73,6 @@ const Payment = ({ cart, availablePaymentMethods, storeSettings }: PaymentProps)
   const isStripePayment = isStripe(selectedPaymentMethod);
   const stripeReady = useContext(StripeContext);
 
-  const isSandboxMode = isStripeSandbox() || isPayPalSandbox();
   const checkoutQuote = selectedCheckoutQuote(cart);
   const currencyConfig = {
     currencyCode: checkoutQuote?.currencyCode || storeSettings?.currencyCode || "USD",
@@ -287,20 +283,6 @@ const Payment = ({ cart, availablePaymentMethods, storeSettings }: PaymentProps)
                         </span>
                       </div>
                       <div className="flex items-center gap-3">
-                        {isSandboxMode ? (
-                          <TooltipProvider>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <div className="flex size-5 items-center justify-center rounded-full bg-muted text-foreground">
-                                  <FlaskConical className="size-3" strokeWidth={2.5} />
-                                </div>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                <p>Sandbox environment – do not enter real payment info</p>
-                              </TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
-                        ) : null}
                         <div className="flex size-5 items-center justify-center text-foreground">
                           {paymentInfoMap[method.code]?.icon}
                         </div>
