@@ -20,6 +20,7 @@ model User {
   roleId                            String?              @map("role")
   apiKeys                           ApiKey[]             @relation("ApiKey_user")
   phone                             String               @default("")
+  hasAccount                        Boolean              @default(false)
   restaurantOrders                  RestaurantOrder[]    @relation("RestaurantOrder_customer")
   addresses                         Address[]            @relation("Address_user")
   carts                             Cart[]               @relation("Cart_user")

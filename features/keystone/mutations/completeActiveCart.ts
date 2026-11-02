@@ -4,6 +4,7 @@
  */
 import type { Context } from ".keystone/types";
 import { getPaymentStatus, capturePayment } from "../utils/paymentProviderAdapter";
+import { resolveOrderCustomer } from "../security/guest-user";
 import { calculateRestaurantTotals } from "../../lib/restaurant-order-pricing";
 import { assertCanAccessCart } from "../utils/cartAccess";
 import {
@@ -82,7 +83,8 @@ export default async function completeActiveCart(
       deliveryZip
       deliveryCountryCode
       tipPercent
-      user { id }
+      createdAt
+      user { id hasAccount createdAt }
       order { id orderNumber secretKey status }
       paymentCollection {
         id
@@ -222,7 +224,7 @@ export default async function completeActiveCart(
   };
 
   const orderNumber = `ORD-${Date.now().toString(36).toUpperCase()}-${require("crypto").randomBytes(3).toString("hex").toUpperCase()}`;
-  const customerId = cart.user?.id;
+  const { customerId, isGuest } = resolveOrderCustomer(cart);
   const secretKey = !customerId ? require("crypto").randomBytes(32).toString("hex") : "";
   const isDeliveryOrder = cart.orderType === "delivery";
   if (Number(selectedSession.amount || 0) !== total && !isManual) {
@@ -423,7 +425,7 @@ export default async function completeActiveCart(
       eventType: "checkout.completed",
       entityType: "RestaurantOrder",
       entityId: order.id,
-      after: { total, paymentStatus: payment.status },
+      after: { total, paymentStatus: payment.status, isGuestOrder: isGuest },
       metadata: { paymentSessionId: selectedSession.id, paymentIdempotencyKey },
     });
     if (payment.status === "succeeded") {

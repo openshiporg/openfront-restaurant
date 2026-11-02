@@ -326,6 +326,7 @@ input UserCreateInput {
   role: RoleRelateToOneForCreateInput
   apiKeys: ApiKeyRelateToManyForCreateInput
   phone: String
+  hasAccount: Boolean
   restaurantOrders: RestaurantOrderRelateToManyForCreateInput
   addresses: AddressRelateToManyForCreateInput
   carts: CartRelateToManyForCreateInput

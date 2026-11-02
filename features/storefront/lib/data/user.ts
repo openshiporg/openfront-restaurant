@@ -219,7 +219,7 @@ export async function signUp(_currentState: any, formData: FormData) {
         }
       `,
       {
-        data: { email, password, name, phone }
+        data: { email, password, name, phone, hasAccount: true }
       }
     );
 

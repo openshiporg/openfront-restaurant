@@ -16,8 +16,20 @@ import {
 import { isSignedIn, permissions, rules } from '../access'
 import type { Session } from '../access'
 import { trackingFields } from './trackingFields'
+import { retireReturningGuest, resolvePublicHasAccount } from '../security/guest-user'
 
 export const User = list({
+  hooks: {
+    resolveInput: async ({ operation, inputData, resolvedData, context }) => {
+      if (operation === 'create' && !permissions.canManagePeople({ session: context.session })) {
+        // A returning guest frees the email held by their earlier guest record. Registered
+        // customers (hasAccount true), staff and anyone with a role are never touched.
+        await retireReturningGuest(context.prisma, resolvedData.email);
+        return { ...resolvedData, hasAccount: resolvePublicHasAccount(inputData as any) };
+      }
+      return resolvedData;
+    },
+  },
   access: {
     operation: {
       query: isSignedIn, // Any signed-in user can query (filter limits to self)
@@ -98,6 +110,9 @@ export const User = list({
         description: 'Primary phone number for the user',
       },
     }),
+
+    // True for a customer who registered an account; false for a per-checkout guest user.
+    hasAccount: checkbox({ defaultValue: false }),
 
     restaurantOrders: relationship({
       access: { create: () => false, update: () => false },
