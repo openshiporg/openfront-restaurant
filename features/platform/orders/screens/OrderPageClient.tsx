@@ -51,6 +51,11 @@ function prettyStatus(value: string) {
   return value.replace(/_/g, " ");
 }
 
+function sentenceCase(value: string) {
+  const t = String(value || "").replace(/_/g, " ").toLowerCase();
+  return t.charAt(0).toUpperCase() + t.slice(1);
+}
+
 export function OrderPageClient({ order, currencyCode = "USD", locale = "en-US" }: OrderPageClientProps) {
   const [isPending, startTransition] = useTransition();
   const [currentStatus, setCurrentStatus] = useState(order.status);
@@ -147,10 +152,10 @@ export function OrderPageClient({ order, currencyCode = "USD", locale = "en-US" 
             <Printer size={14} />
           </Button>
           <Select value={currentStatus} onValueChange={handleStatusChange} disabled={isPending}>
-            <SelectTrigger className="h-9 sm:h-8 w-[calc(50%-0.25rem)] min-w-[150px] flex-1 sm:w-auto sm:flex-none sm:min-w-[155px] text-xs px-3 rounded-full [&>svg]:h-3 [&>svg]:w-3">
+            <SelectTrigger className="h-9 sm:h-8 w-[calc(50%-0.25rem)] min-w-[150px] flex-1 sm:w-auto sm:flex-none sm:min-w-[155px] text-xs px-3 rounded-md [&>svg]:h-3 [&>svg]:w-3">
               <div className="flex items-center gap-2 min-w-0">
                 <StatusDot status={currentStatus as keyof typeof statusConfig} size="sm" />
-                <span className="uppercase tracking-wider text-[11px] font-semibold truncate">{activeStatus.label}</span>
+                <span className="text-xs font-medium truncate">{sentenceCase(activeStatus.label)}</span>
               </div>
             </SelectTrigger>
             <SelectContent>
