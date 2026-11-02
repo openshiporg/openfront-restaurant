@@ -9,7 +9,16 @@ export const Role = list({
   access: {
     operation: {
       ...allOperations(permissions.canManageRoles),
-      query: () => true,
+      // Roles are staff data: never public. Any session (user or scoped API
+      // key) may query; the filter limits it to the caller's own role unless
+      // it holds canReadRoles/canManageRoles (E-commerce pattern).
+      query: ({ session }) => Boolean(session),
+    },
+    filter: {
+      query: ({ session }) =>
+        permissions.canReadRoles({ session }) || permissions.canManageRoles({ session })
+          ? true
+          : { assignedTo: { some: { id: { equals: session?.itemId } } } },
     },
   },
   ui: {

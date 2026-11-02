@@ -183,3 +183,14 @@ test("recipe food cost percentage uses venue currency minor units, including zer
     assert.equal(await resolver({ item: { menuItemId: "menu", recipeIngredients: [{ ingredientId: "i", quantity: 1 }], yield: 1 } }, {}, context), 25);
   }
 });
+
+test('Role list is never public: anonymous gets no rows, staff see only their own role unless they can read roles', async () => {
+  const { Role } = await import('../features/keystone/models/Role')
+  const access = (Role as any).access
+  assert.equal(await access.operation.query({ session: undefined }), false)
+  const staff = { itemId: 'u1', data: { role: { canReadRoles: false, canManageRoles: false } } }
+  assert.equal(await access.operation.query({ session: staff }), true)
+  assert.deepEqual(await access.filter.query({ session: staff }), { assignedTo: { some: { id: { equals: 'u1' } } } })
+  const reader = { itemId: 'u2', data: { role: { canReadRoles: true } } }
+  assert.equal(await access.filter.query({ session: reader }), true)
+})
