@@ -107,12 +107,13 @@ async function createGuestReservationRaw(
       data: { customerName: name.slice(0, 120), customerEmail: email, customerPhone: phone.slice(0, 40), reservationDate: start, partySize: args.partySize, duration: RESERVATION_DURATION, status: "confirmed", specialRequests: (args.notes || "").trim().slice(0, 500), assignedTableId: table.id },
     });
     const code = reservationCode(reservation.id);
+    const storeName = settings.name?.trim() || "the restaurant";
     const when = new Intl.DateTimeFormat("en-US", { timeZone: settings.timezone, dateStyle: "full", timeStyle: "short" }).format(start);
     await appendAuditEventWithClient(tx, null, { eventKey: `guest.reservation_created:${reservation.id}`, eventType: "guest.reservation_created", entityType: "Reservation", entityId: reservation.id, metadata: { email, code } });
     await enqueueRestaurantNotification(tx, null, {
       eventKey: `reservation-confirmation:${reservation.id}`, entityType: "Reservation", entityId: reservation.id, to: email,
-      subject: `Your table at ${settings.name} is confirmed`,
-      text: `Hi ${name},\n\nYour table for ${args.partySize} at ${settings.name} is confirmed for ${when}.\nConfirmation code: ${code}\n\nNeed to change it? Call us and quote your code.`,
+      subject: `Your table at ${storeName} is confirmed`,
+      text: `Hi ${name},\n\nYour table for ${args.partySize} at ${storeName} is confirmed for ${when}.\nConfirmation code: ${code}\n\nNeed to change it? Call us and quote your code.`,
     });
     return { reservation, code };
   });
