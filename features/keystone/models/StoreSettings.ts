@@ -10,7 +10,7 @@ import {
 } from "../../lib/store-logo";
 import { sanitizeStoreLogoSvg } from "../utils/storeLogo";
 import { getPublicPaymentProviderConfig } from "../utils/paymentProviderConfig";
-import { getDeliveryConfigurationError, normalizeDeliveryPostalCodeList } from "../../lib/delivery-zones";
+import { getDeliveryConfigurationError, getUniqueDeliveryPostalCodes, normalizeCountryCode, normalizeDeliveryPostalCodeList } from "../../lib/delivery-zones";
 
 function effectiveDeliverySettings(input: any, existing: any = {}) {
   return {
@@ -18,6 +18,21 @@ function effectiveDeliverySettings(input: any, existing: any = {}) {
     countryCode: input.countryCode === undefined ? existing.countryCode ?? "US" : input.countryCode,
     deliveryPostalCodes: input.deliveryPostalCodes === undefined ? existing.deliveryPostalCodes : input.deliveryPostalCodes,
   };
+}
+
+/**
+ * True when a save changes the stored delivery configuration. Unchanged values
+ * echoed back by a full-form save (Store Settings sends every field) do not count.
+ */
+export function changesDeliveryConfig(inputData: any, item: any = {}) {
+  if (inputData?.deliveryEnabled !== undefined && Boolean(inputData.deliveryEnabled) !== Boolean(item?.deliveryEnabled)) return true;
+  if (inputData?.countryCode !== undefined && normalizeCountryCode(inputData.countryCode) !== normalizeCountryCode(item?.countryCode)) return true;
+  if (inputData?.deliveryPostalCodes !== undefined) {
+    const next = getUniqueDeliveryPostalCodes(inputData.deliveryPostalCodes).sort().join(",");
+    const current = getUniqueDeliveryPostalCodes(item?.deliveryPostalCodes).sort().join(",");
+    if (next !== current) return true;
+  }
+  return false;
 }
 
 function deliveryValidationError(settings: any) {
@@ -58,6 +73,10 @@ export const StoreSettings = list({
         }
       },
       update: ({ inputData, item, resolvedData, addValidationError }: any) => {
+        // Only a save that changes the delivery configuration is checked against it, so a
+        // logo or name save is not blocked by a stored delivery setup it leaves as is.
+        // Checkout still refuses delivery while the stored zones are incomplete.
+        if (!changesDeliveryConfig(inputData, item)) return;
         const settings = effectiveDeliverySettings(resolvedData, item);
         if (inputData?.deliveryPostalCodes !== undefined) settings.deliveryPostalCodes = inputData.deliveryPostalCodes;
         const issue = deliveryValidationError(settings);

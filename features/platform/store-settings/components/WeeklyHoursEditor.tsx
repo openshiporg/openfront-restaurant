@@ -87,7 +87,7 @@ export function WeeklyHoursEditor({
       {/* Section header */}
       <div className="px-5 py-3 flex items-center gap-2 bg-muted/20">
         <CalendarClock size={13} className="text-muted-foreground" />
-        <span className="text-[11px] uppercase tracking-wider font-semibold text-foreground">
+        <span className="text-xs uppercase tracking-wider font-semibold text-foreground">
           Operations
         </span>
       </div>
@@ -109,7 +109,7 @@ export function WeeklyHoursEditor({
             >
               <p
                 className={cn(
-                  'text-[10px] uppercase tracking-wider font-semibold',
+                  'text-xs uppercase tracking-wider font-semibold',
                   isActive ? 'text-foreground' : 'text-muted-foreground'
                 )}
               >
@@ -124,7 +124,7 @@ export function WeeklyHoursEditor({
                 )}
               />
               {isToday && (
-                <span className="mt-0.5 text-[8px] uppercase tracking-wider font-semibold text-blue-500">
+                <span className="mt-0.5 text-xs leading-none uppercase tracking-wider font-semibold text-blue-500">
                   Today
                 </span>
               )}
@@ -136,7 +136,7 @@ export function WeeklyHoursEditor({
       {/* Active day — status row */}
       <div className="px-5 py-3 flex items-center justify-between">
         <div>
-          <p className="text-[11px] uppercase tracking-wider text-muted-foreground">
+          <p className="text-xs uppercase tracking-wider text-muted-foreground">
             {activeDayData.label}
           </p>
           <p className="text-sm font-semibold mt-0.5">
@@ -168,7 +168,7 @@ export function WeeklyHoursEditor({
               style={{ gridTemplateColumns: '1fr 1fr auto' }}
             >
               <div className="px-5 py-3">
-                <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Open</p>
+                <p className="text-xs uppercase tracking-wider text-muted-foreground">Open</p>
                 <Input
                   type="time"
                   step={1800}
@@ -180,7 +180,7 @@ export function WeeklyHoursEditor({
                 />
               </div>
               <div className="px-5 py-3">
-                <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Close</p>
+                <p className="text-xs uppercase tracking-wider text-muted-foreground">Close</p>
                 <Input
                   type="time"
                   step={1800}

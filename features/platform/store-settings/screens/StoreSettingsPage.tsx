@@ -2,10 +2,15 @@
 
 import { Label } from "@/components/ui/label"
 import { useMemo, useState, type ReactNode } from 'react'
-import { gql, request } from 'graphql-request'
 import { PageBreadcrumbs } from '@/features/dashboard/components/PageBreadcrumbs'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover'
 import {
   Select,
   SelectContent,
@@ -13,18 +18,22 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import * as SelectPrimitive from '@radix-ui/react-select'
 import MultipleSelector, { type Option } from '@/components/ui/multiple-selector'
 import { Switch } from '@/components/ui/switch'
-import { Globe2, Save, Store, CalendarClock, Palette } from 'lucide-react'
+import { Globe2, Store, CalendarClock, Palette, Code } from 'lucide-react'
+import { toast } from 'sonner'
+import { cn } from '@/lib/utils'
 import {
   WeeklyHoursEditor,
   type DayKey,
   type HoursState,
 } from '@/features/platform/store-settings/components/WeeklyHoursEditor'
 import { getUniqueDeliveryPostalCodes, normalizeCountryCode, normalizePostalCode } from '@/features/lib/delivery-zones'
-import { normalizeStoreLogoColor } from '@/features/lib/store-logo'
-import { LOGO_ICONS } from '@/features/platform/store-settings/lib/icon-registry'
-import { LogoPicker } from '@/features/platform/store-settings/components/LogoPicker'
+import { normalizeStoreLogoColor } from '@/features/platform/store-settings/lib/store-logo'
+import { LOGO_ICONS, HUE_PRESETS } from '@/features/platform/store-settings/lib/icon-registry'
+import { updateStoreSettings } from '@/features/platform/store-settings/actions'
+import { StoreSettingsSaveBar } from '@/features/platform/store-settings/components/StoreSettingsSaveBar'
 
 interface StoreSettingsData {
   id?: string
@@ -50,33 +59,6 @@ interface StoreSettingsData {
   promoBanner?: string | null
   hours?: any
 }
-
-const UPDATE_STORE_SETTINGS = gql`
-  mutation UpdateStoreSettings($id: ID!, $data: StoreSettingsUpdateInput!) {
-    updateStoreSettings(where: { id: $id }, data: $data) {
-      id
-      name
-      logoIcon
-      logoColor
-      currencyCode
-      locale
-      timezone
-      deliveryEnabled
-      deliveryPostalCodes
-      taxRate
-      hours
-    }
-  }
-`
-
-const CREATE_STORE_SETTINGS = gql`
-  mutation CreateStoreSettings($data: StoreSettingsCreateInput!) {
-    createStoreSettings(data: $data) {
-      id
-      name
-    }
-  }
-`
 
 const days: Array<{ key: DayKey; label: string; short: string }> = [
   { key: 'monday', label: 'Monday', short: 'Mon' },
@@ -197,7 +179,7 @@ function Section({
     <div className="rounded-lg border border-border bg-card overflow-hidden divide-y divide-border">
       <div className="px-5 py-3 flex items-center gap-2 bg-muted/20">
         <span className="text-muted-foreground">{icon}</span>
-        <span className="text-[11px] uppercase tracking-wider font-semibold text-foreground">{title}</span>
+        <span className="text-xs uppercase tracking-wider font-semibold text-foreground">{title}</span>
       </div>
       {children}
     </div>
@@ -234,6 +216,14 @@ export function StoreSettingsPage({ initialSettings }: { initialSettings: StoreS
     estimatedPickup: initialSettings?.estimatedPickup || '15-20 min',
     promoBanner: initialSettings?.promoBanner || '',
   })
+
+  // Same names as the E-commerce logo block, over this page's form state.
+  const logoIcon = form.logoIcon
+  const logoColor = form.logoColor
+  const setLogoIcon = (value: string) => setForm((current) => ({ ...current, logoIcon: value }))
+  const setLogoColor = (value: string) => setForm((current) => ({ ...current, logoColor: value }))
+  // Find matching preset icon, but don't default to first icon if not found
+  const selectedIcon = LOGO_ICONS.find((icon) => icon.lightSvg === logoIcon)
 
   const [maxActiveOnlineOrders, setMaxActiveOnlineOrders] = useState(String(initialSettings?.hours?._ordering?.maxActiveOnlineOrders || 0))
   const [orderingCutoff, setOrderingCutoff] = useState(String(initialSettings?.hours?._ordering?.cutoffMinutes || 0))
@@ -336,12 +326,14 @@ export function StoreSettingsPage({ initialSettings }: { initialSettings: StoreS
         hours: { ...serializeHours(hours), _ordering: { ...(initialSettings?.hours?._ordering || {}), cutoffMinutes: Number(orderingCutoff), maxActiveOnlineOrders: Number(maxActiveOnlineOrders), mealPeriods: JSON.parse(mealWindows) } },
       }
 
-      if (initialSettings?.id) {
-        await request('/api/graphql', UPDATE_STORE_SETTINGS, { id: initialSettings.id, data })
-      } else {
-        await request('/api/graphql', CREATE_STORE_SETTINGS, { data })
+      const result = await updateStoreSettings(initialSettings?.id, data)
+      if (!result.success) {
+        const message = result.error || 'Failed to update store settings'
+        setError(message)
+        toast.error(message)
+        return
       }
-
+      toast.success('Store settings updated successfully')
       setSavedAt(new Date().toLocaleTimeString())
     } catch (e: any) {
       setError(e?.message || 'Failed to save store settings')
@@ -351,7 +343,7 @@ export function StoreSettingsPage({ initialSettings }: { initialSettings: StoreS
   }
 
   return (
-    <div className="flex h-full flex-col bg-background">
+    <div className="flex h-full flex-col bg-background pb-24 md:pb-0">
       <PageBreadcrumbs items={breadcrumbs} />
 
       {/* Header */}
@@ -363,33 +355,29 @@ export function StoreSettingsPage({ initialSettings }: { initialSettings: StoreS
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
-          {savedAt ? (
-            <span className="text-xs text-muted-foreground">Saved {savedAt}</span>
-          ) : null}
-          <Button onClick={onSave} disabled={isSaving} className="h-8 text-xs px-4">
-            <Save className="mr-2 h-3.5 w-3.5" />
-            {isSaving ? 'Saving…' : 'Save Changes'}
-          </Button>
-        </div>
+        <StoreSettingsSaveBar
+          onSave={onSave}
+          isSaving={isSaving}
+          status={savedAt ? `Saved ${savedAt}` : null}
+        />
       </div>
 
       {/* Stat strip */}
-      <div className="grid grid-cols-2 md:grid-cols-4 divide-x border-b border-border">
+      <div className="grid grid-cols-2 md:grid-cols-4 divide-x border-b border-border [&>*:nth-child(n+3)]:border-t md:[&>*:nth-child(n+3)]:border-t-0">
         <div className="px-5 py-3">
-          <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Open Days</p>
+          <p className="text-xs uppercase tracking-wider text-muted-foreground">Open Days</p>
           <p className="text-xl font-semibold mt-1">{openDaysCount}<span className="text-sm text-muted-foreground font-normal"> / 7</span></p>
         </div>
         <div className="px-5 py-3">
-          <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Today</p>
+          <p className="text-xs uppercase tracking-wider text-muted-foreground">Today</p>
           <p className="text-sm font-semibold mt-1 truncate">{todaySummary}</p>
         </div>
         <div className="px-5 py-3">
-          <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Currency</p>
+          <p className="text-xs uppercase tracking-wider text-muted-foreground">Currency</p>
           <p className="text-sm font-semibold mt-1">{form.currencyCode} · {form.locale}</p>
         </div>
         <div className="px-5 py-3">
-          <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Timezone</p>
+          <p className="text-xs uppercase tracking-wider text-muted-foreground">Timezone</p>
           <p className="text-sm font-semibold mt-1 truncate">{form.timezone.split('/').pop()?.replace('_', ' ')}</p>
         </div>
       </div>
@@ -400,9 +388,9 @@ export function StoreSettingsPage({ initialSettings }: { initialSettings: StoreS
           {/* Identity & Contact */}
           <Section title="Identity & Contact" icon={<Store size={13} />}>
             {/* Row 1: Name + Tagline */}
-            <div className="grid grid-cols-2 divide-x divide-border">
+            <div className="grid grid-cols-1 divide-y divide-border sm:grid-cols-2 sm:divide-x sm:divide-y-0">
               <div className="px-5 py-3">
-                <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Store Name</p>
+                <p className="text-xs uppercase tracking-wider text-muted-foreground">Store Name</p>
                 <Input
                   value={form.name}
                   onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
@@ -411,7 +399,7 @@ export function StoreSettingsPage({ initialSettings }: { initialSettings: StoreS
                 />
               </div>
               <div className="px-5 py-3">
-                <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Tagline</p>
+                <p className="text-xs uppercase tracking-wider text-muted-foreground">Tagline</p>
                 <Input
                   value={form.tagline}
                   onChange={(e) => setForm((f) => ({ ...f, tagline: e.target.value }))}
@@ -422,7 +410,7 @@ export function StoreSettingsPage({ initialSettings }: { initialSettings: StoreS
             </div>
             {/* Row 2: Address */}
             <div className="px-5 py-3">
-              <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Address</p>
+              <p className="text-xs uppercase tracking-wider text-muted-foreground">Address</p>
               <Input
                 value={form.address}
                 onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))}
@@ -431,9 +419,9 @@ export function StoreSettingsPage({ initialSettings }: { initialSettings: StoreS
               />
             </div>
             {/* Row 3: Phone + Email + Country */}
-            <div className="grid grid-cols-3 divide-x divide-border">
+            <div className="grid grid-cols-1 divide-y divide-border sm:grid-cols-3 sm:divide-x sm:divide-y-0">
               <div className="px-5 py-3">
-                <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Phone</p>
+                <p className="text-xs uppercase tracking-wider text-muted-foreground">Phone</p>
                 <Input
                   value={form.phone}
                   onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
@@ -442,7 +430,7 @@ export function StoreSettingsPage({ initialSettings }: { initialSettings: StoreS
                 />
               </div>
               <div className="px-5 py-3">
-                <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Email</p>
+                <p className="text-xs uppercase tracking-wider text-muted-foreground">Email</p>
                 <Input
                   type="email"
                   value={form.email}
@@ -452,7 +440,7 @@ export function StoreSettingsPage({ initialSettings }: { initialSettings: StoreS
                 />
               </div>
               <div className="px-5 py-3">
-                <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Country Code</p>
+                <p className="text-xs uppercase tracking-wider text-muted-foreground">Country Code</p>
                 <Input
                   value={form.countryCode}
                   onChange={(e) => setForm((f) => ({ ...f, countryCode: normalizeCountryCode(e.target.value) }))}
@@ -463,7 +451,7 @@ export function StoreSettingsPage({ initialSettings }: { initialSettings: StoreS
             </div>
             {/* Row 4: Promo Banner */}
             <div className="px-5 py-3">
-              <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Promo Banner</p>
+              <p className="text-xs uppercase tracking-wider text-muted-foreground">Promo Banner</p>
               <Input
                 value={form.promoBanner}
                 onChange={(e) => setForm((f) => ({ ...f, promoBanner: e.target.value }))}
@@ -475,30 +463,30 @@ export function StoreSettingsPage({ initialSettings }: { initialSettings: StoreS
 
           {/* Localization */}
           <Section title="Localization" icon={<Globe2 size={13} />}>
-            <div className="grid grid-cols-2 md:grid-cols-4 divide-x divide-border">
+            <div className="grid grid-cols-2 md:grid-cols-4 divide-x divide-y divide-border md:divide-y-0">
               <div className="px-5 py-3">
-                <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Currency</p>
+                <p className="text-xs uppercase tracking-wider text-muted-foreground">Currency</p>
                 <Select value={form.currencyCode} onValueChange={(v) => setForm((f) => ({ ...f, currencyCode: v }))}>
                   <SelectTrigger className={fieldSelect}><SelectValue /></SelectTrigger>
                   <SelectContent>{currencyOptions.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div className="px-5 py-3">
-                <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Locale</p>
+                <p className="text-xs uppercase tracking-wider text-muted-foreground">Locale</p>
                 <Select value={form.locale} onValueChange={(v) => setForm((f) => ({ ...f, locale: v }))}>
                   <SelectTrigger className={fieldSelect}><SelectValue /></SelectTrigger>
                   <SelectContent>{localeOptions.map((l) => <SelectItem key={l} value={l}>{l}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div className="px-5 py-3">
-                <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Timezone</p>
+                <p className="text-xs uppercase tracking-wider text-muted-foreground">Timezone</p>
                 <Select value={form.timezone} onValueChange={(v) => setForm((f) => ({ ...f, timezone: v }))}>
                   <SelectTrigger className={fieldSelect}><SelectValue /></SelectTrigger>
                   <SelectContent>{timezoneOptions.map((tz) => <SelectItem key={tz} value={tz}>{tz}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div className="px-5 py-3">
-                <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Tax Rate %</p>
+                <p className="text-xs uppercase tracking-wider text-muted-foreground">Tax Rate %</p>
                 <Input
                   type="number"
                   step="0.01"
@@ -515,7 +503,7 @@ export function StoreSettingsPage({ initialSettings }: { initialSettings: StoreS
           <Section title="Fulfillment" icon={<CalendarClock size={13} />}>
             <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-4 px-5 py-4">
               <div>
-                <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Delivery Availability</p>
+                <p className="text-xs uppercase tracking-wider text-muted-foreground">Delivery Availability</p>
                 <p className="mt-1 text-sm font-semibold text-foreground">
                   {form.deliveryEnabled ? 'Customers can choose delivery' : 'Pickup only'}
                 </p>
@@ -533,7 +521,7 @@ export function StoreSettingsPage({ initialSettings }: { initialSettings: StoreS
             </div>
 
             <div className="px-5 py-4 border-t border-border">
-              <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Delivery ZIP / Postal Codes</p>
+              <p className="text-xs uppercase tracking-wider text-muted-foreground">Delivery ZIP / Postal Codes</p>
               <p className="mt-1 text-xs text-muted-foreground">
                 Add every postal code you want to serve. Customers can still save any address, but delivery will only be offered inside these codes.
               </p>
@@ -575,9 +563,9 @@ export function StoreSettingsPage({ initialSettings }: { initialSettings: StoreS
               </div>
             </div>
 
-            <div className="grid grid-cols-2 divide-x divide-border border-t border-border">
+            <div className="grid grid-cols-1 divide-y divide-border border-t border-border sm:grid-cols-2 sm:divide-x sm:divide-y-0">
               <div className="px-5 py-3">
-                <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Delivery Fee</p>
+                <p className="text-xs uppercase tracking-wider text-muted-foreground">Delivery Fee</p>
                 <Input
                   value={form.deliveryFee}
                   onChange={(e) => setForm((f) => ({ ...f, deliveryFee: e.target.value }))}
@@ -586,7 +574,7 @@ export function StoreSettingsPage({ initialSettings }: { initialSettings: StoreS
                 />
               </div>
               <div className="px-5 py-3">
-                <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Delivery Minimum</p>
+                <p className="text-xs uppercase tracking-wider text-muted-foreground">Delivery Minimum</p>
                 <Input
                   value={form.deliveryMinimum}
                   onChange={(e) => setForm((f) => ({ ...f, deliveryMinimum: e.target.value }))}
@@ -595,9 +583,9 @@ export function StoreSettingsPage({ initialSettings }: { initialSettings: StoreS
                 />
               </div>
             </div>
-            <div className="grid grid-cols-3 divide-x divide-border border-t border-border">
+            <div className="grid grid-cols-1 divide-y divide-border border-t border-border sm:grid-cols-3 sm:divide-x sm:divide-y-0">
               <div className="px-5 py-3">
-                <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Pickup Discount %</p>
+                <p className="text-xs uppercase tracking-wider text-muted-foreground">Pickup Discount %</p>
                 <Input
                   type="number"
                   value={form.pickupDiscount}
@@ -607,7 +595,7 @@ export function StoreSettingsPage({ initialSettings }: { initialSettings: StoreS
                 />
               </div>
               <div className="px-5 py-3">
-                <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Est. Pickup</p>
+                <p className="text-xs uppercase tracking-wider text-muted-foreground">Est. Pickup</p>
                 <Input
                   value={form.estimatedPickup}
                   onChange={(e) => setForm((f) => ({ ...f, estimatedPickup: e.target.value }))}
@@ -616,7 +604,7 @@ export function StoreSettingsPage({ initialSettings }: { initialSettings: StoreS
                 />
               </div>
               <div className="px-5 py-3">
-                <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Est. Delivery</p>
+                <p className="text-xs uppercase tracking-wider text-muted-foreground">Est. Delivery</p>
                 <Input
                   value={form.estimatedDelivery}
                   onChange={(e) => setForm((f) => ({ ...f, estimatedDelivery: e.target.value }))}
@@ -631,37 +619,132 @@ export function StoreSettingsPage({ initialSettings }: { initialSettings: StoreS
 
         <div className="space-y-6">
           <Section title="Branding" icon={<Palette size={13} />}>
-            <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-4 px-5 py-4">
-              <div
-                className="flex size-16 items-center justify-center overflow-hidden border border-border bg-background p-2 [&>svg]:block [&>svg]:size-full"
-                style={{ filter: `hue-rotate(${form.logoColor}deg)` }}
-                dangerouslySetInnerHTML={{ __html: form.logoIcon }}
-              />
-              <div className="min-w-0">
-                <LogoPicker
-                  value={form.logoIcon}
-                  hue={form.logoColor}
-                  onChange={(logoIcon) => setForm((current) => ({ ...current, logoIcon }))}
+            <div className="space-y-6 px-5 py-4">
+        {/* Logo Icon Selector */}
+        <div>
+          <Label>Logo Icon</Label>
+          <div className="mt-2 flex items-center gap-2">
+            <Select
+              value={selectedIcon?.id || ''}
+              onValueChange={(id) => {
+                const icon = LOGO_ICONS.find((i) => i.id === id);
+                if (icon) setLogoIcon(icon.lightSvg);
+              }}
+            >
+              <SelectPrimitive.Trigger
+                className={cn(
+                  'flex h-12 w-12 shrink-0 rounded-lg border border-input bg-background focus:outline-none disabled:cursor-not-allowed disabled:opacity-50 p-0 overflow-hidden items-center justify-center'
+                )}
+              >
+                <div
+                  dangerouslySetInnerHTML={{ __html: logoIcon }}
+                  style={{ filter: `hue-rotate(${logoColor}deg)` }}
+                  className="[&>svg]:w-6 [&>svg]:h-6"
                 />
-                <p className="mt-2 text-xs text-muted-foreground">
-                  This logo is exposed to storefront and Marketplace clients through GraphQL.
-                </p>
-              </div>
-            </div>
-            <div className="border-t border-border px-5 py-4">
-              <div className="flex items-center justify-between gap-4">
-                <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Hue rotation</p>
-                <span className="font-mono text-xs text-muted-foreground">{form.logoColor}°</span>
-              </div>
-              <input
-                type="range"
-                min="0"
-                max="359"
-                value={form.logoColor}
-                onChange={(event) => setForm((current) => ({ ...current, logoColor: event.target.value }))}
-                className="mt-3 w-full accent-primary"
-                aria-label="Logo hue rotation"
-              />
+              </SelectPrimitive.Trigger>
+              <SelectContent className="border-border dark:border-blue-700">
+                {LOGO_ICONS.map((icon) => (
+                  <SelectItem key={icon.id} value={icon.id}>
+                    <span className="flex items-center gap-3">
+                      <div
+                        dangerouslySetInnerHTML={{ __html: icon.lightSvg }}
+                        style={{ filter: `hue-rotate(${logoColor}deg)` }}
+                        className="[&>svg]:w-6 [&>svg]:h-6"
+                      />
+                      <span>
+                        <span className="block font-medium text-gray-900 dark:text-gray-100">
+                          {icon.name}
+                        </span>
+                      </span>
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            {/* SVG Code Editor Popover */}
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-12 w-12 shrink-0"
+                  type="button"
+                >
+                  <Code className="h-4 w-4" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[min(500px,calc(100vw-2rem))]" align="start">
+                <div className="space-y-4">
+                  <div>
+                    <h4 className="font-medium mb-2">Edit SVG Code</h4>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      Edit the SVG code directly. Changes will be reflected in the icon preview.
+                    </p>
+                  </div>
+                  <Textarea
+                    value={logoIcon}
+                    onChange={(e) => setLogoIcon(e.target.value)}
+                    className="font-mono text-xs min-h-[300px]"
+                    placeholder="<svg>...</svg>"
+                  />
+                  <div className="flex items-center gap-2">
+                    <div className="text-sm text-muted-foreground">Preview:</div>
+                    <div
+                      dangerouslySetInnerHTML={{ __html: logoIcon }}
+                      style={{ filter: `hue-rotate(${logoColor}deg)` }}
+                      className="[&>svg]:w-8 [&>svg]:h-8 flex items-center justify-center p-2 border rounded"
+                    />
+                  </div>
+                </div>
+              </PopoverContent>
+            </Popover>
+          </div>
+        </div>
+
+        {/* Logo Color Selector */}
+        <div>
+          <Label>Logo Color</Label>
+          <div className="mt-2">
+            <Select
+              value={logoColor}
+              onValueChange={(value) => setLogoColor(value)}
+            >
+              <SelectPrimitive.Trigger
+                className={cn(
+                  'flex h-12 w-12 shrink-0 rounded-lg border border-input bg-background focus:outline-none disabled:cursor-not-allowed disabled:opacity-50 p-0 overflow-hidden items-center justify-center'
+                )}
+              >
+                <SelectValue>
+                  <div
+                    className="w-6 h-6 rounded-full"
+                    style={{
+                      background: `hsl(${(240 + parseInt(logoColor)) % 360}, 70%, 50%)`
+                    }}
+                  />
+                </SelectValue>
+              </SelectPrimitive.Trigger>
+              <SelectContent className="border-border dark:border-blue-700">
+                <div className="grid grid-cols-4 gap-2 p-2">
+                  {HUE_PRESETS.map((preset) => (
+                    <SelectItem
+                      key={preset.value}
+                      value={preset.value.toString()}
+                      className="cursor-pointer p-0 h-12 w-12 flex items-center justify-center [&>span:first-child]:hidden"
+                    >
+                      <div
+                        className="w-6 h-6 rounded-full"
+                        style={{
+                          background: `hsl(${(240 + preset.value) % 360}, 70%, 50%)`
+                        }}
+                      />
+                    </SelectItem>
+                  ))}
+                </div>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
             </div>
           </Section>
 
