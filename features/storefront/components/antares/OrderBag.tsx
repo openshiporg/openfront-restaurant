@@ -140,7 +140,15 @@ export function OrderBag({ cart, currencyCode, locale, readyIn, address, classNa
           {address ? (
             <p className="flex items-start gap-3">
               <MapPin className="mt-0.5 size-6 shrink-0 text-ink-soft" strokeWidth={1.75} aria-hidden="true" />
-              <span className="max-w-[22ch] leading-snug">{address}</span>
+              <span className="leading-snug">
+                {/* Street on one line, city on the next, the way the address is written on a card. */}
+                {address.includes(",") ? (
+                  <>
+                    <span className="block">{address.slice(0, address.indexOf(",")).trim()}</span>
+                    <span className="block">{address.slice(address.indexOf(",") + 1).trim()}</span>
+                  </>
+                ) : address}
+              </span>
             </p>
           ) : null}
         </div>

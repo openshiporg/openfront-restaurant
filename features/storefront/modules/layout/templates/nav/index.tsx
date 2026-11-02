@@ -55,7 +55,7 @@ export default function Nav({ storeSettings, cart, brandHue }: NavProps) {
   return (
     <div className="sticky top-0 z-50 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/85">
       <header className="border-b border-border/70">
-        <div className="storefront-shell flex h-[4.5rem] items-center justify-between gap-3 lg:h-24">
+        <div className="storefront-shell flex h-14 items-center justify-between gap-3 md:h-20 lg:h-24">
           <StoreBrand name={storeName} logoIcon={storeSettings?.logoIcon} logoColor={storeSettings?.logoColor} />
 
           {ready ? (
@@ -98,8 +98,8 @@ export default function Nav({ storeSettings, cart, brandHue }: NavProps) {
         </div>
       </header>
       {storeSettings?.promoBanner ? (
-        <div className="bg-mint text-ink">
-          <p className="storefront-shell truncate py-1.5 text-center text-[0.9rem] font-medium">{storeSettings.promoBanner}</p>
+        <div className="bg-mint/70 text-ink">
+          <p className="storefront-shell truncate py-1 text-center text-[0.78rem] md:text-[0.82rem]">{storeSettings.promoBanner}</p>
         </div>
       ) : null}
     </div>

@@ -44,23 +44,23 @@ export function MenuGrid({ tabs, items }: { tabs: GridTab[]; items: GridItem[] }
   return (
     <section id="menu" className="scroll-mt-24" aria-labelledby="menu-title">
       <div className="flex items-center justify-between gap-4">
-        <h2 id="menu-title" className="font-serif text-[2rem] font-bold leading-none sm:text-[2.6rem]">
+        <h2 id="menu-title" className="font-serif text-[1.45rem] font-bold leading-none sm:text-[2.6rem]">
           <span className="sm:hidden">Menu</span>
           <span className="hidden sm:inline">Our Menu</span>
         </h2>
         <button
           type="button"
           onClick={() => setSearching((open) => !open)}
-          className="grid size-12 place-items-center rounded-full border border-border bg-white text-ink transition-colors hover:bg-mint lg:hidden"
+          className="grid size-9 place-items-center rounded-full border border-border bg-white text-ink transition-colors hover:bg-mint sm:size-12 lg:hidden"
           aria-label={searching ? "Close search" : "Search the menu"}
           aria-expanded={searching}
         >
-          {searching ? <X className="size-5" /> : <Search className="size-5" />}
+          {searching ? <X className="size-4 sm:size-5" /> : <Search className="size-4 sm:size-5" />}
         </button>
       </div>
 
       {searching ? (
-        <label className="mt-4 flex h-12 items-center gap-3 rounded-full border border-border bg-white px-4 lg:hidden">
+        <label className="mt-3 flex h-10 items-center gap-2.5 rounded-full border border-border bg-white px-4 lg:hidden">
           <Search className="size-5 text-ink-soft" aria-hidden="true" />
           <span className="sr-only">Search the menu</span>
           <input
@@ -74,7 +74,7 @@ export function MenuGrid({ tabs, items }: { tabs: GridTab[]; items: GridItem[] }
       ) : null}
 
       {/* Phone: pill chips. */}
-      <div className="no-scrollbar -mx-4 mt-5 flex gap-2.5 overflow-x-auto px-4 sm:hidden" role="tablist" aria-label="Menu categories">
+      <div className="no-scrollbar -mx-4 mt-3.5 flex gap-2 overflow-x-auto px-4 sm:hidden" role="tablist" aria-label="Menu categories">
         {tabs.map((tab) => {
           const on = tab.id === active && !query
           return (
@@ -88,7 +88,7 @@ export function MenuGrid({ tabs, items }: { tabs: GridTab[]; items: GridItem[] }
                 setActive(tab.id)
               }}
               className={cn(
-                "inline-flex h-11 shrink-0 items-center whitespace-nowrap rounded-full border px-5 text-[1.05rem] transition-colors",
+                "inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-3.5 text-[0.85rem] transition-colors",
                 on ? "border-leaf bg-leaf font-medium text-white" : "border-border bg-white text-ink hover:border-leaf/40",
               )}
             >
@@ -130,32 +130,29 @@ export function MenuGrid({ tabs, items }: { tabs: GridTab[]; items: GridItem[] }
         <p className="mt-10 text-lg text-ink-soft">{query ? `Nothing on the menu matches "${query}".` : "Nothing in this section right now."}</p>
       ) : (
         <>
-          {/* Phone: photo cards, the first one tall. */}
-          <ul className="mt-6 grid grid-cols-2 auto-rows-[9.75rem] gap-3 sm:hidden">
-            {shown.map((item, index) => (
-              <li key={item.id} className={cn(index === 0 && shown.length > 2 ? "row-span-2" : "")}>
-                <Link
-                  href={getMenuItemHref(item.id)}
-                  prefetch={false}
-                  className={cn(
-                    "relative block overflow-hidden rounded-2xl bg-muted",
-                    "h-full",
-                  )}
-                >
-                  {item.thumbnail ? (
-                    <Image src={item.thumbnail} alt="" fill priority={index < 3} sizes="50vw" className="object-cover" />
-                  ) : null}
-                  <span aria-hidden="true" className="absolute inset-x-0 bottom-0 h-3/5 bg-gradient-to-t from-black/45 to-transparent" />
-                  <span className="absolute inset-x-2.5 bottom-2.5 flex flex-col items-start gap-1.5 pr-11">
-                    <span className="line-clamp-2 text-[1.02rem] font-semibold leading-tight text-white [text-shadow:0_1px_6px_rgb(0_0_0/0.35)]">{item.name}</span>
-                    <span className="rounded-full bg-white px-2.5 py-1 text-sm font-medium text-ink">{item.soldOut ? "Sold out" : item.price}</span>
-                  </span>
-                  <span className="absolute bottom-2.5 right-2.5">
-                    <QuickAdd itemId={item.id} name={item.name} needsChoice={item.needsChoice} defaultModifierIds={item.defaultModifierIds} soldOut={item.soldOut} variant="light" className="size-9" />
-                  </span>
-                </Link>
-              </li>
-            ))}
+          {/* Phone: a mosaic in threes, one tall card beside two short ones, then mirrored. */}
+          <ul className="mt-4 grid grid-flow-row-dense grid-cols-2 auto-rows-[7.6rem] gap-2.5 sm:hidden">
+            {shown.map((item, index) => {
+              const tall = index % 3 === 0 && shown.length - index > 2
+              const rightSide = Math.floor(index / 3) % 2 === 1
+              return (
+                <li key={item.id} className={cn(tall && "row-span-2", tall && rightSide && "col-start-2")}>
+                  <Link href={getMenuItemHref(item.id)} prefetch={false} className="relative block h-full overflow-hidden rounded-[1.1rem] bg-muted">
+                    {item.thumbnail ? (
+                      <Image src={item.thumbnail} alt="" fill priority={index < 3} sizes="50vw" className="object-cover" />
+                    ) : null}
+                    <span aria-hidden="true" className="absolute inset-x-0 bottom-0 h-3/5 bg-gradient-to-t from-black/40 to-transparent" />
+                    <span className="absolute inset-x-2 bottom-2 flex flex-col items-start gap-1 pr-9">
+                      <span className="line-clamp-2 text-[0.92rem] font-semibold leading-tight text-white [text-shadow:0_1px_6px_rgb(0_0_0/0.4)]">{item.name}</span>
+                      <span className="rounded-full bg-white px-2 py-0.5 text-[0.78rem] font-medium tabular-nums text-ink">{item.soldOut ? "Sold out" : item.price}</span>
+                    </span>
+                    <span className={cn("absolute right-2", tall ? "top-2" : "bottom-2")}>
+                      <QuickAdd itemId={item.id} name={item.name} needsChoice={item.needsChoice} defaultModifierIds={item.defaultModifierIds} soldOut={item.soldOut} variant="light" className="size-7 [&_svg]:size-4" />
+                    </span>
+                  </Link>
+                </li>
+              )
+            })}
           </ul>
 
           {/* Wider: photo tiles with the name, price and add underneath. */}

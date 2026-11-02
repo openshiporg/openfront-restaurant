@@ -14,11 +14,11 @@ export function NavMenu({ links }: { links: Array<{ href: string; label: string 
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="inline-flex h-12 items-center gap-2.5 rounded-full border border-border bg-white px-4 text-ink transition-colors hover:bg-mint active:scale-95"
+        className="inline-flex h-9 items-center gap-2 rounded-full border border-border bg-white px-3 text-ink transition-colors hover:bg-mint active:scale-95 md:h-12 md:gap-2.5 md:px-4"
         aria-label="Account and pages"
       >
-        <UserRound className="size-5" strokeWidth={1.75} aria-hidden="true" />
-        <Menu className="size-5" strokeWidth={1.75} aria-hidden="true" />
+        <UserRound className="size-4 md:size-5" strokeWidth={1.75} aria-hidden="true" />
+        <Menu className="size-4 md:size-5" strokeWidth={1.75} aria-hidden="true" />
       </button>
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent className={`storefront-sheet ${storefrontFont.variable} w-full max-w-sm border-0 bg-white p-0 text-ink`}>

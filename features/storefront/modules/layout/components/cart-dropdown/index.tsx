@@ -102,11 +102,11 @@ export default function CartDropdown({ cart, currencyCode, locale, brandHue }: C
         <button
           type="button"
           onClick={() => setIsCartOpen(true)}
-          className="fixed bottom-[calc(5.25rem+env(safe-area-inset-bottom))] right-4 z-40 inline-flex h-14 items-center gap-3 rounded-full bg-white pl-6 pr-5 text-lg font-medium tabular-nums text-ink shadow-[0_8px_30px_rgb(0_0_0/0.14)] transition-transform active:scale-95 md:hidden"
+          className="fixed bottom-[calc(4.25rem+env(safe-area-inset-bottom))] right-4 z-40 inline-flex h-11 items-center gap-2.5 rounded-full bg-white pl-5 pr-4 text-[0.95rem] font-medium tabular-nums text-ink shadow-[0_8px_30px_rgb(0_0_0/0.14)] transition-transform active:scale-95 md:hidden"
           aria-label={`Open order bag, ${formatCurrency(subtotal, { currencyCode, locale })}`}
         >
           {formatCurrency(subtotal, { currencyCode, locale })}
-          <ShoppingCart className="size-6 text-leaf" strokeWidth={2} aria-hidden="true" />
+          <ShoppingCart className="size-5 text-leaf" strokeWidth={2} aria-hidden="true" />
         </button>
       ) : null}
 

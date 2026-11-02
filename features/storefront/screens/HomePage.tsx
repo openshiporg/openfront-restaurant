@@ -109,7 +109,12 @@ export default async function HomePage() {
   ]
   if (tabs.length === 0) tabs.push({ id: "all", label: "All", icon: "all" })
 
-  const gridItems: GridItem[] = allItems.map((item) => {
+  // The menu reads in the kitchen's own section order (sortOrder): mains first, desserts last.
+  const sectionRank = new Map(categories.map((category, index) => [category.id, index]))
+  const rankOf = (item: MenuItem) => sectionRank.get((typeof item.category === "object" ? item.category?.id : item.category) || "") ?? categories.length
+  const ordered = allItems.map((item, index) => ({ item, index })).sort((a, b) => rankOf(a.item) - rankOf(b.item) || a.index - b.index).map(({ item }) => item)
+
+  const gridItems: GridItem[] = ordered.map((item) => {
     const modifiers = item.modifiers || []
     const groups = new Map<string, { required: boolean; min: number; defaults: number }>()
     for (const modifier of modifiers) {
@@ -138,22 +143,22 @@ export default async function HomePage() {
   return (
     <div className="bg-white">
       {/* Phone: pickup timing and the store card. */}
-      <section className="storefront-shell pt-5 md:hidden">
+      <section className="storefront-shell pt-4 md:hidden">
         {ready ? (
-          <p className="flex items-start gap-3">
-            <Clock className="mt-0.5 size-8 shrink-0 text-leaf" strokeWidth={1.75} aria-hidden="true" />
-            <span>
-              <span className="block text-[1.3rem] font-semibold leading-tight text-leaf">Ready in {ready}</span>
-              <span className="text-base text-ink-soft">Pickup</span>
+          <p className="flex items-start gap-2.5">
+            <Clock className="mt-0.5 size-6 shrink-0 text-leaf" strokeWidth={1.75} aria-hidden="true" />
+            <span className="leading-tight">
+              <span className="block text-[1rem] font-semibold text-leaf">Ready in {ready}</span>
+              <span className="text-[0.82rem] text-ink-soft">Pickup</span>
             </span>
           </p>
         ) : null}
-        <div className="mt-6 flex items-center gap-4">
-          <StoreMark logoIcon={storeSettings.logoIcon} logoColor={storeSettings.logoColor} name={storeName} />
-          <div className="min-w-0 flex-1">
-            <h1 className="truncate font-serif text-[1.55rem] font-bold leading-tight">{storeName}</h1>
-            {storeSettings.address ? <p className="truncate text-[0.95rem] text-ink-soft">{storeSettings.address}</p> : null}
-            <p className={status.isOpen ? "text-[0.95rem] font-medium text-leaf" : "text-[0.95rem] font-medium text-ink-soft"}>
+        <div className="mt-4 flex items-center gap-3">
+          <StoreMark name={storeName} />
+          <div className="min-w-0 flex-1 leading-snug">
+            <h1 className="truncate font-serif text-[1.15rem] font-bold">{storeName}</h1>
+            {storeSettings.address ? <p className="truncate text-[0.82rem] text-ink-soft">{storeSettings.address}</p> : null}
+            <p className={status.isOpen ? "text-[0.82rem] font-medium text-leaf" : "text-[0.82rem] font-medium text-ink-soft"}>
               {status.isOpen ? "Open" : "Closed"}
               {status.detail ? <span className="font-normal text-ink-soft"> · {status.detail}</span> : null}
             </p>
@@ -170,16 +175,16 @@ export default async function HomePage() {
               <span aria-hidden="true" className="absolute inset-y-0 left-0 w-2/5 bg-gradient-to-r from-[oklch(0.965_0.003_90)] via-[oklch(0.965_0.003_90/0.55)] to-transparent" />
             </div>
           ) : null}
-          <div className="storefront-shell relative py-10 lg:py-12">
-            <div className="max-w-[34rem] lg:max-w-[38%]">
-              <h1 className="font-serif text-[3.1rem] font-bold leading-[1] tracking-[-0.02em] text-ink lg:text-[3.7rem]">
+          <div className="storefront-shell relative py-9 lg:py-10">
+            <div className="max-w-[34rem] lg:max-w-[42%]">
+              <h1 className="font-serif text-[2.6rem] font-bold leading-[1.02] tracking-[-0.02em] text-ink lg:text-[3.05rem]">
                 {headlineLines(headline).map((line) => (
                   <span key={line} className="block">{line}</span>
                 ))}
               </h1>
-              <span aria-hidden="true" className="mt-5 block h-1 w-14 rounded-full bg-leaf" />
-              {subheadline ? <p className="mt-5 max-w-[44ch] text-pretty text-[1.1rem] text-ink">{subheadline}</p> : null}
-              <ul className="mt-8 flex flex-wrap gap-x-8 gap-y-2.5 text-base text-ink">
+              <span aria-hidden="true" className="mt-4 block h-1 w-12 rounded-full bg-leaf" />
+              {subheadline ? <p className="mt-4 max-w-[46ch] text-pretty text-[1rem] text-ink">{subheadline}</p> : null}
+              <ul className="mt-6 flex flex-wrap gap-x-7 gap-y-2 text-[0.95rem] text-ink">
                 {madeFresh ? (
                   <li className="flex items-center gap-2.5"><Leaf className="size-5 fill-leaf text-leaf" aria-hidden="true" />{madeFresh}</li>
                 ) : null}
@@ -194,7 +199,7 @@ export default async function HomePage() {
           </div>
         </section>
 
-        <div className="storefront-shell pb-16 pt-8 md:pt-12 lg:grid lg:grid-cols-[minmax(0,1fr)_18rem] lg:gap-8 xl:grid-cols-[minmax(0,1fr)_20rem]">
+        <div className="storefront-shell pb-16 pt-5 md:pt-8 lg:grid lg:grid-cols-[minmax(0,1fr)_18rem] lg:gap-8 xl:grid-cols-[minmax(0,1fr)_20rem]">
           <MenuGrid tabs={tabs} items={gridItems} />
         </div>
 

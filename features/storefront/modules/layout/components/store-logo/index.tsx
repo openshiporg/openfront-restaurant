@@ -1,4 +1,5 @@
 import Link from "next/link"
+import { storeOwnMark } from "@/features/storefront/lib/store-mark"
 
 export interface StorefrontLayoutSettings {
   name?: string | null
@@ -27,41 +28,34 @@ interface StoreBrandProps {
  * SVG source, hue treatment, typography, sizing, or link behavior.
  */
 export function StoreBrand({ name, logoIcon, logoColor, className }: StoreBrandProps & { className?: string }) {
+  // Only a mark the store chose in Store Settings; otherwise the wordmark stands alone.
+  const mark = storeOwnMark(logoIcon)
   return (
-    <Link href="/" className={`flex min-w-0 items-center gap-3 py-1 ${className || ""}`}>
-      {logoIcon ? (
+    <Link href="/" className={`flex min-w-0 items-center gap-2.5 py-1 ${className || ""}`}>
+      {mark ? (
         <span
-          className="block size-9 shrink-0 overflow-hidden [&>svg]:block [&>svg]:size-full"
+          className="block size-7 shrink-0 overflow-hidden sm:size-9 [&>svg]:block [&>svg]:size-full"
           style={{ filter: `hue-rotate(${logoColor || "0"}deg)` }}
-          dangerouslySetInnerHTML={{ __html: logoIcon }}
+          dangerouslySetInnerHTML={{ __html: mark }}
           aria-hidden="true"
         />
       ) : null}
-      <span className="flex min-w-0 flex-col items-start gap-1.5">
-        <span className="block truncate whitespace-nowrap font-serif text-[1.45rem] font-bold leading-none text-ink sm:text-[1.75rem]">
+      <span className="flex min-w-0 flex-col items-start gap-1 sm:gap-1.5">
+        <span className="block truncate whitespace-nowrap font-serif text-[1.15rem] font-bold leading-none text-ink sm:text-[1.75rem]">
           {name.trim()}
         </span>
-        <span aria-hidden="true" className="block h-[3px] w-8 rounded-full bg-leaf" />
+        <span aria-hidden="true" className="block h-[2px] w-6 rounded-full bg-leaf sm:h-[3px] sm:w-8" />
       </span>
     </Link>
   )
 }
 
-/** The store's own logo in a rounded tile, or its initials when no logo is set. */
-export function StoreMark({ name, logoIcon, logoColor }: StoreBrandProps) {
+/** The store's initials in a rounded tile: the store row on the phone, under a header that already shows the mark. */
+export function StoreMark({ name }: { name: string }) {
   const initials = name.split(/\s+/).filter(Boolean).slice(0, 2).map((word) => word[0]).join("").toUpperCase()
   return (
-    <span className="grid size-[4.5rem] shrink-0 place-items-center overflow-hidden rounded-2xl border border-border bg-white p-3">
-      {logoIcon ? (
-        <span
-          className="block size-full [&>svg]:block [&>svg]:size-full"
-          style={{ filter: `hue-rotate(${logoColor || "0"}deg)` }}
-          dangerouslySetInnerHTML={{ __html: logoIcon }}
-          aria-hidden="true"
-        />
-      ) : (
-        <span className="font-serif text-2xl font-bold text-leaf" aria-hidden="true">{initials}</span>
-      )}
+    <span className="grid size-14 shrink-0 place-items-center rounded-2xl border border-border bg-white" aria-hidden="true">
+      <span className="font-serif text-[1.35rem] font-bold leading-none text-leaf">{initials}</span>
     </span>
   )
 }
