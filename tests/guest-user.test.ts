@@ -9,7 +9,7 @@ const NEW = "2026-11-02T22:30:00.000Z", OLD = "2026-10-01T00:00:00.000Z";
 const root = join(__dirname, "..");
 
 function db(users: any[]) {
-  const rows = users.map((u) => ({ roleId: null, staffRole: null, employeeId: null, ...u }));
+  const rows = users.map((u) => ({ roleId: null, staffRole: null, employeeId: null, carts: [{ id: "c" }], restaurantOrders: [], ...u }));
   return { rows, user: {
     findFirst: async ({ where }: any) => rows.find((u) => u.email.toLowerCase() === where.email.equals.toLowerCase()) || null,
     update: async ({ where, data }: any) => { Object.assign(rows.find((u) => u.id === where.id)!, data); },
@@ -57,9 +57,37 @@ test("empty or unknown email does nothing", async () => {
   assert.equal(isRetirableGuest(null), false);
 });
 
-test("public create only honours an explicit hasAccount:true", () => {
-  assert.equal(resolvePublicHasAccount({ hasAccount: true }), true);
-  for (const v of [{}, undefined, { hasAccount: false }, { hasAccount: "true" }, { hasAccount: 1 }]) assert.equal(resolvePublicHasAccount(v as any), false);
+test("public create defaults to member; only an explicit false is a guest", () => {
+  for (const v of [{}, undefined, { hasAccount: true }, { hasAccount: "false" }, { hasAccount: 0 }, { email: "a@x.com", name: "a", password: "p" }]) assert.equal(resolvePublicHasAccount(v as any), true);
+  assert.equal(resolvePublicHasAccount({ hasAccount: false }), false);
+});
+
+test("sign-up inputs (dashboard, storefront) are members and not retirable", () => {
+  for (const input of [{ email: "a@x.com", name: "a", password: "p" }, { email: "a@x.com", name: "a", password: "p", hasAccount: true }]) {
+    const hasAccount = resolvePublicHasAccount(input);
+    assert.equal(hasAccount, true);
+    assert.equal(isRetirableGuest({ id: "u", hasAccount, createdAt: NEW, carts: [] } as any, EPOCH), false);
+  }
+});
+
+test("the guest checkout create sends hasAccount:false explicitly", () => {
+  const src = readFileSync(join(root, "features/storefront/lib/data/user.ts"), "utf8");
+  assert.match(src.slice(src.indexOf("CreateGuest") > 0 ? src.indexOf("CreateGuest") : src.indexOf("password: randomPassword") - 200), /hasAccount: false,\s*password: randomPassword/);
+});
+
+test("a guest with no cart or order is never retired; with a cart or order it is", async () => {
+  const none = db([{ id: "x", email: "a@x.com", hasAccount: false, createdAt: NEW, carts: [], restaurantOrders: [] }]);
+  assert.equal(await retireReturningGuest(none as any, "a@x.com", EPOCH), false);
+  assert.equal(none.rows[0].email, "a@x.com");
+  const withOrder = db([{ id: "y", email: "a@x.com", hasAccount: false, createdAt: NEW, carts: [], restaurantOrders: [{ id: "o" }] }]);
+  assert.equal(await retireReturningGuest(withOrder as any, "a@x.com", EPOCH), true);
+});
+
+test("anonymous create with a member's email never retires it (unique constraint then refuses)", async () => {
+  const member = resolvePublicHasAccount({ email: "m@x.com" });
+  const prisma = db([{ id: "m", email: "m@x.com", hasAccount: member, createdAt: NEW, carts: [] }]);
+  assert.equal(await retireReturningGuest(prisma as any, "M@x.com", EPOCH), false);
+  assert.equal(prisma.rows[0].email, "m@x.com");
 });
 
 const CART_AT = "2026-11-02T22:00:00.000Z";

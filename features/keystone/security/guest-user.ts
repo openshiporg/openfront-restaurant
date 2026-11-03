@@ -20,11 +20,15 @@ type GuestCandidate = {
   roleId?: string | null;
   staffRole?: string | null;
   employeeId?: string | null;
+  carts?: unknown[];
+  restaurantOrders?: unknown[];
 };
 
 export function isRetirableGuest(user: GuestCandidate | null | undefined, epoch: Date = GUEST_FLAG_EPOCH): boolean {
   if (!user || user.hasAccount !== false) return false;
   if (user.roleId || user.staffRole || user.employeeId) return false;
+  // The guest flow creates the user for a cart, so a record with no cart/order is a sign-up.
+  if (!(user.carts && user.carts.length) && !(user.restaurantOrders && user.restaurantOrders.length)) return false;
   const created = user.createdAt ? new Date(user.createdAt).getTime() : NaN;
   return Number.isFinite(created) && created >= epoch.getTime();
 }
@@ -39,7 +43,8 @@ export async function retireReturningGuest(prisma: any, email: unknown, epoch: D
   if (!normalized) return false;
   const existing = await prisma.user.findFirst({
     where: { email: { equals: normalized, mode: "insensitive" } },
-    select: { id: true, hasAccount: true, createdAt: true, roleId: true, staffRole: true, employeeId: true },
+    select: { id: true, hasAccount: true, createdAt: true, roleId: true, staffRole: true, employeeId: true,
+      carts: { select: { id: true }, take: 1 }, restaurantOrders: { select: { id: true }, take: 1 } },
   });
   if (!isRetirableGuest(existing, epoch)) return false;
   await prisma.user.update({ where: { id: existing.id }, data: { email: retiredGuestEmail(existing.id) } });
@@ -47,11 +52,11 @@ export async function retireReturningGuest(prisma: any, email: unknown, epoch: D
 }
 
 /**
- * Public (non-manager) user creation: hasAccount is only ever true when the caller explicitly sends
- * true (storefront sign-up). It is a display/guest flag and grants no privileges.
+ * Public (non-manager) user creation: new accounts are members; only the guest checkout marks a guest
+ * by sending hasAccount:false explicitly. It is a display/guest flag and grants no privileges.
  */
 export function resolvePublicHasAccount(inputData: Record<string, unknown> | undefined): boolean {
-  return inputData?.hasAccount === true;
+  return inputData?.hasAccount !== false;
 }
 
 /**

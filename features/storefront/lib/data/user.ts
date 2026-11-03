@@ -640,6 +640,7 @@ export async function createGuestUser(params: {
           email,
           name,
           phone,
+          hasAccount: false,
           password: randomPassword,
         },
       }
