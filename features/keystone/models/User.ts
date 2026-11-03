@@ -24,10 +24,16 @@ export const User = list({
       if (operation === 'create' && !permissions.canManagePeople({ session: context.session })) {
         // A returning guest frees the email held by their earlier guest record. Registered
         // customers (hasAccount true), staff and anyone with a role are never touched.
-        await retireReturningGuest(context.prisma, resolvedData.email);
         return { ...resolvedData, hasAccount: resolvePublicHasAccount(inputData as any) };
       }
       return resolvedData;
+    },
+    // Runs only after resolveInput and all field/list validation passed, right before the DB write,
+    // so a create that fails validation never frees a guest's email.
+    beforeOperation: async ({ operation, resolvedData, context }) => {
+      if (operation === 'create' && !permissions.canManagePeople({ session: context.session })) {
+        await retireReturningGuest(context.prisma, (resolvedData as any)?.email);
+      }
     },
   },
   access: {
