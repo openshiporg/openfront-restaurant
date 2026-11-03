@@ -113,7 +113,8 @@ test("source contracts: sign-up sends hasAccount true, the model hook retires re
   assert.match(read("features/dashboard/actions/auth.ts"), /hasAccount: true/);
   const guestCreate = read("features/storefront/lib/data/user.ts").split("export async function createGuestUser")[1];
   assert.doesNotMatch(guestCreate, /hasAccount: true/);
-  assert.match(read("features/keystone/models/User.ts"), /await retireReturningGuest\(context\.prisma, resolvedData\.email\)/);
+  assert.match(read("features/keystone/models/User.ts"), /beforeOperation[\s\S]*await retireReturningGuest\(context\.prisma, \(resolvedData as any\)\?\.email\)/);
+  assert.doesNotMatch(read("features/keystone/models/User.ts").split("beforeOperation")[0], /retireReturningGuest\(/);
   assert.match(read("features/keystone/models/User.ts"), /!permissions\.canManagePeople/);
   const dir = readdirSync(join(root, "migrations")).find((d) => /user_has_account/.test(d))!;
   const sql = read(`migrations/${dir}/migration.sql`);
