@@ -1,3 +1,4 @@
+import { shopperError } from "../utils/shopperError";
 import crypto from "crypto";
 import { claimCheckoutSession, checkoutCartSignature } from "../utils/checkoutReservation";
 import type { Context } from ".keystone/types";
@@ -56,8 +57,8 @@ export default async function initiatePaymentSession(
     `,
   });
   if (!cart) throw new Error("Cart not found");
-  if (cart.order?.id) throw new Error("Completed carts cannot start another payment");
-  if (!cart.items?.length) throw new Error("Cart is empty");
+  if (cart.order?.id) throw shopperError("Completed carts cannot start another payment", "CART_COMPLETED");
+  if (!cart.items?.length) throw shopperError("Cart is empty", "CART_EMPTY");
   // A provider attempt owns its immutable quote until its outcome is resolved.
   // Retrying must not create a differently priced intent after a catalog edit.
   const activeAttempt = cart.paymentCollection?.paymentSessions?.find((session: any) =>
@@ -118,7 +119,7 @@ export default async function initiatePaymentSession(
     currencyCode: currency,
   });
   if (pricing.deliveryMinimumNotMet) {
-    throw new Error(`Delivery orders require a minimum subtotal of ${settings?.deliveryMinimum || "0.00"}.`);
+    throw shopperError(`Delivery orders require a minimum subtotal of ${settings?.deliveryMinimum || "0.00"}.`, "DELIVERY_MINIMUM_NOT_MET");
   }
   const amount = pricing.total;
   const { paymentCollection: _collection, ...quotedCart } = cart;

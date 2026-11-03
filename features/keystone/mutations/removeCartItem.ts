@@ -1,3 +1,4 @@
+import { shopperError } from "../utils/shopperError";
 import { cartMutationTransaction, touchMutableCart } from "../utils/cartMutationTransaction";
 import { Context } from ".keystone/types";
 import { assertCanAccessCartItem } from "../utils/cartAccess";
@@ -15,7 +16,7 @@ async function removeCartItem(
     where: { id: cartId },
     query: "id order { id }",
   });
-  if (cart?.order?.id) throw new Error("Completed carts cannot be changed");
+  if (cart?.order?.id) throw shopperError("Completed carts cannot be changed", "CART_COMPLETED");
   await touchMutableCart(context, cartId);
 
   await sudoContext.db.CartItem.deleteOne({

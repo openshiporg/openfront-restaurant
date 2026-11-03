@@ -1,3 +1,4 @@
+import { shopperError } from "../utils/shopperError";
 import { cartMutationTransaction, touchMutableCart } from "../utils/cartMutationTransaction";
 import type { Context } from ".keystone/types";
 import { assertCanAccessCart } from "../utils/cartAccess";
@@ -25,7 +26,7 @@ async function addActiveCartItem(
     where: { id: cartId },
     query: "id order { id }",
   });
-  if (cart?.order?.id) throw new Error("Completed carts cannot be changed");
+  if (cart?.order?.id) throw shopperError("Completed carts cannot be changed", "CART_COMPLETED");
   await touchMutableCart(context, cartId);
   const validated = await validateCartItemInput(context, input);
 

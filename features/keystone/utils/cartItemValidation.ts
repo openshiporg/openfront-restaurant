@@ -1,3 +1,4 @@
+import { shopperError } from "./shopperError";
 import { assertOrderingAvailable } from "../../lib/restaurant-hours";
 import type { Context } from ".keystone/types";
 
@@ -30,16 +31,16 @@ type ModifierRecord = ValidatedCartItem["modifiers"][number] & {
 export function normalizeCartQuantity(value: unknown) {
   const quantity = Number(value);
   if (!Number.isInteger(quantity) || quantity < 1 || quantity > 99) {
-    throw new Error("Quantity must be a whole number between 1 and 99");
+    throw shopperError("Quantity must be a whole number between 1 and 99", "INVALID_QUANTITY");
   }
   return quantity;
 }
 
 export function normalizeSpecialInstructions(value: unknown) {
   if (value == null) return "";
-  if (typeof value !== "string") throw new Error("Special instructions must be text");
+  if (typeof value !== "string") throw shopperError("Special instructions must be text", "INVALID_CART_INPUT");
   const normalized = value.trim();
-  if (normalized.length > 500) throw new Error("Special instructions cannot exceed 500 characters");
+  if (normalized.length > 500) throw shopperError("Special instructions cannot exceed 500 characters", "INVALID_CART_INPUT");
   return normalized;
 }
 
@@ -49,13 +50,13 @@ export function validateModifierSelections(
 ) {
   const uniqueIds = Array.from(new Set(requestedModifierIds.filter(Boolean)));
   if (uniqueIds.length !== requestedModifierIds.length) {
-    throw new Error("A modifier cannot be selected more than once");
+    throw shopperError("A modifier cannot be selected more than once", "INVALID_MODIFIERS");
   }
 
   const byId = new Map(availableModifiers.map((modifier) => [modifier.id, modifier]));
   const selected = uniqueIds.map((id) => {
     const modifier = byId.get(id);
-    if (!modifier) throw new Error("One or more selected modifiers do not belong to this menu item");
+    if (!modifier) throw shopperError("One or more selected modifiers do not belong to this menu item", "INVALID_MODIFIERS");
     return modifier;
   });
 
@@ -76,10 +77,10 @@ export function validateModifierSelections(
     const maximum = configuredMaximum.length > 0 ? Math.min(...configuredMaximum) : groupModifiers.length;
 
     if (selectedCount < minimum) {
-      throw new Error(`Select at least ${minimum} option${minimum === 1 ? "" : "s"} from ${group}`);
+      throw shopperError(`Select at least ${minimum} option${minimum === 1 ? "" : "s"} from ${group}`, "INVALID_MODIFIERS");
     }
     if (selectedCount > maximum) {
-      throw new Error(`Select no more than ${maximum} option${maximum === 1 ? "" : "s"} from ${group}`);
+      throw shopperError(`Select no more than ${maximum} option${maximum === 1 ? "" : "s"} from ${group}`, "INVALID_MODIFIERS");
     }
   }
 
@@ -95,7 +96,7 @@ export async function validateCartItemInput(
     specialInstructions?: string | null;
   }
 ): Promise<ValidatedCartItem> {
-  if (!input.menuItemId) throw new Error("Menu item is required");
+  if (!input.menuItemId) throw shopperError("Menu item is required", "MENU_ITEM_REQUIRED");
 
   const menuItem = await context.sudo().query.MenuItem.findOne({
     where: { id: input.menuItemId },
@@ -121,8 +122,8 @@ export async function validateCartItemInput(
     `,
   });
 
-  if (!menuItem) throw new Error("Menu item not found");
-  if (!menuItem.available) throw new Error(`${menuItem.name || "Selected item"} is unavailable`);
+  if (!menuItem) throw shopperError("Menu item not found", "MENU_ITEM_NOT_FOUND");
+  if (!menuItem.available) throw shopperError(`${menuItem.name || "Selected item"} is unavailable`, "ITEM_UNAVAILABLE");
   const settings = await context.sudo().query.StoreSettings.findOne({ where: { id: "1" }, query: "name timezone hours" });
   assertOrderingAvailable(settings, menuItem);
 
@@ -139,7 +140,7 @@ export async function validateCartItemInput(
   const modifierTotal = modifiers.reduce((sum, modifier) => sum + modifier.priceAdjustment, 0);
   const unitPrice = basePrice + modifierTotal;
 
-  if (unitPrice < 0) throw new Error("Selected modifiers cannot make the item price negative");
+  if (unitPrice < 0) throw shopperError("Selected modifiers cannot make the item price negative", "INVALID_MODIFIERS");
 
   return {
     menuItem: {

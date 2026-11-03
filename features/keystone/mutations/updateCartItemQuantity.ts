@@ -1,3 +1,4 @@
+import { shopperError } from "../utils/shopperError";
 import { cartMutationTransaction, touchMutableCart } from "../utils/cartMutationTransaction";
 import { Context } from ".keystone/types";
 import { assertCanAccessCartItem } from "../utils/cartAccess";
@@ -14,7 +15,7 @@ async function updateCartItemQuantity(
     where: { id: cartItem.cart.id },
     query: "id order { id }",
   });
-  if (cart?.order?.id) throw new Error("Completed carts cannot be changed");
+  if (cart?.order?.id) throw shopperError("Completed carts cannot be changed", "CART_COMPLETED");
   await touchMutableCart(context, cartItem.cart.id);
 
   await sudoContext.db.CartItem.updateOne({

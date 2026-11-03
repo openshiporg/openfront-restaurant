@@ -1,3 +1,4 @@
+import { shopperError } from "./shopperError";
 import type { Context } from ".keystone/types";
 import { getDeliveryEligibility, normalizeCountryCode, normalizePostalCode } from "../../lib/delivery-zones";
 
@@ -42,7 +43,7 @@ export function assertDeliveryModeAllowed(params: {
   } | null;
 }) {
   if (params.orderType === "delivery" && !params.storeSettings?.deliveryEnabled) {
-    throw new Error("Delivery is not available for this restaurant.");
+    throw shopperError("Delivery is not available for this restaurant.", "DELIVERY_UNAVAILABLE");
   }
 }
 
@@ -58,7 +59,7 @@ export function assertDeliveryAddressComplete(params: {
   }
 
   if (!params.deliveryAddress || !params.deliveryCity || !params.deliveryZip || !params.deliveryCountryCode) {
-    throw new Error("Delivery address is incomplete. Add street address, city, postal code, and country code.")
+    throw shopperError("Delivery address is incomplete. Add street address, city, postal code, and country code.", "DELIVERY_ADDRESS_INCOMPLETE")
   }
 }
 
@@ -85,7 +86,9 @@ export function assertDeliveryAddressEligible(params: {
   })
 
   if (!eligibility.eligible) {
-    throw new Error(getDeliveryErrorMessage(eligibility.reason))
+    // Missing zone configuration is a store setup problem, not shopper input: it stays masked.
+    if (eligibility.reason === "missing_delivery_zones") throw new Error(getDeliveryErrorMessage(eligibility.reason))
+    throw shopperError(getDeliveryErrorMessage(eligibility.reason), eligibility.reason === "delivery_disabled" ? "DELIVERY_UNAVAILABLE" : eligibility.reason === "missing_address" ? "DELIVERY_ADDRESS_INCOMPLETE" : "DELIVERY_OUT_OF_ZONE")
   }
 }
 

@@ -1,3 +1,4 @@
+import { shopperError } from "../utils/shopperError";
 import { cartMutationTransaction, touchMutableCart } from "../utils/cartMutationTransaction";
 import type { Context } from ".keystone/types";
 import { permissions } from "../access";
@@ -30,9 +31,9 @@ type ActiveCartUpdateInput = {
 
 function boundedText(value: unknown, field: string, maximum: number) {
   if (value == null) return undefined;
-  if (typeof value !== "string") throw new Error(`${field} must be text`);
+  if (typeof value !== "string") throw shopperError(`${field} must be text`, "INVALID_CART_INPUT");
   const normalized = value.trim();
-  if (normalized.length > maximum) throw new Error(`${field} cannot exceed ${maximum} characters`);
+  if (normalized.length > maximum) throw shopperError(`${field} cannot exceed ${maximum} characters`, "INVALID_CART_INPUT");
   return normalized;
 }
 
@@ -60,7 +61,7 @@ async function updateActiveCart(
     `,
   });
   if (!cart) throw new Error("Cart not found");
-  if (cart.order?.id) throw new Error("Completed carts cannot be changed");
+  if (cart.order?.id) throw shopperError("Completed carts cannot be changed", "CART_COMPLETED");
   await touchMutableCart(context, cartId);
 
   const deliveryInput = Object.fromEntries(
@@ -75,9 +76,9 @@ async function updateActiveCart(
   );
   const normalizedDelivery = normalizeDeliveryFields(deliveryInput);
   const nextOrderType = data.orderType ?? cart.orderType ?? "pickup";
-  if (!ALLOWED_ORDER_TYPES.has(nextOrderType)) throw new Error("Invalid order type");
+  if (!ALLOWED_ORDER_TYPES.has(nextOrderType)) throw shopperError("Invalid order type", "INVALID_ORDER_TYPE");
   if (data.tipPercent != null && !ALLOWED_TIP_PERCENTS.has(data.tipPercent)) {
-    throw new Error("Invalid tip percentage");
+    throw shopperError("Invalid tip percentage", "INVALID_TIP");
   }
 
   const storeSettings = await getStoreDeliverySettings(context);

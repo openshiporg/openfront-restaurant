@@ -2,6 +2,7 @@
  * completeActiveCart aligned to the active selected payment-session flow.
  * Selected PaymentSession is the only payment source of truth.
  */
+import { shopperError } from "../utils/shopperError";
 import type { Context } from ".keystone/types";
 import { getPaymentStatus, capturePayment } from "../utils/paymentProviderAdapter";
 import { resolveOrderCustomer } from "../security/guest-user";
@@ -129,7 +130,7 @@ export default async function completeActiveCart(
     if (isKitchenActiveOrderStatus(cart.order.status)) await syncKitchenTicketsForOrder(cart.order.id, context);
     return cart.order;
   }
-  if (!cart.items?.length) throw new Error("Cart is empty");
+  if (!cart.items?.length) throw shopperError("Cart is empty", "CART_EMPTY");
 
   const selectedSession = paymentSessionId
     ? cart.paymentCollection?.paymentSessions?.find(
@@ -218,7 +219,7 @@ export default async function completeActiveCart(
   // Orders record one combined discount; the promo portion is tied back through order.discounts.
   const pickupDiscount = Number(basePickupDiscount || 0) + Number(promoDiscount || 0);
   if (deliveryMinimumNotMet) {
-    throw new Error(`Delivery orders require a minimum subtotal of ${settings?.deliveryMinimum || "0.00"}.`);
+    throw shopperError(`Delivery orders require a minimum subtotal of ${settings?.deliveryMinimum || "0.00"}.`, "DELIVERY_MINIMUM_NOT_MET");
   }
 
   const orderTypeMap: Record<string, string> = {
@@ -231,7 +232,7 @@ export default async function completeActiveCart(
   const secretKey = !customerId ? require("crypto").randomBytes(32).toString("hex") : "";
   const isDeliveryOrder = cart.orderType === "delivery";
   if (Number(selectedSession.amount || 0) !== total && !isManual) {
-    throw new Error("Cart total changed. Please return to payment and confirm your payment method again.");
+    throw shopperError("Cart total changed. Please return to payment and confirm your payment method again.", "CART_TOTAL_CHANGED");
   }
 
   const prisma = context.prisma as any;
