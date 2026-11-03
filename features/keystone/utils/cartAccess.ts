@@ -1,8 +1,14 @@
 import * as cookie from "cookie";
+import { GraphQLError } from "graphql";
 import type { Context } from ".keystone/types";
 import { isSignedIn, permissions } from "../access";
 import { cartIdFromProof, verifyCartProof } from "./cartProof";
 
+// Missing and foreign carts get the same clear refusal. A GraphQLError is not masked as
+// "Unexpected error." by Yoga, and the message matches existing checks.
+export function cartRefusal(message: "Cart not found" | "Cart item not found") {
+  return new GraphQLError(message, { extensions: { code: "CART_NOT_FOUND" } });
+}
 type CartAccessMode = "read" | "write" | "checkout";
 function requestProof(context: Context): string | undefined {
   const headers = context.req?.headers as Record<string, any> | undefined;
@@ -20,13 +26,13 @@ export async function assertCanAccessCart(context: Context, cartId: string, mode
   const human = isSignedIn({ session: context.session });
   const validProof = verifyCartProof(proof, cartId);
   // Anonymous and scoped service callers cannot probe privileged cart lookups by ID.
-  if (!bypass && !human && !validProof) throw new Error("Cart not found");
+  if (!bypass && !human && !validProof) throw cartRefusal("Cart not found");
   const cart = await context.sudo().query.Cart.findOne({ where: { id: cartId }, query: "id user { id }" });
-  if (!cart) throw new Error("Cart not found");
+  if (!cart) throw cartRefusal("Cart not found");
   if (!bypass) {
     const owner = human && cart.user?.id === context.session?.itemId;
     const guest = !cart.user?.id && validProof && !(context.session as any)?.apiKeyId;
-    if (!owner && !guest) throw new Error("Cart not found");
+    if (!owner && !guest) throw cartRefusal("Cart not found");
   }
   if (mode === "write") {
     const state = await context.sudo().query.Cart.findOne({
@@ -44,12 +50,12 @@ export async function assertCanAccessCartItem(context: Context, cartItemId: stri
   const proof = requestProof(context);
   const proofCartId = cartIdFromProof(proof);
   if (!bypass && !isSignedIn({ session: context.session })) {
-    if (!proofCartId || !verifyCartProof(proof, proofCartId)) throw new Error("Cart item not found");
+    if (!proofCartId || !verifyCartProof(proof, proofCartId)) throw cartRefusal("Cart item not found");
     await assertCanAccessCart(context, proofCartId, mode);
   }
   // This projection contains no customer, amount or provider data.
   const item = await context.sudo().query.CartItem.findOne({ where: { id: cartItemId }, query: "id cart { id user { id } }" });
-  if (!item?.cart?.id) throw new Error("Cart item not found");
+  if (!item?.cart?.id) throw cartRefusal("Cart item not found");
   await assertCanAccessCart(context, item.cart.id, mode);
   return item;
 }
