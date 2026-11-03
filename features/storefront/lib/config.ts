@@ -5,6 +5,7 @@
 
 import { GraphQLClient, RequestDocument, Variables } from 'graphql-request';
 import { getGraphQLEndpoint } from './getBaseUrl';
+import { internalGraphqlEndpoint, withRequestIdentity } from '@/features/keystone/lib/internal-origin';
 
 class OpenfrontClient {
   private clients = new Map<number, Promise<GraphQLClient>>();
@@ -12,8 +13,12 @@ class OpenfrontClient {
   private async getClient(timeout = 10000): Promise<GraphQLClient> {
     if (!this.clients.has(timeout)) {
       this.clients.set(timeout, (async () => {
-        const endpoint = await getGraphQLEndpoint();
+        // On the server, call this process over loopback with the visitor's signed identity so
+        // server renders don't share the public egress IP bucket. Browser calls stay public.
+        const loopback = typeof window === 'undefined' ? internalGraphqlEndpoint() : null;
+        const endpoint = loopback ?? await getGraphQLEndpoint();
         return new GraphQLClient(endpoint, {
+          ...(loopback ? { fetch: withRequestIdentity() } : {}),
           credentials: 'include',
           headers: {
             'Connection': 'keep-alive',

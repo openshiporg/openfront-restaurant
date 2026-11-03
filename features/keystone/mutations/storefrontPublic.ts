@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { throttleClient } from "../utils/throttleClient";
 import Stripe from "stripe";
 import type { Context } from ".keystone/types";
 import { appendAuditEventWithClient } from "../utils/audit";
@@ -32,8 +33,7 @@ const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const hits = new Map<string, number[]>();
 /** Small per-client limiter for unauthenticated lookups; one process, best effort. */
 function throttle(context: Context, bucket: string, limit: number, windowMs = 60_000) {
-  const headers = (context.req?.headers || {}) as Record<string, any>;
-  const client = String(headers["x-forwarded-for"] || context.req?.socket?.remoteAddress || "unknown").split(",")[0].trim();
+  const client = throttleClient(context.req);
   const key = `${bucket}:${client}`;
   const now = Date.now();
   const recent = (hits.get(key) || []).filter((t) => now - t < windowMs);

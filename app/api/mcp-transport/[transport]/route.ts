@@ -13,6 +13,10 @@ import {
   isInputObjectType,
 } from 'graphql';
 import { getBaseUrl } from '@/features/dashboard/lib/getBaseUrl';
+import { internalGraphqlEndpoint, withRequestIdentity } from '@/features/keystone/lib/internal-origin';
+
+// Self-calls to /api/graphql carry the caller's signed identity (read from the current request).
+const selfFetch = withRequestIdentity();
 import { requireMcpSession } from '@/features/keystone/mcpGate';
 
 // Get simple type name for display
@@ -28,7 +32,7 @@ function getSimpleTypeName(type: any): string {
 
 // Execute GraphQL query with authentication
 async function executeGraphQL(query: string, graphqlEndpoint: string, cookie: string): Promise<any> {
-  const response = await fetch(graphqlEndpoint, {
+  const response = await selfFetch(graphqlEndpoint, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -46,7 +50,7 @@ async function executeGraphQL(query: string, graphqlEndpoint: string, cookie: st
 
 // Get GraphQL schema from introspection
 async function getGraphQLSchema(graphqlEndpoint: string, cookie: string): Promise<GraphQLSchema> {
-  const response = await fetch(graphqlEndpoint, {
+  const response = await selfFetch(graphqlEndpoint, {
     method: 'POST',
     headers: { 
       'Content-Type': 'application/json',
@@ -75,8 +79,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ tra
     const { transport } = await params;
     
     // Construct GraphQL endpoint
-    const baseUrl = await getBaseUrl();
-    const graphqlEndpoint = `${baseUrl}/api/graphql`;
+    const graphqlEndpoint = internalGraphqlEndpoint() ?? `${await getBaseUrl()}/api/graphql`;
     
     // Extract cookie from request
     const cookie = request.headers.get('cookie') || ''

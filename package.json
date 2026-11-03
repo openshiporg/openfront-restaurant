@@ -8,6 +8,7 @@
     "views:generate": "tsx features/keystone/view-order/generate-view-order.ts",
     "start": "next start",
     "lint": "eslint .",
+    "test:security": "node --import tsx --test features/keystone/lib/internal-origin.test.ts",
     "test:offline": "node --import tsx --test tests/*.test.ts",
     "migrate:gen": "keystone build --no-ui && tsx features/keystone/view-order/generate-view-order.ts && keystone prisma migrate dev",
     "migrate": "prisma migrate deploy"
