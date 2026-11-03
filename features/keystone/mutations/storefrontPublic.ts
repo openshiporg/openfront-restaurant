@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import { throttleClient } from "../utils/throttleClient";
 import Stripe from "stripe";
+import { GraphQLError } from "graphql";
 import type { Context } from ".keystone/types";
 import { appendAuditEventWithClient } from "../utils/audit";
 import { enqueueRestaurantNotification } from "../utils/restaurantNotifications";
@@ -18,7 +19,7 @@ function guarded<A extends unknown[], R>(fn: (...args: A) => Promise<R>) {
   return async (...args: A): Promise<R | { success: false; message: string }> => {
     try { return await fn(...args); }
     catch (error) {
-      if (error instanceof UserError) return { success: false, message: error.message };
+      if (error instanceof UserError || isRateLimited(error)) return { success: false, message: (error as Error).message };
       throw error;
     }
   };
@@ -30,6 +31,15 @@ const GIFT_MIN = 1000;
 const GIFT_MAX = 50000;
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+const RATE_LIMIT_MESSAGE = "Too many attempts. Please wait a minute and try again.";
+/** A GraphQLError is not masked as "Unexpected error." by Yoga, so unwrapped lookups get a clear refusal. */
+function rateLimited() {
+  return new GraphQLError(RATE_LIMIT_MESSAGE, { extensions: { code: "RATE_LIMITED" } });
+}
+function isRateLimited(error: unknown) {
+  return error instanceof GraphQLError && error.extensions?.code === "RATE_LIMITED";
+}
+
 const hits = new Map<string, number[]>();
 /** Small per-client limiter for unauthenticated lookups; one process, best effort. */
 function throttle(context: Context, bucket: string, limit: number, windowMs = 60_000) {
@@ -37,7 +47,7 @@ function throttle(context: Context, bucket: string, limit: number, windowMs = 60
   const key = `${bucket}:${client}`;
   const now = Date.now();
   const recent = (hits.get(key) || []).filter((t) => now - t < windowMs);
-  if (recent.length >= limit) throw new UserError("Too many attempts. Please wait a minute and try again.");
+  if (recent.length >= limit) throw rateLimited();
   recent.push(now);
   hits.set(key, recent);
   if (hits.size > 5000) for (const [k, v] of hits) if (!v.some((t) => now - t < windowMs)) hits.delete(k);
