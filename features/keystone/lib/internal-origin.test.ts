@@ -220,3 +220,27 @@ test('withRequestIdentity signs on the server and leaves unsigned when there is 
     if (prev === undefined) delete process.env.SESSION_SECRET; else process.env.SESSION_SECRET = prev
   }
 })
+
+test('a long-lived client signs the CURRENT visitor on every call (two visitors, two identities, never the first one)', async () => {
+  const prev = process.env.SESSION_SECRET
+  process.env.SESSION_SECRET = SECRET
+  const seen: Headers[] = []
+  const inner = (async (_u: any, init: any) => { seen.push(new Headers(init.headers)); return new Response('{}') }) as typeof fetch
+  let current: Record<string, string> = { 'x-real-ip': '203.0.113.7' }
+  const reader = async () => ({ get: (n: string) => current[n] ?? null })
+  try {
+    const shared = withRequestIdentity(inner, reader) // built once, like a cached client
+    await shared('http://127.0.0.1:1/api/graphql', {})
+    current = { 'x-real-ip': '198.51.100.9' }
+    await shared('http://127.0.0.1:1/api/graphql', {})
+    await shared('http://127.0.0.1:1/api/graphql', {})
+    const ids = seen.map((h) => h.get('x-openfront-client-identity'))
+    assert.match(ids[0] || '', /^[a-f0-9]{64}$/)
+    assert.notEqual(ids[0], ids[1])
+    assert.equal(ids[1], ids[2])
+    assert.equal(ids[0], internalIdentityHeaders('203.0.113.7')['x-openfront-client-identity'])
+    assert.equal(ids[1], internalIdentityHeaders('198.51.100.9')['x-openfront-client-identity'])
+  } finally {
+    if (prev === undefined) delete process.env.SESSION_SECRET; else process.env.SESSION_SECRET = prev
+  }
+})
