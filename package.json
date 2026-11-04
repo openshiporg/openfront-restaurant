@@ -1,6 +1,7 @@
 {
   "name": "weekday-keystone",
   "version": "0.1.0",
+  "license": "MIT",
   "private": true,
   "scripts": {
     "dev": "keystone build --no-ui && npm run views:generate && npm run migrate && next dev",
