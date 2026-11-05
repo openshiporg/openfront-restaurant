@@ -13,6 +13,7 @@ import { CategoryIcon } from "@/features/storefront/components/antares/CategoryI
 import { QuickAdd } from "@/features/storefront/components/antares/QuickAdd"
 import type { MenuCategory, MenuItem } from "@/features/storefront/lib/store-data"
 import { cn } from "@/lib/utils"
+import { getServiceStatus } from "@/features/storefront/lib/store-hours-display"
 
 type Props = {
   params: Promise<{ id: string }>
@@ -174,7 +175,7 @@ export default async function MenuItemPage(props: Props) {
 
           <div className="hidden xl:block">
             <div className="sticky top-28">
-              <OrderBag cart={cart} currencyCode={currency.currencyCode} locale={currency.locale} readyIn={readyIn(storeSettings?.estimatedPickup)} address={storeSettings?.address} />
+              <OrderBag cart={cart} currencyCode={currency.currencyCode} locale={currency.locale} readyIn={readyIn(storeSettings?.estimatedPickup)} address={storeSettings?.address} storeName={storeSettings?.name} status={storeSettings ? getServiceStatus(storeSettings.hours, storeSettings.timezone || "America/New_York", currency.locale) : null} />
             </div>
           </div>
         </div>

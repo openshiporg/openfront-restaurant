@@ -1,6 +1,6 @@
 import { Metadata } from "next"
 import Image from "next/image"
-import { Clock, Leaf } from "lucide-react"
+import { Leaf } from "lucide-react"
 import {
   getMenuCategories,
   getMenuItems,
@@ -11,12 +11,12 @@ import { StorefrontDataUnavailableError } from "@/features/storefront/lib/data/e
 import { type MenuCategory, type MenuItem } from "@/features/storefront/lib/store-data"
 import { getCurrencyConfig, formatCurrency } from "@/features/storefront/lib/currency"
 import { getMenuItemDescriptionText } from "@/features/storefront/lib/menu-item-utils"
-import { getServiceStatus, getWeeklyHoursDisplay } from "@/features/storefront/lib/store-hours-display"
+import { getServiceStatus } from "@/features/storefront/lib/store-hours-display"
 import { buildMenuVisibility, selectHeroMenuItems } from "@/features/storefront/lib/menu-visibility"
 import { StorefrontUnavailable } from "@/features/storefront/components/StorefrontUnavailable"
 import { MenuGrid, type GridItem, type GridTab } from "@/features/storefront/components/antares/MenuGrid"
 import { OrderBag } from "@/features/storefront/components/antares/OrderBag"
-import { StoreMark } from "@/features/storefront/modules/layout/components/store-logo"
+import { PickupSummary } from "@/features/storefront/components/PickupSummary"
 
 export async function generateMetadata(): Promise<Metadata> {
   const storeSettings = await getStoreSettings()
@@ -32,22 +32,6 @@ function readyIn(estimate?: string | null) {
   const value = (estimate || "").trim()
   if (!value) return null
   return /min|hour|hr/i.test(value) ? value : `${value} min`
-}
-
-/** "Open 11am – 9pm Daily" when every day matches; otherwise today's hours. */
-function hoursLine(hours: unknown, locale: string, timezone: string) {
-  const week = getWeeklyHoursDisplay(hours, locale)
-  const open = week.filter((entry) => entry.value !== "Closed")
-  if (open.length === 0) return null
-  if (open.length === 7 && open.every((entry) => entry.value === open[0].value)) return `Open ${open[0].value} daily`
-  let today = ""
-  try {
-    today = new Intl.DateTimeFormat("en-US", { weekday: "short", timeZone: timezone }).format(new Date())
-  } catch {
-    today = new Intl.DateTimeFormat("en-US", { weekday: "short" }).format(new Date())
-  }
-  const entry = week.find((day) => day.day === today)
-  return entry && entry.value !== "Closed" ? `Today ${entry.value}` : null
 }
 
 /** Splits a headline into lines at sentence ends so "Craft Burgers. Real Good." stacks like the menu board. */
@@ -86,7 +70,6 @@ export default async function HomePage() {
   const timezone = storeSettings.timezone || "America/New_York"
   const status = getServiceStatus(storeSettings.hours, timezone, currency.locale)
   const ready = readyIn(storeSettings.estimatedPickup)
-  const hours = hoursLine(storeSettings.hours, currency.locale, timezone)
   const storeName = String(storeSettings.name || "").trim()
   const headline = storeSettings.heroHeadline || storeName
   const subheadline = storeSettings.heroSubheadline || storeSettings.tagline || ""
@@ -142,28 +125,9 @@ export default async function HomePage() {
 
   return (
     <div className="bg-white">
-      {/* Phone: pickup timing and the store card. */}
+      {/* Phone: one store block with where and when to collect. */}
       <section className="storefront-shell pt-4 md:hidden">
-        {ready ? (
-          <p className="flex items-start gap-2.5">
-            <Clock className="mt-px size-5 shrink-0 text-leaf" strokeWidth={1.75} aria-hidden="true" />
-            <span className="leading-tight">
-              <span className="block text-[0.8rem] font-semibold text-leaf">Ready in {ready}</span>
-              <span className="text-[0.75rem] text-ink-soft">Pickup</span>
-            </span>
-          </p>
-        ) : null}
-        <div className="mt-4 flex items-center gap-3">
-          <StoreMark name={storeName} />
-          <div className="min-w-0 flex-1 leading-snug">
-            <h1 className="storefront-store-name truncate font-sans text-[0.86rem] font-bold">{storeName}</h1>
-            {storeSettings.address ? <p className="truncate text-[0.75rem] text-ink-soft">{storeSettings.address}</p> : null}
-            <p className={status.isOpen ? "text-[0.75rem] font-medium text-leaf" : "text-[0.75rem] font-medium text-ink-soft"}>
-              {status.isOpen ? "Open" : "Closed"}
-              {status.detail ? <span className="font-normal text-ink-soft"> · {status.detail}</span> : null}
-            </p>
-          </div>
-        </div>
+        <PickupSummary name={storeName} address={storeSettings.address} status={status} readyIn={ready} nameAsHeading />
       </section>
 
       {/* Wider: hero with the order bag floating over its right edge. */}
@@ -184,17 +148,18 @@ export default async function HomePage() {
               </h1>
               <span aria-hidden="true" className="mt-4 block h-1 w-12 rounded-full bg-leaf" />
               {subheadline ? <p className="mt-4 max-w-[46ch] text-pretty text-[1rem] text-ink">{subheadline}</p> : null}
-              <ul className="mt-6 flex flex-wrap gap-x-7 gap-y-2 text-[0.95rem] text-ink">
-                {madeFresh ? (
-                  <li className="flex items-center gap-2.5"><Leaf className="size-5 fill-leaf text-leaf" aria-hidden="true" />{madeFresh}</li>
-                ) : null}
-                {ready ? (
-                  <li className="flex items-center gap-2.5"><Clock className="size-5 text-leaf" aria-hidden="true" />Ready in <span className="text-leaf">{ready}</span></li>
-                ) : null}
-                {hours ? (
-                  <li className="flex items-center gap-2.5"><Clock className="size-5 text-ink-soft" aria-hidden="true" />{hours}</li>
-                ) : null}
-              </ul>
+              {madeFresh ? (
+                <p className="mt-6 flex items-center gap-2.5 text-[0.95rem] text-ink"><Leaf className="size-5 fill-leaf text-leaf" aria-hidden="true" />{madeFresh}</p>
+              ) : null}
+              {/* Below lg the order bag is hidden, so the store block lives in the hero. */}
+              <PickupSummary
+                name={storeName}
+                address={storeSettings.address}
+                status={status}
+                readyIn={ready}
+                size="hero"
+                className="mt-6 lg:hidden"
+              />
             </div>
           </div>
         </section>
@@ -214,6 +179,8 @@ export default async function HomePage() {
                   locale={currency.locale}
                   readyIn={ready}
                   address={storeSettings.address}
+                  storeName={storeName}
+                  status={status}
                 />
               </div>
             </div>

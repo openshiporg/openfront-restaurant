@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { Clock, MapPin } from "lucide-react"
+import { MapPin } from "lucide-react"
 import { getCurrencyConfig } from "@/features/storefront/lib/currency"
 import CartButton from "@/features/storefront/modules/layout/components/cart-button"
 import type { CartData } from "@/features/storefront/modules/layout/components/cart-dropdown"
@@ -25,12 +25,6 @@ interface NavProps {
   brandHue: string
 }
 
-function readyIn(estimate?: string | null) {
-  const value = (estimate || "").trim()
-  if (!value) return null
-  return /min|hour|hr/i.test(value) ? value : `${value} min`
-}
-
 /** Splits "742 Artisan Way, Brooklyn, NY 11201" into a street line and the rest. */
 export function addressLines(address?: string | null) {
   const value = (address || "").trim()
@@ -49,7 +43,6 @@ export default function Nav({ storeSettings, cart, brandHue }: NavProps) {
   const timezone = storeSettings?.timezone || "America/New_York"
   const locale = currencyConfig.locale
   const initialStatus = getServiceStatus(storeSettings?.hours, timezone, locale)
-  const ready = readyIn(storeSettings?.estimatedPickup)
   const lines = addressLines(storeSettings?.address)
 
   return (
@@ -58,14 +51,6 @@ export default function Nav({ storeSettings, cart, brandHue }: NavProps) {
         <div className="storefront-shell flex h-14 items-center justify-between gap-3 md:h-20 lg:h-24">
           <StoreBrand name={storeName} logoIcon={storeSettings?.logoIcon} logoColor={storeSettings?.logoColor} />
 
-          {ready ? (
-            <p className="hidden items-center gap-2.5 text-[1.15rem] text-ink xl:flex">
-              <span className="grid size-7 place-items-center rounded-full bg-leaf text-white">
-                <Clock className="size-4" strokeWidth={2.25} aria-hidden="true" />
-              </span>
-              Ready in <span className="font-semibold text-leaf">{ready}</span>
-            </p>
-          ) : null}
 
           <div className="flex shrink-0 items-center gap-1 sm:gap-2">
             <nav className="hidden items-center lg:flex" aria-label="Storefront">

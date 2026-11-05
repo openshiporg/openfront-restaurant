@@ -4,11 +4,13 @@ import { useState } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Clock, MapPin, Minus, Plus, ShoppingBag, X } from "lucide-react"
+import { Minus, Plus, ShoppingBag, X } from "lucide-react"
 import { formatCurrency } from "@/features/storefront/lib/currency"
 import { removeLineItem, updateLineItem } from "@/features/storefront/lib/data/cart"
 import type { CartData } from "@/features/storefront/modules/layout/components/cart-dropdown"
 import { cn } from "@/lib/utils"
+import type { ServiceStatus } from "@/features/storefront/lib/store-hours-display"
+import { PickupSummary } from "@/features/storefront/components/PickupSummary"
 
 interface OrderBagProps {
   cart: CartData | null
@@ -16,11 +18,13 @@ interface OrderBagProps {
   locale: string
   readyIn?: string | null
   address?: string | null
+  storeName?: string | null
+  status?: ServiceStatus | null
   className?: string
 }
 
 /** The order bag that sits beside the menu on wide screens: live items, totals and checkout. */
-export function OrderBag({ cart, currencyCode, locale, readyIn, address, className }: OrderBagProps) {
+export function OrderBag({ cart, currencyCode, locale, readyIn, address, storeName, status, className }: OrderBagProps) {
   const router = useRouter()
   const [busy, setBusy] = useState(false)
   const items = cart?.items || []
@@ -125,32 +129,9 @@ export function OrderBag({ cart, currencyCode, locale, readyIn, address, classNa
         </>
       )}
 
-      {readyIn || address ? (
-        <div className="mt-6 space-y-4 border-t border-border pt-6 text-[1.05rem]">
-          {readyIn ? (
-            <p className="flex items-center gap-3">
-              <span className="grid size-7 shrink-0 place-items-center rounded-full bg-leaf text-white">
-                <Clock className="size-4" strokeWidth={2.25} aria-hidden="true" />
-              </span>
-              <span>
-                Ready in <span className="font-semibold text-leaf">{readyIn}</span>
-              </span>
-            </p>
-          ) : null}
-          {address ? (
-            <p className="flex items-start gap-3">
-              <MapPin className="mt-0.5 size-6 shrink-0 text-ink-soft" strokeWidth={1.75} aria-hidden="true" />
-              <span className="leading-snug">
-                {/* Street on one line, city on the next, the way the address is written on a card. */}
-                {address.includes(",") ? (
-                  <>
-                    <span className="block">{address.slice(0, address.indexOf(",")).trim()}</span>
-                    <span className="block">{address.slice(address.indexOf(",") + 1).trim()}</span>
-                  </>
-                ) : address}
-              </span>
-            </p>
-          ) : null}
+      {readyIn || address || storeName ? (
+        <div className="mt-6 border-t border-border pt-5">
+          <PickupSummary name={storeName} address={address} status={status} readyIn={readyIn} />
         </div>
       ) : null}
     </aside>

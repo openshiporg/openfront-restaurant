@@ -49,13 +49,3 @@ export function StoreBrand({ name, logoIcon, logoColor, className }: StoreBrandP
     </Link>
   )
 }
-
-/** The store's initials in a rounded tile: the store row on the phone, under a header that already shows the mark. */
-export function StoreMark({ name }: { name: string }) {
-  const initials = name.split(/\s+/).filter(Boolean).slice(0, 2).map((word) => word[0]).join("").toUpperCase()
-  return (
-    <span className="grid size-12 shrink-0 place-items-center rounded-[0.9rem] border border-border bg-white" aria-hidden="true">
-      <span className="font-sans text-[1.15rem] font-bold leading-none text-leaf">{initials}</span>
-    </span>
-  )
-}
