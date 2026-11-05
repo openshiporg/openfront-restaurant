@@ -10,6 +10,8 @@ interface PickupSummaryProps {
   size?: "compact" | "hero"
   /** Render the name as the page heading (the phone home page has no other h1). */
   nameAsHeading?: boolean
+  /** Narrow containers (the order bag): pickup time on its own line instead of a dangling " · ". */
+  stackMeta?: boolean
   className?: string
 }
 
@@ -23,7 +25,7 @@ function rangeDash(value: string) {
  * status and the pickup estimate. Used wherever the storefront shows where and
  * when to collect an order, so the phone header, the hero and the bag agree.
  */
-export function PickupSummary({ name, address, status, readyIn, size = "compact", nameAsHeading, className }: PickupSummaryProps) {
+export function PickupSummary({ name, address, status, readyIn, size = "compact", nameAsHeading, stackMeta, className }: PickupSummaryProps) {
   const storeName = (name || "").trim()
   const statusText = status ? (status.isOpen ? status.detail || "Open" : status.detail || "Closed") : null
   const pickup = readyIn ? `Pickup ready in ${rangeDash(readyIn)}` : null
@@ -44,7 +46,7 @@ export function PickupSummary({ name, address, status, readyIn, size = "compact"
           {statusText ? (
             <span className={status?.isOpen ? "font-medium text-leaf" : "font-medium text-ink"}>{statusText}</span>
           ) : null}
-          {statusText && pickup ? <span aria-hidden="true"> · </span> : null}
+          {statusText && pickup ? (stackMeta ? <br /> : <span aria-hidden="true"> · </span>) : null}
           {pickup ? <span className="whitespace-nowrap">{pickup}</span> : null}
         </p>
       ) : null}

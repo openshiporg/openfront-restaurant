@@ -131,7 +131,7 @@ export function OrderBag({ cart, currencyCode, locale, readyIn, address, storeNa
 
       {readyIn || address || storeName ? (
         <div className="mt-6 border-t border-border pt-5">
-          <PickupSummary name={storeName} address={address} status={status} readyIn={readyIn} />
+          <PickupSummary name={storeName} address={address} status={status} readyIn={readyIn} stackMeta />
         </div>
       ) : null}
     </aside>
