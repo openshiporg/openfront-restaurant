@@ -61,10 +61,10 @@ export function OrderListPageClient({
           A clean command center for online + in-house order orchestration.
         </p>
       </div>
-      <div className="flex flex-wrap gap-2 text-[11px]">
-        <span className="rounded-full border px-2.5 py-1 bg-background">Active: {activeCount}</span>
-        <span className="rounded-full border px-2.5 py-1 bg-background">Ready: {statusCounts.ready || 0}</span>
-        <span className="rounded-full border px-2.5 py-1 bg-background">Closed: {statusCounts.completed || 0}</span>
+      <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs font-medium tabular-nums text-muted-foreground">
+        <span>Active: {activeCount}</span>
+        <span>Ready: {statusCounts.ready || 0}</span>
+        <span>Closed: {statusCounts.completed || 0}</span>
       </div>
     </div>
   );

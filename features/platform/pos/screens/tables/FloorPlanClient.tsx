@@ -574,7 +574,7 @@ export function FloorPlanClient() {
           {Object.entries(statusConfig).map(([status, config]) => (
             <div
               key={status}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-accent"
+              className="inline-flex items-center gap-1.5 py-1 text-xs font-medium text-muted-foreground"
             >
               <span className={cn('inline-block size-1.5 rounded-full outline', config.dotClass)} />
               {config.label} ({statusCounts[status] || 0})
