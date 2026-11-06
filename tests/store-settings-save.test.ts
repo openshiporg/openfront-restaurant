@@ -36,7 +36,7 @@ test("the hue is normalized to 0-359", () => {
   const wrapped = buildStoreSettingsPayload({ logoColor: "400" });
   assert.equal(wrapped.success && wrapped.data.logoColor, "40");
   const junk = buildStoreSettingsPayload({ logoColor: "red" });
-  assert.equal(junk.success && junk.data.logoColor, "0");
+  assert.equal(junk.success && junk.data.logoColor, "240");
 });
 
 test("an unsafe SVG rejects the save instead of being stored", () => {

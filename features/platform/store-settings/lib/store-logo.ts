@@ -1,6 +1,6 @@
 import { LOGO_ICONS } from './icon-registry';
 export const DEFAULT_STORE_LOGO_ICON = LOGO_ICONS.find((icon) => icon.id === 'refractional')!.lightSvg;
-export const DEFAULT_STORE_LOGO_COLOR = '0';
+export const DEFAULT_STORE_LOGO_COLOR = '240';
 
 // This module is intentionally browser-safe. Server-only SVG parsing and
 // sanitization lives under features/keystone/utils/storeLogo.ts.
