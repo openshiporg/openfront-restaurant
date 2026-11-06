@@ -7,6 +7,7 @@ function fixture() {
   const rows: any[] = [
     { id: "n1", eventKey: "notification:order-confirmed:o1", eventType: "notification.queued", entityType: "RestaurantOrder", entityId: "o1", createdAt: new Date(), metadata: { to: "delivered@resend.dev", subject: "Order R-1 received", text: "received" } },
     { id: "n2", eventKey: "notification:order-confirmed:o2", eventType: "notification.queued", entityType: "RestaurantOrder", entityId: "o2", createdAt: new Date(), metadata: { to: "other@resend.dev", subject: "Order R-2 received", text: "received" } },
+    { id: "c1", eventKey: "campaign:c1:u1", eventType: "notification.queued", entityType: "RestaurantCampaign", entityId: "c1", createdAt: new Date(), metadata: { to: "promo@resend.dev", subject: "promo", text: "promo" } },
     { id: "g1", eventKey: "gift-delivery:g1", eventType: "notification.queued", entityType: "GiftCard", entityId: "g1", createdAt: new Date(), metadata: { to: "gift@resend.dev", subject: "gift", text: "gift" } },
   ];
   const tx = {
@@ -51,9 +52,9 @@ test("a second call (replay) and the staff Send button do not resend an accepted
 test("other queued rows (other orders, gifts, campaigns) are never touched", async () => {
   const { rows, context } = fixture();
   await deliverOrderConfirmationNow(context, "o1", async () => ({ accepted: true }));
-  for (const id of ["n2", "g1"]) assert.equal(status(rows, id), undefined);
-  // The system path cannot be pointed at a non-confirmation row.
-  await assert.rejects(deliverQueuedNotification(context, "g1", async () => ({ accepted: true }), false, true), /limited to order confirmations/);
+  for (const id of ["n2", "g1", "c1"]) assert.equal(status(rows, id), undefined);
+  // The system path cannot be pointed at marketing or other staff-sent rows.
+  await assert.rejects(deliverQueuedNotification(context, "c1", async () => ({ accepted: true }), false, true), /limited to order confirmations/);
 });
 
 test("a rejected or throwing transport never throws and is recorded for staff review", async () => {
