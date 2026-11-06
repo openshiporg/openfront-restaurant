@@ -261,6 +261,7 @@ export function assertKitchenProjectionCurrent(expected: any, current: any) {
 }
 
 export async function reconcileRestaurantOrderStatus(orderId: string, context: Context) {
+  let becameReady = false;
   await serviceTransaction(context.prisma, async tx => {
     const order = await tx.restaurantOrder.findUnique({ where: { id: orderId }, include: { orderItems: { select: { id: true, isVoided: true } }, courses: { where: { orderItems: { some: { isVoided: false } } } } } });
     if (!order || ["completed", "cancelled", "dispatched", "served", "open"].includes(order.status)) return;
@@ -275,7 +276,21 @@ export async function reconcileRestaurantOrderStatus(orderId: string, context: C
       : !held && active.every((ticket: any) => ticket.status === "served") ? (["delivery", "takeout"].includes(order.orderType) ? "ready" : "served") : "in_progress";
     if (["ready", "served"].includes(nextStatus) && !hasKitchenWorkCoverage(order, tickets, ["ready", "served"])) return;
     if (nextStatus !== order.status) await tx.restaurantOrder.update({ where: { id: orderId }, data: { status: nextStatus } });
+    becameReady = nextStatus === "ready" && order.status !== "ready";
   });
+  if (becameReady) await sendReadyNotice(orderId, context);
+}
+
+/** Online pickup guests hear when their food is ready; only with SMTP configured, never throws. */
+export async function sendReadyNotice(orderId: string, context: Context) {
+  if (!process.env.SMTP_HOST || !process.env.SMTP_FROM) return;
+  try {
+    const [{ notifyOnlinePickupReady }, { smtpNotificationTransport }] = await Promise.all([
+      import("./restaurantNotifications"),
+      import("../../integrations/notifications/smtp"),
+    ]);
+    await notifyOnlinePickupReady(context.sudo() as Context, orderId, smtpNotificationTransport);
+  } catch { /* the status change is committed; the notice is best effort and visible in Notifications */ }
 }
 
 export async function syncKitchenTicketsForOrder(orderId: string, context: Context) {

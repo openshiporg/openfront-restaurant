@@ -76,3 +76,32 @@ test("the order-received email shows the total as money and links to the order, 
   assert.match(text, /Track your order: https:\/\/r\.test\/order\/confirmed\/o1\?secretKey=k/);
   assert.doesNotMatch(text, /minor units/);
 });
+
+test("an online pickup order emails 'ready for pickup' once, and only online takeout orders get it", async () => {
+  const { notifyOnlinePickupReady } = await import("../features/keystone/utils/restaurantNotifications");
+  const events = new Map<string, any>();
+  const order: any = { id: "o1", status: "ready", orderType: "takeout", orderSource: "online", orderNumber: "ORD-1", customerEmail: "g@x.co", customer: null };
+  const prisma: any = {
+    restaurantOrder: { findUnique: async () => order },
+    storeSettings: { findUnique: async () => ({ name: "Stack Kitchen", address: "742 Artisan Way" }) },
+    auditEvent: {
+      upsert: async ({ where, create }: any) => { if (!events.has(where.eventKey)) events.set(where.eventKey, { id: `e${events.size}`, ...create }); return events.get(where.eventKey); },
+      findUnique: async ({ where }: any) => where.eventKey ? events.get(where.eventKey) : [...events.values()].find((e) => e.id === where.id),
+      findMany: async ({ where }: any) => [...events.values()].filter((e) => e.entityType === where.entityType && e.entityId === where.entityId),
+      create: async ({ data }: any) => { const row = { id: `e${events.size}`, ...data }; events.set(data.eventKey || row.id, row); return row; },
+    },
+    $transaction: async (fn: any) => fn(prisma),
+  };
+  const sent: any[] = [];
+  const transport = async (message: any) => { sent.push(message); return { accepted: true }; };
+  const context: any = { prisma, session: null, sudo: () => context };
+  await notifyOnlinePickupReady(context, "o1", transport);
+  await notifyOnlinePickupReady(context, "o1", transport);
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].subject, "Order ORD-1 is ready for pickup");
+  assert.match(sent[0].text, /ready for pickup/);
+  order.orderSource = "pos";
+  events.clear();
+  await notifyOnlinePickupReady(context, "o1", transport);
+  assert.equal(sent.length, 1);
+});

@@ -25,6 +25,8 @@ async function recordState(tx: any, actorId: string | undefined, notificationId:
   return appendAuditEventWithClient(tx, actorId, { eventKey: `notification-state:${notificationId}:${sequence}`, eventType: `notification.${status}`, entityType: "RestaurantNotification", entityId: notificationId, metadata: { ...metadata, sequence, status } });
 }
 const ORDER_CONFIRMATION_PREFIX = "notification:order-confirmed:";
+const ORDER_READY_PREFIX = "notification:order-ready:";
+const SYSTEM_PREFIXES = [ORDER_CONFIRMATION_PREFIX, ORDER_READY_PREFIX];
 /**
  * In-process delivery of ONE order's "received" confirmation right after checkout commits, so a guest
  * checkout does not depend on staff pressing Send. It can only deliver the row whose event key is
@@ -40,12 +42,38 @@ export async function deliverOrderConfirmationNow(context: Context, orderId: str
     return { id: "", status: "failed", error: "Order confirmation was not delivered; staff can send it from Notifications" };
   }
 }
+/**
+ * "Your order is ready" for an online pickup order, the first time it reaches ready (Toast/Square default).
+ * Queued and sent once per order through the same claim state machine; dine-in, delivery and POS orders are skipped. Never throws.
+ */
+export async function notifyOnlinePickupReady(context: Context, orderId: string, transport: NotificationTransport) {
+  try {
+    const prisma = context.prisma as any;
+    const order = await prisma.restaurantOrder.findUnique({ where: { id: orderId }, select: { id: true, status: true, orderType: true, orderSource: true, orderNumber: true, customerEmail: true, customer: { select: { email: true } } } });
+    if (!order || order.status !== "ready" || order.orderType !== "takeout" || order.orderSource !== "online") return { status: "skipped" };
+    const to = order.customerEmail || order.customer?.email || "";
+    if (!to) return { status: "no_recipient" };
+    const settings = await prisma.storeSettings.findUnique({ where: { id: "1" }, select: { name: true, address: true } });
+    const store = settings?.name?.trim() || "the restaurant";
+    await prisma.$transaction((tx: any) => enqueueRestaurantNotification(tx, null, {
+      eventKey: `${ORDER_READY_PREFIX}${order.id}`, entityType: "RestaurantOrder", entityId: order.id, to,
+      subject: `Order ${order.orderNumber} is ready for pickup`,
+      text: `Your order ${order.orderNumber} from ${store} is ready for pickup.${settings?.address ? `\n\n${settings.address}` : ""}\n\nSee you soon.`,
+    }));
+    const row = await prisma.auditEvent.findUnique({ where: { eventKey: `${ORDER_READY_PREFIX}${order.id}` } });
+    if (!row || row.eventType !== "notification.queued") return { status: "no_event" };
+    return await deliverQueuedNotification(context, row.id, transport, false, true);
+  } catch {
+    return { status: "failed" };
+  }
+}
+
 export async function deliverQueuedNotification(context: Context, notificationId: string, transport: NotificationTransport, retryUnknown = false, system = false) {
   if (!system) authorize(context);
   const prisma = context.prisma as any;
   const claim = await prisma.$transaction(async (tx: any) => {
     const state = await notificationState(tx, notificationId);
-    if (system && !String(state.row.eventKey || "").startsWith(ORDER_CONFIRMATION_PREFIX)) throw new Error("System delivery is limited to order confirmations");
+    if (system && !SYSTEM_PREFIXES.some((prefix) => String(state.row.eventKey || "").startsWith(prefix))) throw new Error("System delivery is limited to order confirmations and ready notices");
     if (state.row.metadata?.marketing && !system && !permissions.canManageUsers(context)) throw new Error("User management is required to dispatch marketing");
     if (["accepted", "acknowledged", "suppressed"].includes(state.status)) return { ...state, replay: true };
     if (state.row.eventKey?.startsWith("gift-delivery:")) {

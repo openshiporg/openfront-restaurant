@@ -2,7 +2,7 @@ import type { Context } from ".keystone/types";
 import { permissions } from "../access";
 import { appendAuditEventWithClient } from "../utils/audit";
 import { appendKitchenTicketEventWithClient } from "../utils/kitchenTicketEvents";
-import { syncKitchenTicketsForOrder } from "../utils/kitchenTicketSync";
+import { sendReadyNotice, syncKitchenTicketsForOrder } from "../utils/kitchenTicketSync";
 import { reconcileCompletedOrderOperations } from "../utils/orderCompletion";
 import { assertServiceTransition, serviceTransaction } from "../utils/serviceOrderState";
 
@@ -37,5 +37,6 @@ export default async function transitionRestaurantOrder(
   });
   if (["completed", "cancelled"].includes(status)) await reconcileCompletedOrderOperations(orderId, context);
   else await syncKitchenTicketsForOrder(orderId, context);
+  if (status === "ready") await sendReadyNotice(orderId, context);
   return updated;
 }
