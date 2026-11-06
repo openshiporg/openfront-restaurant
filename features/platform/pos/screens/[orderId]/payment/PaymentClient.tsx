@@ -1,4 +1,5 @@
 'use client'
+import { toast } from 'sonner'
 
 import { CheckAllocationNotice } from '@/features/platform/payments/components/CheckAllocationNotice'
 import { RefundRecovery } from '@/features/platform/payments/components/RefundRecovery'
@@ -324,7 +325,7 @@ export function PaymentClient({ orderId }: PaymentClientProps) {
     const receivedInCents = toMinorUnits(cashReceived || '0', currencyConfig.currencyCode)
     
     if (receivedInCents < total) {
-      alert('Cash received is less than the total amount')
+      toast.error('Cash received is less than the total amount')
       return
     }
 
@@ -348,11 +349,11 @@ export function PaymentClient({ orderId }: PaymentClientProps) {
         setChangeAmount(receivedInCents - total)
         setSuccessDialogOpen(true)
       } else {
-        alert(`Payment failed: ${error}`)
+        toast.error(`Payment failed: ${error}`)
       }
     } catch (err) {
       console.error('Error processing cash payment:', err)
-      alert('Failed to process payment')
+      toast.error('Failed to process payment')
     } finally {
       setProcessing(false)
     }
@@ -382,13 +383,13 @@ export function PaymentClient({ orderId }: PaymentClientProps) {
       if (success && clientSecret && paymentId && stripePublishableKey) {
         setCardSession({ clientSecret, paymentId })
       } else if (success && !stripePublishableKey) {
-        alert('Stripe publishable configuration is unavailable. The payment remains reserved for recovery.')
+        toast.error('Stripe publishable configuration is unavailable. The payment remains reserved for recovery.')
       } else {
-        alert(`Payment failed: ${error || 'Secure card session could not be created'}`)
+        toast.error(`Payment failed: ${error || 'Secure card session could not be created'}`)
       }
     } catch (err) {
       console.error('Error processing card payment:', err)
-      alert('Failed to process card payment')
+      toast.error('Failed to process card payment')
     } finally {
       setProcessing(false)
     }
@@ -453,14 +454,14 @@ export function PaymentClient({ orderId }: PaymentClientProps) {
           await fetchOrder()
           setGiftCardBalance(Math.max(0, giftCardBalance - chargedAmount))
           const msg = formatCurrency(chargedAmount, currencyConfig) + " charged to gift card. Remaining balance: " + formatCurrency(Number(redemption.remainingBalance || 0), currencyConfig)
-          alert(msg)
+          toast.error(msg)
         }
       } else {
-        alert(`Payment failed: ${redemption.error}`)
+        toast.error(`Payment failed: ${redemption.error}`)
       }
     } catch (err) {
       console.error('Error processing gift card payment:', err)
-      alert('Failed to process gift card payment')
+      toast.error('Failed to process gift card payment')
     } finally {
       setProcessing(false)
     }
@@ -470,19 +471,19 @@ export function PaymentClient({ orderId }: PaymentClientProps) {
     try {
       if (splitPayments.some(payment => payment.status !== 'pending')) throw new Error('Resolve existing tender attempts before replanning');
       setSplitPayments(equalTenderAmounts(getRemainingBalance(), Number(equalGuests)).map(amount => ({ id: crypto.randomUUID(), amount, method: newSplitMethod === 'card' ? 'card' : 'cash', status: 'pending' })));
-    } catch (error) { alert(error instanceof Error ? error.message : 'Unable to plan equal tenders'); }
+    } catch (error) { toast.error(error instanceof Error ? error.message : 'Unable to plan equal tenders'); }
   }
 
   // Split payment functions
   const addSplitPayment = () => {
     if (newSplitMethod === 'gift_card') {
-      alert('Apply gift cards from the Gift Card tab before adding remaining split tenders')
+      toast.error('Apply gift cards from the Gift Card tab before adding remaining split tenders')
       return
     }
     const amount = toMinorUnits(newSplitAmount || '0', currencyConfig.currencyCode)
     if (amount <= 0) return
     if (amount > getSplitRemaining()) {
-      alert('Amount exceeds remaining balance')
+      toast.error('Amount exceeds remaining balance')
       return
     }
 
@@ -543,7 +544,7 @@ export function PaymentClient({ orderId }: PaymentClientProps) {
             prev.map((p) => (p.id === split.id ? { ...p, status: 'completed' } : p))
           )
         } else {
-          alert(`Payment ${i + 1} failed: ${error}`)
+          toast.error(`Payment ${i + 1} failed: ${error}`)
           setProcessing(false)
           return
         }
@@ -555,7 +556,7 @@ export function PaymentClient({ orderId }: PaymentClientProps) {
       setSuccessDialogOpen(true)
     } catch (err) {
       console.error('Error processing split payments:', err)
-      alert('Failed to process split payments')
+      toast.error('Failed to process split payments')
     } finally {
       setProcessing(false)
     }

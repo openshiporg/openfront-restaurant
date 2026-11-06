@@ -1,4 +1,5 @@
 "use client";
+import { confirmAction } from '@/features/dashboard/components/ConfirmDialog'
 import { useState } from "react";
 import { request } from "graphql-request";
 import { Button } from "@/components/ui/button";
@@ -60,7 +61,7 @@ export function RestaurantNotifications() {
   };
   const send = async (row: any) => {
     const uncertain = ["unknown", "processing"].includes(row.status);
-    if (uncertain && !window.confirm("The earlier message may have been sent. Retry may send a duplicate. Continue?")) return;
+    if (uncertain && !(await confirmAction({ title: "Send again?", description: "The earlier message may have been sent. Retrying may send a duplicate.", confirmLabel: "Send again" }))) return;
     try {
       const result: any = await request("/api/graphql", `mutation($notificationId:ID!,$retryUnknown:Boolean){sendRestaurantNotification(notificationId:$notificationId,retryUnknown:$retryUnknown){id status error}}`, { notificationId: row.id, retryUnknown: uncertain });
       setMessage(`${result.sendRestaurantNotification.status}: ${result.sendRestaurantNotification.error || "SMTP acceptance is not proof of delivery."}`);

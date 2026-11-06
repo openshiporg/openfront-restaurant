@@ -1,4 +1,6 @@
 'use client'
+import { confirmAction } from '@/features/dashboard/components/ConfirmDialog'
+import { toast } from 'sonner'
 
 import React, { useState, useEffect, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
@@ -138,7 +140,7 @@ export function TablesPage() {
       setFloors(res.floors || [])
     } catch (err) {
       console.error(err)
-      window.alert(err instanceof Error ? err.message : "Unable to save table changes")
+      toast.error(err instanceof Error ? err.message : "Unable to save table changes")
     } finally {
       setLoading(false)
     }
@@ -200,14 +202,14 @@ export function TablesPage() {
       await fetchData()
     } catch (err) {
       console.error(err)
-      window.alert(err instanceof Error ? err.message : "Unable to save table changes")
+      toast.error(err instanceof Error ? err.message : "Unable to save table changes")
     } finally {
       setIsSaving(false)
     }
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Delete this table?')) return
+    if (!(await confirmAction({ title: 'Delete this table?', confirmLabel: 'Delete table', destructive: true }))) return
     setDeletingId(id)
     try {
       const result: any = await request('/api/graphql', DELETE_TABLE, { id })
@@ -215,7 +217,7 @@ export function TablesPage() {
       await fetchData()
     } catch (err) {
       console.error(err)
-      window.alert(err instanceof Error ? err.message : "Unable to save table changes")
+      toast.error(err instanceof Error ? err.message : "Unable to save table changes")
     } finally {
       setDeletingId(null)
     }
@@ -231,7 +233,7 @@ export function TablesPage() {
       await fetchData()
     } catch (err) {
       console.error(err)
-      window.alert(err instanceof Error ? err.message : "Unable to save table changes")
+      toast.error(err instanceof Error ? err.message : "Unable to save table changes")
     } finally {
       setIsSaving(false)
     }

@@ -1,4 +1,5 @@
 'use client'
+import { confirmAction } from '@/features/dashboard/components/ConfirmDialog'
 
 import React, { useState, useEffect, useCallback } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -205,7 +206,7 @@ export function RecipesPage() {
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Delete this recipe?')) return
+    if (!(await confirmAction({ title: 'Delete this recipe?', confirmLabel: 'Delete recipe', destructive: true }))) return
     try {
       await request('/api/graphql', DELETE_RECIPE, { id })
       fetchData()

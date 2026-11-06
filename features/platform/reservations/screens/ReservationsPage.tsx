@@ -1,4 +1,5 @@
 'use client'
+import { confirmAction } from '@/features/dashboard/components/ConfirmDialog'
 import { formatInZone } from '@/features/dashboard/lib/storeTime';
 
 import { useState, useEffect, useCallback } from 'react'
@@ -245,7 +246,7 @@ export function ReservationsPage() {
   }
 
   const handleCancelReservation = async (id: string) => {
-    if (!confirm('Cancel this reservation?')) return
+    if (!(await confirmAction({ title: 'Cancel this reservation?', confirmLabel: 'Cancel reservation', destructive: true }))) return
     await updateReservationAction(id, 'cancel')
   }
 

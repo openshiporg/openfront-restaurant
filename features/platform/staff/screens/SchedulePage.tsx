@@ -1,4 +1,5 @@
 'use client'
+import { confirmAction } from '@/features/dashboard/components/ConfirmDialog'
 import { formatInZone } from '@/features/dashboard/lib/storeTime';
 
 import React, { useState, useEffect, useCallback } from 'react'
@@ -241,7 +242,7 @@ export function SchedulePage() {
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Cancel this shift?')) return
+    if (!(await confirmAction({ title: 'Cancel this shift?', confirmLabel: 'Cancel shift', destructive: true }))) return
     await updateShiftAction(id, 'cancel')
   }
 

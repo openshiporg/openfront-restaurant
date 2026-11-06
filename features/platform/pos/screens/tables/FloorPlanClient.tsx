@@ -1,4 +1,5 @@
 'use client'
+import { toast } from 'sonner'
 import { ViewerTime } from '@/features/dashboard/components/ViewerTime';
 
 import React, { useState, useEffect, useCallback } from 'react'
@@ -304,10 +305,10 @@ export function FloorPlanClient() {
       )
       setHasChanges(false)
       setEditMode(false)
-      alert('Table positions saved!')
+      toast.success('Table positions saved')
     } catch (err) {
       console.error('Error saving positions:', err)
-      alert('Failed to save positions')
+      toast.error('Failed to save positions')
     }
   }
 
@@ -333,7 +334,7 @@ export function FloorPlanClient() {
         setDialogOpen(false)
         setTargetTableId('')
       } else {
-        alert(result.transferTable.error)
+        toast.error(result.transferTable.error)
       }
     } catch (err) {
       console.error('Error transferring table:', err)
@@ -355,7 +356,7 @@ export function FloorPlanClient() {
         setDialogOpen(false)
         setTablesToCombine([])
       } else {
-        alert(result.combineTables.error)
+        toast.error(result.combineTables.error)
       }
     } catch (err) {
       console.error('Error combining tables:', err)

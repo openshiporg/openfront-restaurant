@@ -1,4 +1,5 @@
 'use client'
+import { confirmAction } from '@/features/dashboard/components/ConfirmDialog'
 
 import React, { useState, useEffect, useCallback } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -225,7 +226,7 @@ export function WaitlistPage() {
   }
 
   const handleNotify = async (entry: WaitlistEntry) => {
-    if (!window.confirm(`Call ${entry.customerName} at ${entry.phoneNumber}. Have you successfully contacted this guest?`)) return;
+    if (!(await confirmAction({ title: `Call ${entry.customerName}`, description: `Phone ${entry.phoneNumber}. Confirm once you have reached this guest.`, confirmLabel: 'Guest contacted', cancelLabel: 'Not yet' }))) return;
     try {
       const res: any = await request('/api/graphql', UPDATE_WAITLIST_STATUS, {
         entryId: entry.id,
@@ -273,7 +274,7 @@ export function WaitlistPage() {
   }
 
   const handleCancel = async (entry: WaitlistEntry) => {
-    if (!confirm('Cancel this waitlist entry?')) return;
+    if (!(await confirmAction({ title: 'Cancel this waitlist entry?', confirmLabel: 'Cancel entry', destructive: true }))) return;
     try {
       const res: any = await request('/api/graphql', UPDATE_WAITLIST_STATUS, {
         entryId: entry.id,

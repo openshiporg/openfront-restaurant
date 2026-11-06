@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { ThemeProvider } from "next-themes";
 import { Toaster } from "@/components/ui/sonner";
+import { ConfirmDialogHost } from "@/features/dashboard/components/ConfirmDialog";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -22,6 +23,7 @@ export default function DashboardLayout({
     >
       {children}
       <Toaster />
+      <ConfirmDialogHost />
     </ThemeProvider>
   );
 }

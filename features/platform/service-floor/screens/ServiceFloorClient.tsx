@@ -1,4 +1,5 @@
 'use client'
+import { confirmAction } from '@/features/dashboard/components/ConfirmDialog'
 
 import { useEffect, useMemo, useState } from 'react'
 import { reserveServiceItemAttempt, clearServiceItemAttempt } from '@/features/lib/service-item-attempt'
@@ -912,8 +913,8 @@ export function ServiceFloorClient() {
                   {addingItem ? 'Adding item…' : selectedOrder ? 'Add to check' : 'Start check with item'}
                 </Button>
                 <Button type="button" variant="ghost" size="sm" disabled={addingItem || !actorId || !selectedTable}
-                  onClick={() => {
-                    if (!selectedTable || !window.confirm('Review the current check for the earlier item addition first. Clearing the saved retry allows a new addition; it does not undo an item already added. Continue?')) return
+                  onClick={async () => {
+                    if (!selectedTable || !(await confirmAction({ title: 'Clear the saved retry?', description: 'Review the current check for the earlier item addition first. Clearing allows a new addition; it does not undo an item already added.', confirmLabel: 'Clear retry' }))) return
                     clearServiceItemAttempt(localStorage, actorId, selectedTable.id)
                     setSheetError(null)
                     setSheetSuccess('Saved retry cleared after reviewing the check. No item was submitted.')

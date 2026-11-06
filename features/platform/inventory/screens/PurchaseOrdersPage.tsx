@@ -1,4 +1,5 @@
 'use client'
+import { confirmAction } from '@/features/dashboard/components/ConfirmDialog'
 import { ViewerTime } from '@/features/dashboard/components/ViewerTime';
 
 import React, { useState, useEffect, useCallback } from 'react'
@@ -225,7 +226,7 @@ export function PurchaseOrdersPage() {
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Delete this purchase order?')) return
+    if (!(await confirmAction({ title: 'Delete this purchase order?', confirmLabel: 'Delete', destructive: true }))) return
     try {
       await request('/api/graphql', DELETE_PO, { id })
       fetchData()
@@ -435,7 +436,7 @@ export function PurchaseOrdersPage() {
                             </>
                           )}
                           {['sent', 'confirmed', 'shipped', 'partially_received'].includes(po.status) && (
-                            <><Button size="sm" variant="outline" className="h-7 text-xs px-2.5" onClick={() => { if (window.confirm('Cancel the unreceived remainder? Existing received stock and receipts remain recorded.')) updateStatus(po.id, 'cancelled') }}>Cancel remainder</Button>
+                            <><Button size="sm" variant="outline" className="h-7 text-xs px-2.5" onClick={async () => { if (await confirmAction({ title: 'Cancel the unreceived remainder?', description: 'Received stock and receipts stay recorded.', confirmLabel: 'Cancel remainder', destructive: true })) updateStatus(po.id, 'cancelled') }}>Cancel remainder</Button>
                             <Button size="sm" className="h-7 text-xs px-2.5" onClick={() => updateStatus(po.id, 'received')}>
                               <Package size={11} className="mr-1" /> Receive
                             </Button></>
