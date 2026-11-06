@@ -19,6 +19,18 @@ import {
  * taking orders, or any 15-minute slot from the next opening through tomorrow, inside store hours
  * and after prep time. When the restaurant is closed, a later time is the only choice.
  */
+/** Whether the cart's time is orderable right now: ASAP while open, otherwise a live slot. */
+export function orderTimeIsValid(cart: any, storeSettings: any, now = new Date()) {
+  const orderType = cart?.orderType || "pickup"
+  const timeZone = storeSettings?.timezone || "America/New_York"
+  const cutoff = Number(storeSettings?.hours?._ordering?.cutoffMinutes || 0)
+  const openNow = storeSettings?.hours ? Boolean(orderingWindow(storeSettings.hours, timeZone, now, cutoff)) : false
+  const selected = cart?.scheduledFor ? new Date(cart.scheduledFor).toISOString() : ""
+  if (!selected) return openNow
+  const slots = orderAheadSlots(storeSettings?.hours, timeZone, leadForOrderType(storeSettings, orderType), now)
+  return slots.some((slot) => slot.toISOString() === selected)
+}
+
 export default function OrderTime({
   cart,
   storeSettings,

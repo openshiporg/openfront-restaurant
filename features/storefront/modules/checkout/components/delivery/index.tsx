@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label"
 
 import { cn } from "@/lib/utils"
 import AddressSelect, { NEW_ADDRESS_VALUE, SAME_AS_DELIVERY_VALUE } from "../address-select"
-import OrderTime from "../order-time"
+import OrderTime, { orderTimeIsValid } from "../order-time"
 import { formatScheduled } from "@/features/lib/order-ahead"
 import { setCheckoutContact, setCheckoutDelivery } from "@/features/storefront/lib/data/cart"
 import compareAddresses from "@/features/storefront/lib/util/compare-addresses"
@@ -373,7 +373,9 @@ const Delivery = ({
 
   const billingSummary = billingSameAsDelivery ? addressInfo : billingAddressInfo
 
-  const [timeValid, setTimeValid] = useState(true)
+  const [pickerValid, setTimeValid] = useState(true)
+  // Checked here too, so a collapsed step is never "done" with ASAP while the kitchen is closed.
+  const timeValid = pickerValid && orderTimeIsValid(cart, storeInfo)
   const isComplete =
     timeValid &&
     (orderType === "pickup" ||
