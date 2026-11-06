@@ -61,3 +61,9 @@ test('scheduled time joins the checkout signature only when chosen', () => {
   assert.equal(checkoutCartSignature(cart), checkoutCartSignature({ ...cart, scheduledFor: null }));
   assert.notEqual(checkoutCartSignature(cart), checkoutCartSignature({ ...cart, scheduledFor: '2026-11-06T16:30:00.000Z' }));
 });
+
+test("a scheduled order refunded before its kitchen start is never released to the kitchen", async () => {
+  const { readFileSync } = await import("node:fs");
+  const sync = readFileSync("features/keystone/utils/kitchenTicketSync.ts", "utf8");
+  assert.match(sync, /order\.payments\.every\(\(payment[^)]*\) => String\(payment\.status \|\| ""\)\.toLowerCase\(\) === "refunded"\)\) continue;/);
+});

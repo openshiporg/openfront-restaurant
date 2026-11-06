@@ -550,12 +550,14 @@ export async function releaseDueScheduledOrders(context: Context, now = new Date
       fireAt: { lte: now },
       status: { in: ["open", ...ACTIVE_ORDER_STATUSES] },
     },
-    select: { id: true },
+    select: { id: true, payments: { select: { status: true } } },
     orderBy: { fireAt: "asc" },
     take: 50,
   });
   let released = 0;
   for (const order of due) {
+    // A scheduled order refunded before its kitchen start stays off the line.
+    if (order.payments?.length && order.payments.every((payment: { status?: string }) => String(payment.status || "").toLowerCase() === "refunded")) continue;
     const claimed = await prisma.restaurantOrder.updateMany({
       where: { id: order.id, onHold: true, holdReason: SCHEDULED_HOLD_REASON },
       data: { onHold: false, holdReason: "" },
