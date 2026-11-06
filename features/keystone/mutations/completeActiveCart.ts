@@ -15,6 +15,7 @@ import {
 } from "../utils/deliveryValidation";
 import { isKitchenActiveOrderStatus, SCHEDULED_HOLD_REASON, syncKitchenTicketsForOrder } from "../utils/kitchenTicketSync";
 import { formatScheduled, leadForOrderType } from "../../lib/order-ahead";
+import { orderReceivedText } from "../../lib/order-confirmation-text";
 import { validateCartItemInput } from "../utils/cartItemValidation";
 import { appendAuditEventWithClient } from "../utils/audit";
 import { freezeOrderPricingPolicy, getOrderPricingPolicy } from "../utils/orderPricingPolicy";
@@ -467,7 +468,12 @@ export default async function completeActiveCart(
     await enqueueRestaurantNotification(tx, context.session?.itemId, {
       eventKey: `notification:order-confirmed:${order.id}`, entityType: "RestaurantOrder", entityId: order.id,
       to: cart.email || "", subject: `Order ${order.orderNumber} received`,
-      text: `Your ${order.orderType} order ${order.orderNumber} has been received.${scheduledFor ? ` Scheduled for ${formatScheduled(scheduledFor, settings?.timezone)}.` : ""} Total: ${total} minor units ${currencyCode}. Payment: ${payment.status}. Please contact the restaurant with your order number for changes.`,
+      text: orderReceivedText({
+        storeName: settings?.name, orderType: order.orderType, orderNumber: order.orderNumber, total, currencyCode,
+        paid: ["succeeded", "captured", "paid"].includes(String(payment.status || "").toLowerCase()),
+        scheduledLabel: scheduledFor ? formatScheduled(scheduledFor, settings?.timezone) : null,
+        statusUrl: process.env.SMTP_STORE_LINK ? `${process.env.SMTP_STORE_LINK.replace(/\/$/, "")}/order/confirmed/${order.id}${order.secretKey ? `?secretKey=${order.secretKey}` : ""}` : null,
+      }),
     });
     return { order, payment, replay: false };
     // The payment has already been taken, so give a slow database room to record the order.

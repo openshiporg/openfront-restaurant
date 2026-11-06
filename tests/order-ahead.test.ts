@@ -67,3 +67,12 @@ test("a scheduled order refunded before its kitchen start is never released to t
   const sync = readFileSync("features/keystone/utils/kitchenTicketSync.ts", "utf8");
   assert.match(sync, /order\.payments\.every\(\(payment[^)]*\) => String\(payment\.status \|\| ""\)\.toLowerCase\(\) === "refunded"\)\) continue;/);
 });
+
+test("the order-received email shows the total as money and links to the order, never minor units", async () => {
+  const { orderReceivedText } = await import("../features/lib/order-confirmation-text");
+  const text = orderReceivedText({ storeName: "Stack Kitchen", orderType: "pickup", orderNumber: "ORD-1", total: 1381, currencyCode: "usd", paid: true, statusUrl: "https://r.test/order/confirmed/o1?secretKey=k" });
+  assert.match(text, /Total \$13\.81, paid by card\./);
+  assert.match(text, /Order ORD-1 \(pickup\) is in\./);
+  assert.match(text, /Track your order: https:\/\/r\.test\/order\/confirmed\/o1\?secretKey=k/);
+  assert.doesNotMatch(text, /minor units/);
+});

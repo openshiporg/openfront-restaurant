@@ -7,6 +7,7 @@ export async function getStoreDeliverySettings(context: Context) {
     where: { id: "1" },
     query: `
       id
+      name
       countryCode
       deliveryEnabled
       deliveryPostalCodes
