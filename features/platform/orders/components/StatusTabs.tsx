@@ -74,10 +74,8 @@ export function StatusTabs({ statusCounts }: StatusTabsProps) {
               )}
               <span className="uppercase tracking-wide">{tab.label}</span>
               <span
-                className={`rounded-full px-1.5 py-0.5 text-[10px] ${
-                  active
-                    ? "bg-background/20 text-background"
-                    : "bg-muted text-muted-foreground"
+                className={`text-[11px] tabular-nums ${
+                  active ? "text-background/80" : "text-muted-foreground"
                 }`}
               >
                 {tab.count}

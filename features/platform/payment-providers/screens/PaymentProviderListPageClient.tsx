@@ -178,7 +178,7 @@ export function PaymentProviderListPageClient({
                       <div>
                         <div className="flex items-center gap-2">
                           <p className="text-sm font-semibold">{provider.name}</p>
-                          <span className="text-[10px] uppercase tracking-wider text-muted-foreground border border-border rounded-full px-1.5 py-0.5">
+                          <span className="text-xs font-medium text-muted-foreground">
                             {typeLabel}
                           </span>
                         </div>
