@@ -33,6 +33,7 @@ import {
   Utensils,
 } from 'lucide-react'
 import { gql, request } from 'graphql-request'
+import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { PageBreadcrumbs } from '@/features/dashboard/components/PageBreadcrumbs'
 
@@ -319,9 +320,18 @@ export function POSClient() {
       setSelectedTables([])
       setIsUrgent(false)
       setSpecialInstructions('')
-      alert('Order sent to kitchen!')
-    } catch (err) {
-      alert('Error: ' + err)
+      toast.success('Order sent to kitchen')
+    } catch (err: any) {
+      const gqlErrors = err?.response?.errors
+      if (Array.isArray(gqlErrors) && gqlErrors.length > 0) {
+        // The server answered and refused the order, so nothing was created.
+        // Release the retry key so the cashier can edit the order and send again.
+        submissionAttempt.current = null
+        clearPosDraft(localStorage)
+        toast.error('Order not sent', { description: gqlErrors[0]?.message || 'The kitchen did not accept this order.' })
+      } else {
+        toast.error('Order not sent', { description: err instanceof Error ? err.message : 'Check the connection and send again.' })
+      }
     } finally {
       setSubmitting(false)
     }
