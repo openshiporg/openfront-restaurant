@@ -69,14 +69,10 @@ export async function OperationalDashboard() {
         />
 
         {/* Header */}
-        <div className="px-4 md:px-6 py-4 border-b border-border flex items-start justify-between gap-4">
-          <div>
+        <div className="px-4 md:px-6 py-4 border-b border-border flex flex-col sm:flex-row sm:items-start justify-between gap-2 sm:gap-4">
+          <div className="min-w-0">
             <div className="flex items-center gap-2">
               <h1 className="text-2xl font-semibold tracking-tight">Operations</h1>
-              <span className="inline-flex items-center gap-1 text-[11px] uppercase tracking-wider text-emerald-600 border border-emerald-200 dark:border-emerald-800 rounded-full px-2 py-0.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                Snapshot
-              </span>
             </div>
             <p className="text-sm text-muted-foreground mt-0.5">Restaurant operations as loaded. Today uses the restaurant’s local calendar date.</p>
           </div>

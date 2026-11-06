@@ -9,7 +9,6 @@ import {
   AccordionTrigger,
   AccordionContent,
 } from "@/components/ui/accordion";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -81,23 +80,12 @@ export function OrderDetailsComponent({
                 #{order.orderNumber}
               </Link>
 
-              <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">
+              <span className="text-xs text-muted-foreground">
                 <ViewerTime value={order.createdAt} style="datetime" />
+                {" · "}
+                <span className="capitalize">{(order.orderSource || "online").replace("_", " ")}</span>
+                {order.orderType ? <>{" · "}<span className="capitalize">{order.orderType.replace("_", " ")}</span></> : null}
               </span>
-
-              <Badge
-                variant="secondary"
-                className="text-xs py-0.5 px-2.5 tracking-wide font-semibold rounded-full uppercase"
-              >
-                {order.orderSource || "online"}
-              </Badge>
-
-              <Badge
-                variant="outline"
-                className="text-xs py-0.5 px-2.5 tracking-wide font-semibold rounded-full uppercase"
-              >
-                {order.orderType?.replace("_", " ")}
-              </Badge>
             </div>
 
             <div className="mt-2 flex flex-wrap items-center gap-4 text-sm">
