@@ -137,7 +137,7 @@ export function GiftCardListPageClient({
   const isEmpty = data?.count === 0 && !searchString
 
   const breadcrumbs = [
-    { type: 'link' as const, label: 'Dashboard', href: basePath },
+    { type: 'link' as const, label: 'Dashboard', href: '' },
     { type: 'page' as const, label: 'Platform' },
     { type: 'page' as const, label: 'GiftCards' }
   ]

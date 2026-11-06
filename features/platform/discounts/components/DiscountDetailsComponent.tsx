@@ -9,7 +9,6 @@ import {
   AccordionTrigger,
   AccordionContent,
 } from "@/components/ui/accordion";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -17,7 +16,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { MoreVertical, Tag, Edit, Trash, Users, Ticket, Calendar, BarChart, Percent, DollarSign } from "lucide-react";
+import { MoreVertical, Tag, Edit, Users, Ticket, Calendar, BarChart, Percent, DollarSign } from "lucide-react";
 import Link from "next/link";
 import { EditItemDrawerClientWrapper } from "../../components/EditItemDrawerClientWrapper";
 import { Discount } from "../actions";
@@ -68,7 +67,7 @@ export function DiscountDetailsComponent({ discount, list }: DiscountDetailsComp
                     <Ticket className="size-8" />
                   )}
                 </div>
-                <div className="text-[10px] font-bold uppercase tracking-widest mt-1 opacity-80">
+                <div className="text-xs font-bold uppercase tracking-widest mt-1 opacity-80">
                   Discount
                 </div>
               </div>
@@ -80,17 +79,14 @@ export function DiscountDetailsComponent({ discount, list }: DiscountDetailsComp
                     <h3 className="text-xl font-bold tracking-tight font-mono truncate">
                       {discount.code}
                     </h3>
-                    <Badge
+                    <span
                       className={cn(
-                        "rounded-full px-2.5 py-0.5 text-[10px] font-bold tracking-wider",
-                        isActive 
-                          ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20" 
-                          : "bg-zinc-500/10 text-zinc-500 border-zinc-500/20"
+                        "text-xs font-semibold",
+                        isActive ? "text-emerald-700" : "text-muted-foreground"
                       )}
-                      variant="outline"
                     >
                       {statusText}
-                    </Badge>
+                    </span>
                   </div>
                   
                   <p className="text-sm text-muted-foreground line-clamp-1">
@@ -131,17 +127,11 @@ export function DiscountDetailsComponent({ discount, list }: DiscountDetailsComp
                         <Edit className="size-4 text-blue-500" />
                         Edit Discount
                       </DropdownMenuItem>
-                      <DropdownMenuItem className="rounded-lg gap-2 cursor-pointer text-destructive focus:text-destructive">
-                        <Trash className="size-4" />
-                        Delete
-                      </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
 
-                  <AccordionTrigger asChild>
-                    <Button variant="outline" size="sm" className="h-9 px-4 rounded-xl border-2 font-bold hover:bg-muted">
-                      Details
-                    </Button>
+                  <AccordionTrigger className="h-9 py-0 px-4 gap-2 rounded-xl border-2 text-sm font-bold hover:bg-muted hover:no-underline">
+                    Details
                   </AccordionTrigger>
                 </div>
               </div>
@@ -164,9 +154,7 @@ export function DiscountDetailsComponent({ discount, list }: DiscountDetailsComp
                       </div>
                       <div className="flex justify-between text-sm">
                         <span className="text-muted-foreground">Stackable</span>
-                        <Badge variant={discount.stackable ? "default" : "outline"} className="h-5 text-[10px]">
-                          {discount.stackable ? "YES" : "NO"}
-                        </Badge>
+                        <span className="font-bold">{discount.stackable ? "Yes" : "No"}</span>
                       </div>
                     </div>
                   </div>
@@ -226,11 +214,11 @@ export function DiscountDetailsComponent({ discount, list }: DiscountDetailsComp
                         >
                           <div className="flex flex-col">
                             <span className="text-xs font-bold">#{order.orderNumber}</span>
-                            <span className="text-[10px] text-muted-foreground"><ViewerTime value={order.createdAt} style="date" /></span>
+                            <span className="text-xs text-muted-foreground"><ViewerTime value={order.createdAt} style="date" /></span>
                           </div>
                           <div className="flex flex-col items-end">
                             <span className="text-sm font-black">${order.total}</span>
-                            <Badge variant="outline" className="h-4 text-[9px] px-1">{order.status}</Badge>
+                            <span className="text-xs text-muted-foreground capitalize">{order.status}</span>
                           </div>
                         </Link>
                       ))}
