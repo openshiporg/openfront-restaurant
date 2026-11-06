@@ -16,7 +16,7 @@ export const metadata: Metadata = {
   title: "Openfront Restaurant",
   description: "Next, Keystone, and Tailwind Starter Template",
   icons: {
-    icon: "/next-keystone-favicon.svg",
+    icon: "/favicon.svg",
   },
 };
 
