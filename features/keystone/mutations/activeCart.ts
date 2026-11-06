@@ -34,6 +34,7 @@ export default async function activeCart(root: any, { cartId }: { cartId?: strin
       deliveryZip
       deliveryCountryCode
       tipPercent
+      scheduledFor
       items {
         id
         thumbnail

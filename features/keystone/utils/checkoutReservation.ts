@@ -7,6 +7,8 @@ export function checkoutCartSignature(cart: any, fallbackCart?: any) {
   return JSON.stringify({
     userId: cart.userId || cart.user?.id || null,
     fields: ["orderType", "email", "customerName", "customerPhone", "deliveryAddress", "deliveryAddress2", "deliveryCity", "deliveryState", "deliveryZip", "deliveryCountryCode", "tipPercent"].map(field => cart[field] || ""),
+    // Order ahead joins the signature only when chosen, so quotes made before this field existed still match.
+    ...(cart.scheduledFor ? { scheduledFor: new Date(cart.scheduledFor).toISOString() } : {}),
     items: (cart.items || []).map((item: any) => {
       const fallback = fallbackItems.get(item.id) as any;
       return {

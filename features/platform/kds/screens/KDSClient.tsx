@@ -41,6 +41,44 @@ type KdsTicket = {
   items: TicketItem[]
 }
 
+type UpcomingOrder = {
+  id: string
+  orderNumber: string
+  orderType: string
+  customerName?: string | null
+  scheduledFor: string
+  fireAt: string
+  orderItems: { id: string; quantity: number }[]
+}
+
+function clockTime(value: string) {
+  return new Date(value).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+}
+
+/** Scheduled (order-ahead) orders that reach the line later; each fires at its start time. */
+function UpcomingStrip({ orders, now }: { orders: UpcomingOrder[]; now: Date }) {
+  if (!orders.length) return null
+  return (
+    <section aria-label="Upcoming scheduled orders" className="px-4 sm:px-8 py-3 border-b border-border" data-testid="kds-upcoming">
+      <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Upcoming scheduled orders</h2>
+      <ul className="flex gap-2 overflow-x-auto pb-1">
+        {orders.map((order) => {
+          const minutes = Math.max(0, Math.round((new Date(order.fireAt).getTime() - now.getTime()) / 60000))
+          const items = order.orderItems.reduce((sum, item) => sum + (item.quantity || 1), 0)
+          return (
+            <li key={order.id} className="shrink-0 rounded-lg border border-border bg-card px-3 py-2 text-sm min-w-[180px]">
+              <p className="font-semibold">#{order.orderNumber.slice(-6)} · {order.orderType === 'delivery' ? 'Delivery' : 'Pickup'} {clockTime(order.scheduledFor)}</p>
+              <p className="text-xs text-muted-foreground">
+                {order.customerName ? `${order.customerName} · ` : ''}{items} item{items === 1 ? '' : 's'} · fires {minutes < 60 ? `in ${minutes} min` : `at ${clockTime(order.fireAt)}`}
+              </p>
+            </li>
+          )
+        })}
+      </ul>
+    </section>
+  )
+}
+
 const GET_KDS_DATA = gql`
   query GetKdsData {
     kitchenStations(where: { isActive: { equals: true } }, orderBy: { displayOrder: asc }) {
@@ -68,6 +106,32 @@ const GET_KDS_DATA = gql`
         createdAt
         tables { id tableNumber }
       }
+    }
+  }
+`
+
+// Order ahead: paid scheduled orders waiting for their kitchen start time. Syncing first releases
+// any that are due, so the board fires them on time even between server release passes.
+const RELEASE_SCHEDULED = gql`
+  mutation ReleaseScheduledOrders {
+    releaseScheduledOrders
+  }
+`
+
+const GET_UPCOMING = gql`
+  query GetUpcomingScheduledOrders($now: DateTime!) {
+    restaurantOrders(
+      where: { onHold: { equals: true }, fireAt: { gt: $now }, status: { notIn: ["completed", "cancelled"] } }
+      orderBy: { fireAt: asc }
+      take: 12
+    ) {
+      id
+      orderNumber
+      orderType
+      customerName
+      scheduledFor
+      fireAt
+      orderItems { id quantity }
     }
   }
 `
@@ -579,11 +643,17 @@ export function KDSClient() {
   const [density, setDensity] = useState<Density>('comfortable')
   const [viewMode, setViewMode] = useState<ViewMode>('tickets')
   const [mutationError, setMutationError] = useState<string | null>(null)
+  const [upcoming, setUpcoming] = useState<UpcomingOrder[]>([])
   const [now, setNow] = useState(new Date())
 
   const fetchKDS = async () => {
     try {
-      const res: any = await request('/api/graphql', GET_KDS_DATA)
+      await request("/api/graphql", RELEASE_SCHEDULED).catch(() => null)
+      const [res, upcomingRes]: any = await Promise.all([
+        request('/api/graphql', GET_KDS_DATA),
+        request('/api/graphql', GET_UPCOMING, { now: new Date().toISOString() }).catch(() => null),
+      ])
+      setUpcoming(upcomingRes?.restaurantOrders || [])
 
       setStations((res.kitchenStations || []).map((s: any) => ({ id: s.id, name: s.name })))
       setTickets((res.kitchenTickets || []).map((ticket: any) => ({
@@ -704,6 +774,7 @@ export function KDSClient() {
           {mutationError}
         </div>
       )}
+      <UpcomingStrip orders={upcoming} now={now} />
       <StationMetrics tickets={stationFiltered} />
       {viewMode === 'all-day' ? (
         <AllDayView tickets={stationFiltered} />

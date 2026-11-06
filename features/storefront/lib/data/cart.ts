@@ -510,6 +510,25 @@ export async function setCheckoutTip(tipPercent: string) {
   }
 }
 
+/** Order ahead: "" means as soon as possible; otherwise an ISO time from the store's slot grid. */
+export async function setCheckoutTime(scheduledFor: string) {
+  const cartId = await getCartId();
+  if (!cartId) return { success: false, message: "No cartId cookie found" };
+
+  try {
+    await openfrontClient.request(
+      UPDATE_ACTIVE_CART_MUTATION,
+      { cartId, data: { scheduledFor: scheduledFor || "" } },
+      await getAuthHeaders()
+    );
+    updateTag("cart");
+    revalidatePath("/checkout");
+    return { success: true };
+  } catch (error) {
+    return { success: false, message: customerErrorMessage(error, "That time is no longer available. Choose another time.") };
+  }
+}
+
 export async function addToCart(params: {
   menuItemId: string;
   quantity: number;

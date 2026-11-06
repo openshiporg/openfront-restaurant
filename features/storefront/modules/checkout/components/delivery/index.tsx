@@ -10,6 +10,8 @@ import { Label } from "@/components/ui/label"
 
 import { cn } from "@/lib/utils"
 import AddressSelect, { NEW_ADDRESS_VALUE, SAME_AS_DELIVERY_VALUE } from "../address-select"
+import OrderTime from "../order-time"
+import { formatScheduled } from "@/features/lib/order-ahead"
 import { setCheckoutContact, setCheckoutDelivery } from "@/features/storefront/lib/data/cart"
 import compareAddresses from "@/features/storefront/lib/util/compare-addresses"
 import {
@@ -371,12 +373,17 @@ const Delivery = ({
 
   const billingSummary = billingSameAsDelivery ? addressInfo : billingAddressInfo
 
+  const [timeValid, setTimeValid] = useState(true)
   const isComplete =
-    orderType === "pickup" ||
-    (hasRequiredDeliveryFields &&
-      deliveryEligibility.eligible &&
-      !deliveryMinimumNotMet &&
-      (billingSameAsDelivery || hasRequiredBillingFields))
+    timeValid &&
+    (orderType === "pickup" ||
+      (hasRequiredDeliveryFields &&
+        deliveryEligibility.eligible &&
+        !deliveryMinimumNotMet &&
+        (billingSameAsDelivery || hasRequiredBillingFields)))
+  const scheduledLabel = cart?.scheduledFor
+    ? formatScheduled(cart.scheduledFor, storeInfo.timezone, storeInfo.locale || "en-US")
+    : null
 
   const deliveryErrorMessage = useMemo(() => {
     if (orderType !== "delivery") return null
@@ -738,8 +745,10 @@ const Delivery = ({
             </div>
           )}
 
+          <OrderTime cart={cart} storeSettings={storeInfo} onValidityChange={setTimeValid} />
+
           {error ? (
-            <div className="rounded-lg border border-destructive/20 bg-destructive/10 p-3 text-xs leading-5 text-destructive">
+            <div className="rounded-lg border border-destructive/20 bg-destructive/10 p-3 text-sm leading-5 text-destructive">
               {error}
             </div>
           ) : null}
@@ -792,13 +801,21 @@ const Delivery = ({
                 Pickup Location
               </p>
               <p className="text-sm text-foreground">{storeInfo.address}</p>
-              {storeInfo.estimatedPickup ? (
+              {!scheduledLabel && storeInfo.estimatedPickup ? (
                 <p className="text-sm font-medium text-foreground">
                   Estimated ready in {storeInfo.estimatedPickup}
                 </p>
               ) : null}
             </>
           )}
+          <div>
+            <p className="mb-1 text-[0.95rem] font-semibold text-ink-soft">
+              {orderType === "delivery" ? "Delivery time" : "Pickup time"}
+            </p>
+            <p className="text-sm text-foreground" data-testid="order-time-summary">
+              {scheduledLabel || "As soon as possible"}
+            </p>
+          </div>
         </div>
       ) : null}
     </div>

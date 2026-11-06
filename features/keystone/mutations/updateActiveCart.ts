@@ -10,6 +10,7 @@ import {
   getStoreDeliverySettings,
   normalizeDeliveryFields,
 } from "../utils/deliveryValidation";
+import { checkScheduledTime } from "../../lib/order-ahead";
 
 const ALLOWED_TIP_PERCENTS = new Set(["0", "15", "18", "20", "25"]);
 const ALLOWED_ORDER_TYPES = new Set(["pickup", "delivery"]);
@@ -27,6 +28,8 @@ type ActiveCartUpdateInput = {
   deliveryCountryCode?: string | null;
   tipPercent?: string | null;
   userId?: string | null;
+  /** ISO time for order ahead; "" or null means as soon as possible. */
+  scheduledFor?: string | null;
 };
 
 function boundedText(value: unknown, field: string, maximum: number) {
@@ -56,6 +59,7 @@ async function updateActiveCart(
       deliveryState
       deliveryCountryCode
       deliveryZip
+      scheduledFor
       user { id }
       order { id }
     `,
@@ -103,6 +107,22 @@ async function updateActiveCart(
     });
   }
 
+  // Order ahead: validate a chosen time against store hours and prep time. Changing between
+  // pickup and delivery changes the prep time, so a kept time is re-checked too.
+  let scheduledFor: Date | null | undefined;
+  if (data.scheduledFor !== undefined || (data.orderType && data.orderType !== cart.orderType && cart.scheduledFor)) {
+    const requested = data.scheduledFor !== undefined ? data.scheduledFor : cart.scheduledFor;
+    if (!requested) scheduledFor = null;
+    else {
+      const hoursSettings = await sudo.query.StoreSettings.findOne({ where: { id: "1" }, query: "timezone hours estimatedPickup estimatedDelivery" });
+      const check = checkScheduledTime(hoursSettings, nextOrderType, requested);
+      if (!check.ok) {
+        if (data.scheduledFor !== undefined) throw shopperError(check.message, "SCHEDULED_TIME_UNAVAILABLE");
+        scheduledFor = null;
+      } else scheduledFor = new Date(requested);
+    }
+  }
+
   let userId: string | undefined;
   if (data.userId) {
     const canAssignAnotherUser = permissions.canManageOrders({ session: context.session });
@@ -121,6 +141,7 @@ async function updateActiveCart(
     customerPhone: boundedText(data.customerPhone, "Phone", 64),
     ...normalizedDelivery,
     tipPercent: data.tipPercent ?? undefined,
+    scheduledFor,
     user: userId ? { connect: { id: userId } } : undefined,
   };
 

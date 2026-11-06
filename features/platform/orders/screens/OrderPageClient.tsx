@@ -191,7 +191,7 @@ export function OrderPageClient({ order, currencyCode = "USD", locale = "en-US" 
       </div>
 
       {/* Stat strip */}
-      <div className="grid grid-cols-2 md:grid-cols-4 divide-x border-b border-border">
+      <div className={`grid grid-cols-2 divide-x border-b border-border ${order.scheduledFor ? "md:grid-cols-5" : "md:grid-cols-4"}`}>
         <div className="px-5 py-3">
           <p className="text-xs uppercase tracking-wider text-muted-foreground">Total</p>
           <p className="text-xl font-semibold mt-1">
@@ -204,6 +204,21 @@ export function OrderPageClient({ order, currencyCode = "USD", locale = "en-US" 
             {order.orderType?.replace("_", " ") || "—"}
           </p>
         </div>
+        {order.scheduledFor ? (
+          <div className="px-5 py-3" data-testid="order-scheduled-for">
+            <p className="text-xs uppercase tracking-wider text-muted-foreground">
+              {order.orderType === "delivery" ? "Deliver at" : "Pickup at"}
+            </p>
+            <p className="text-sm font-semibold mt-1">
+              <ViewerTime value={order.scheduledFor} style="datetime" />
+            </p>
+            {order.onHold && order.fireAt ? (
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Kitchen starts <ViewerTime value={order.fireAt} style="datetime" />
+              </p>
+            ) : null}
+          </div>
+        ) : null}
         <div className="px-5 py-3">
           <p className="text-xs uppercase tracking-wider text-muted-foreground">Placed</p>
           <p className="text-sm font-semibold mt-1">

@@ -32,6 +32,8 @@ import {
   Check,
   Utensils,
 } from 'lucide-react'
+import { orderingWindow } from '@/features/lib/restaurant-hours'
+import { formatScheduled, formatSlotTime, groupSlots, leadForOrderType, orderAheadSlots } from '@/features/lib/order-ahead'
 import { gql, request } from 'graphql-request'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
@@ -97,6 +99,10 @@ const GET_DATA = gql`
       taxRate
       currencyCode
       locale
+      timezone
+      hours
+      estimatedPickup
+      estimatedDelivery
     }
   }
 `
@@ -110,6 +116,9 @@ const CREATE_POS_ORDER = gql`
     $isUrgent: Boolean
     $specialInstructions: String
     $items: [POSOrderItemInput!]!
+    $scheduledFor: String
+    $customerName: String
+    $customerPhone: String
   ) {
     createPOSOrder(
       idempotencyKey: $idempotencyKey
@@ -119,6 +128,9 @@ const CREATE_POS_ORDER = gql`
       isUrgent: $isUrgent
       specialInstructions: $specialInstructions
       items: $items
+      scheduledFor: $scheduledFor
+      customerName: $customerName
+      customerPhone: $customerPhone
     ) {
       id
       orderNumber
@@ -146,7 +158,7 @@ export function POSClient() {
     tables: Table[]
     categories: MenuCategory[]
     items: MenuItem[]
-    storeSettings: { taxRate?: string | null; currencyCode?: string | null; locale?: string | null } | null
+    storeSettings: { taxRate?: string | null; currencyCode?: string | null; locale?: string | null; timezone?: string | null; hours?: any; estimatedPickup?: string | null; estimatedDelivery?: string | null } | null
   }>({ tables: [], categories: [], items: [], storeSettings: null })
 
   const [selectedCategory, setSelectedCategory] = useState<string>('all')
@@ -159,6 +171,10 @@ export function POSClient() {
   const [tablePopoverOpen, setTablePopoverOpen] = useState(false)
   const [isUrgent, setIsUrgent] = useState(false)
   const [specialInstructions, setSpecialInstructions] = useState('')
+  // Order ahead (takeout): '' = as soon as possible, otherwise an ISO slot.
+  const [scheduledFor, setScheduledFor] = useState('')
+  const [pickupName, setPickupName] = useState('')
+  const [pickupPhone, setPickupPhone] = useState('')
   const [configuringItem, setConfiguringItem] = useState<MenuItem | null>(null)
   const [selectedModifierIds, setSelectedModifierIds] = useState<string[]>([])
   const [itemInstructions, setItemInstructions] = useState('')
@@ -290,7 +306,7 @@ export function POSClient() {
     if (cart.length === 0 || submitting || (orderType === 'dine_in' && selectedTables.length === 0)) return
     try {
       setSubmitting(true)
-      const fingerprint = JSON.stringify({ orderType, guestCount, selectedTables, isUrgent, specialInstructions, cart })
+      const fingerprint = JSON.stringify({ orderType, guestCount, selectedTables, isUrgent, specialInstructions, cart, scheduledFor: orderType === 'takeout' ? scheduledFor : '', pickupName, pickupPhone })
       if (submissionAttempt.current && submissionAttempt.current.fingerprint !== fingerprint) throw new Error('The previous send has an unresolved response. Reload to restore and retry that exact order before starting another.')
       const key = submissionAttempt.current?.fingerprint === fingerprint ? submissionAttempt.current.key : crypto.randomUUID()
       submissionAttempt.current = { fingerprint, key }
@@ -305,6 +321,9 @@ export function POSClient() {
         tableIds: orderType === 'dine_in' ? selectedTables : [],
         isUrgent,
         specialInstructions: specialInstructions || null,
+        scheduledFor: orderType === 'takeout' && scheduledFor ? scheduledFor : null,
+        customerName: orderType === 'takeout' ? pickupName.trim() || null : null,
+        customerPhone: orderType === 'takeout' ? pickupPhone.trim() || null : null,
         items: cart.map((item) => ({
           menuItemId: item.menuItem.id,
           quantity: item.quantity,
@@ -320,7 +339,14 @@ export function POSClient() {
       setSelectedTables([])
       setIsUrgent(false)
       setSpecialInstructions('')
-      toast.success('Order sent to kitchen')
+      const scheduledLabel = orderType === 'takeout' && scheduledFor
+        ? formatScheduled(scheduledFor, data.storeSettings?.timezone, data.storeSettings?.locale || 'en-US')
+        : null
+      setScheduledFor('')
+      setPickupName('')
+      setPickupPhone('')
+      if (scheduledLabel) toast.success('Order scheduled', { description: `Pickup ${scheduledLabel}. It goes to the kitchen when prep should start.` })
+      else toast.success('Order sent to kitchen')
     } catch (err: any) {
       const gqlErrors = err?.response?.errors
       if (Array.isArray(gqlErrors) && gqlErrors.length > 0) {
@@ -359,10 +385,18 @@ export function POSClient() {
 
   const availableTables = data.tables.filter((t) => t.status === 'available').length
 
+  const posZone = data.storeSettings?.timezone || 'America/New_York'
+  const posHours = data.storeSettings?.hours
+  const posOpenNow = posHours ? orderingWindow(posHours, posZone, new Date(), Number(posHours?._ordering?.cutoffMinutes || 0)) : true
+  const posSlotGroups = groupSlots(
+    posHours ? orderAheadSlots(posHours, posZone, leadForOrderType(data.storeSettings, 'pickup')) : [],
+    posZone
+  )
+
   const canSend =
     cart.length > 0 &&
     !submitting &&
-    (orderType === 'takeout' || selectedTables.length > 0)
+    (orderType === 'takeout' ? posOpenNow || Boolean(scheduledFor) : selectedTables.length > 0)
 
   if (loading) {
     return (
@@ -613,6 +647,34 @@ export function POSClient() {
             </div>
           )}
 
+          {/* Pickup time — takeout only: now, or order ahead for later today/tomorrow */}
+          {orderType === 'takeout' && (
+            <div className="px-4 py-3 border-b border-border shrink-0 space-y-2" data-testid="pos-pickup-time">
+              <label htmlFor="pos-pickup-time" className="block text-xs uppercase tracking-wider text-muted-foreground">Pickup time</label>
+              <select
+                id="pos-pickup-time"
+                value={scheduledFor}
+                onChange={(event) => setScheduledFor(event.target.value)}
+                className="w-full h-9 rounded border border-border bg-background px-2 text-sm"
+              >
+                <option value="">{posOpenNow ? 'As soon as possible' : 'Choose a later time'}</option>
+                {posSlotGroups.map((group) => (
+                  <optgroup key={group.label} label={group.label}>
+                    {group.slots.map((slot) => (
+                      <option key={slot.toISOString()} value={slot.toISOString()}>
+                        {group.label} {formatSlotTime(slot, data.storeSettings?.timezone, data.storeSettings?.locale || 'en-US')}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+              <div className="grid grid-cols-2 gap-2">
+                <input aria-label="Customer name" placeholder="Name" value={pickupName} onChange={(event) => setPickupName(event.target.value)} className="h-9 rounded border border-border bg-background px-2 text-sm min-w-0" />
+                <input aria-label="Customer phone" placeholder="Phone" inputMode="tel" value={pickupPhone} onChange={(event) => setPickupPhone(event.target.value)} className="h-9 rounded border border-border bg-background px-2 text-sm min-w-0" />
+              </div>
+            </div>
+          )}
+
           {/* Cart items — the ONLY scrollable section in the right panel */}
           <div className="flex-1 min-h-0 overflow-y-auto px-4 py-2 bg-muted/40">
             {cart.length === 0 ? (
@@ -766,7 +828,7 @@ export function POSClient() {
                   : 'bg-muted text-muted-foreground cursor-not-allowed'
               )}
             >
-              {submitting ? 'Sending…' : 'Send to Kitchen'}
+              {submitting ? 'Sending…' : orderType === 'takeout' && scheduledFor ? 'Schedule Order' : 'Send to Kitchen'}
             </button>
           </div>
         </div>

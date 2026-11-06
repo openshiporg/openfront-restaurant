@@ -24,11 +24,12 @@ async function addActiveCartItem(
   const sudo = context.sudo();
   const cart = await sudo.query.Cart.findOne({
     where: { id: cartId },
-    query: "id order { id }",
+    query: "id orderType scheduledFor order { id }",
   });
   if (cart?.order?.id) throw shopperError("Completed carts cannot be changed", "CART_COMPLETED");
   await touchMutableCart(context, cartId);
-  const validated = await validateCartItemInput(context, input);
+  // Closed now? Guests can still build a basket to order ahead for a later slot (Toast/Square).
+  const validated = await validateCartItemInput(context, input, { at: cart?.scheduledFor || null, allowLater: true, orderType: cart?.orderType });
 
   await sudo.query.CartItem.createOne({
     data: {

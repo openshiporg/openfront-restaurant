@@ -15,6 +15,9 @@ export async function getStoreDeliverySettings(context: Context) {
       pickupDiscount
       taxRate
       currencyCode
+      timezone
+      estimatedPickup
+      estimatedDelivery
     `,
   });
 }

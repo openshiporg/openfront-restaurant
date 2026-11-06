@@ -86,6 +86,11 @@ export function OrderDetailsComponent({
                 <span className="capitalize">{(order.orderSource || "online").replace("_", " ")}</span>
                 {order.orderType ? <>{" · "}<span className="capitalize">{order.orderType.replace("_", " ")}</span></> : null}
               </span>
+              {order.scheduledFor ? (
+                <span className="text-xs font-semibold text-foreground" data-testid="order-scheduled-for">
+                  Scheduled for <ViewerTime value={order.scheduledFor} style="datetime" />
+                </span>
+              ) : null}
             </div>
 
             <div className="mt-2 flex flex-wrap items-center gap-4 text-sm">

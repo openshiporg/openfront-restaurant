@@ -244,6 +244,8 @@ model RestaurantOrder {
   specialInstructions            String                @default("")
   onHold                         Boolean               @default(false)
   holdReason                     String                @default("")
+  scheduledFor                   DateTime?
+  fireAt                         DateTime?
   isUrgent                       Boolean               @default(false)
   subtotal                       Int?                  @default(0)
   tax                            Int?                  @default(0)
@@ -520,6 +522,7 @@ model Cart {
   paymentCollection   PaymentCollection? @relation("Cart_paymentCollection", fields: [paymentCollectionId], references: [id])
   paymentCollectionId String?            @unique @map("paymentCollection")
   tipPercent          String?            @default("0")
+  scheduledFor        DateTime?
   order               RestaurantOrder?   @relation("Cart_order", fields: [orderId], references: [id])
   orderId             String?            @map("order")
   createdAt           DateTime           @default(now())

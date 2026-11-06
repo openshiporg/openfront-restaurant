@@ -14,6 +14,9 @@ export async function getOrders(
     orderType
     orderSource
     status
+    scheduledFor
+    fireAt
+    onHold
     total
     createdAt
     updatedAt
@@ -75,6 +78,9 @@ export async function getOrder(orderId: string) {
         orderType
         orderSource
         status
+        scheduledFor
+        fireAt
+        onHold
         guestCount
         specialInstructions
         subtotal

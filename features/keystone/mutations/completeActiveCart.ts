@@ -13,7 +13,8 @@ import {
   assertDeliveryAddressEligible,
   getStoreDeliverySettings,
 } from "../utils/deliveryValidation";
-import { isKitchenActiveOrderStatus, syncKitchenTicketsForOrder } from "../utils/kitchenTicketSync";
+import { isKitchenActiveOrderStatus, SCHEDULED_HOLD_REASON, syncKitchenTicketsForOrder } from "../utils/kitchenTicketSync";
+import { formatScheduled, leadForOrderType } from "../../lib/order-ahead";
 import { validateCartItemInput } from "../utils/cartItemValidation";
 import { appendAuditEventWithClient } from "../utils/audit";
 import { freezeOrderPricingPolicy, getOrderPricingPolicy } from "../utils/orderPricingPolicy";
@@ -84,6 +85,7 @@ export default async function completeActiveCart(
       deliveryZip
       deliveryCountryCode
       tipPercent
+      scheduledFor
       createdAt
       user { id hasAccount createdAt }
       order { id orderNumber secretKey status }
@@ -159,7 +161,7 @@ export default async function completeActiveCart(
         quantity: item.quantity,
         modifierIds: (item.modifiers || []).map((modifier: any) => modifier.id),
         specialInstructions: item.specialInstructions,
-      })
+      }, { at: cart.scheduledFor || null, orderType: cart.orderType })
     )
   );
 
@@ -317,6 +319,15 @@ export default async function completeActiveCart(
     pp_system_default: "cash",
   };
   const paymentIdempotencyKey = `checkout:${selectedSession.idempotencyKey || selectedSession.id}`;
+  // Order ahead: the paid order waits off the kitchen line until (pickup/delivery time − prep time).
+  // The time was validated before payment; once money has moved it is honoured as reviewed.
+  const scheduledFor = cart.scheduledFor ? new Date(cart.scheduledFor) : null;
+  const fireAt = scheduledFor && !Number.isNaN(scheduledFor.getTime())
+    ? new Date(scheduledFor.getTime() - leadForOrderType(settings, cart.orderType) * 60_000)
+    : null;
+  const schedule = scheduledFor && fireAt
+    ? { scheduledFor, fireAt, ...(fireAt.getTime() > Date.now() ? { onHold: true, holdReason: SCHEDULED_HOLD_REASON } : {}) }
+    : {};
   const result = await prisma.$transaction(async (tx: any) => {
     const lockedCart = await tx.cart.findUnique({
       where: { id: cartId },
@@ -366,6 +377,7 @@ export default async function completeActiveCart(
         deliveryZip: isDeliveryOrder ? cart.deliveryZip || "" : "",
         deliveryCountryCode: isDeliveryOrder ? cart.deliveryCountryCode || "" : "",
         secretKey,
+        ...schedule,
         ...(quote?.promo?.discountId ? { discounts: { connect: { id: quote.promo.discountId } } } : {}),
       },
     });
@@ -455,7 +467,7 @@ export default async function completeActiveCart(
     await enqueueRestaurantNotification(tx, context.session?.itemId, {
       eventKey: `notification:order-confirmed:${order.id}`, entityType: "RestaurantOrder", entityId: order.id,
       to: cart.email || "", subject: `Order ${order.orderNumber} received`,
-      text: `Your ${order.orderType} order ${order.orderNumber} has been received. Total: ${total} minor units ${currencyCode}. Payment: ${payment.status}. Please contact the restaurant with your order number for changes.`,
+      text: `Your ${order.orderType} order ${order.orderNumber} has been received.${scheduledFor ? ` Scheduled for ${formatScheduled(scheduledFor, settings?.timezone)}.` : ""} Total: ${total} minor units ${currencyCode}. Payment: ${payment.status}. Please contact the restaurant with your order number for changes.`,
     });
     return { order, payment, replay: false };
     // The payment has already been taken, so give a slow database room to record the order.

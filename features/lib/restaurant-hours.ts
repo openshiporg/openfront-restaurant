@@ -46,16 +46,31 @@ export function nextOrderingOpening(hours: any, timezone: string, now: Date, lea
   return null;
 }
 
-export function assertOrderingAvailable(settings: any, item?: any, now = new Date()) {
+export type OrderingOptions = {
+  /** A chosen order-ahead time: menu service periods are checked at that time, not now. */
+  at?: Date | null;
+  /** Building a basket while closed is allowed when a later time can still be chosen. */
+  allowLater?: boolean;
+  /** Whether any order-ahead time exists (computed by the caller to keep this module dependency-free). */
+  hasLaterSlot?: boolean;
+};
+
+export function assertOrderingAvailable(settings: any, item?: any, now = new Date(), options: OrderingOptions = {}) {
   if (!settings?.timezone || !settings?.hours) throw new Error('Restaurant ordering schedule is not configured');
   const lead = Number(settings.hours._ordering?.cutoffMinutes || 0);
   if (!Number.isInteger(lead) || lead < 0 || lead > 240) throw new Error('Invalid ordering cutoff configuration');
-  if (!orderingWindow(settings.hours, settings.timezone, now, lead)) {
+  const at = options.at ? new Date(options.at) : null;
+  const openNow = orderingWindow(settings.hours, settings.timezone, now, lead);
+  if (!at && !openNow && !(options.allowLater && options.hasLaterSlot)) {
     const opensAt = nextOrderingOpening(settings.hours, settings.timezone, now, lead);
     const localTime = opensAt && new Intl.DateTimeFormat('en-US', { timeZone: settings.timezone, weekday: 'short', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' }).format(opensAt);
-    throw new GraphQLError(`${settings.name?.trim() || 'The restaurant'} is closed right now.${localTime ? ` Ordering opens at ${localTime}.` : ''}`, {
+    const later = options.hasLaterSlot ? ' Choose a later pickup time to order ahead.' : '';
+    throw new GraphQLError(`${settings.name?.trim() || 'The restaurant'} is closed right now.${localTime ? ` Ordering opens at ${localTime}.` : ''}${later}`, {
       extensions: { code: 'RESTAURANT_CLOSED', ...(opensAt ? { opensAt: opensAt.toISOString() } : {}) },
     });
   }
-  if (item && (!mealAvailable(item.mealPeriods, settings.hours, settings.timezone, now) || !mealAvailable(item.category?.mealPeriods, settings.hours, settings.timezone, now))) throw new GraphQLError('This item is outside its menu service period.', { extensions: { code: 'OUTSIDE_SERVICE_PERIOD' } });
+  const serviceTime = at || (openNow ? now : null);
+  if (item && serviceTime && (!mealAvailable(item.mealPeriods, settings.hours, settings.timezone, serviceTime) || !mealAvailable(item.category?.mealPeriods, settings.hours, settings.timezone, serviceTime))) {
+    throw new GraphQLError(at ? `${item.name || 'This item'} is not served at the time you chose.` : 'This item is outside its menu service period.', { extensions: { code: 'OUTSIDE_SERVICE_PERIOD' } });
+  }
 }

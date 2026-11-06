@@ -3,6 +3,7 @@ import { permissions } from "../access";
 import {
   isExpediterStation,
   reconcileRestaurantOrderStatus,
+  releaseDueScheduledOrders,
   syncKitchenTicketsForActiveOrders,
 } from "../utils/kitchenTicketSync";
 import { appendKitchenTicketEventWithClient } from "../utils/kitchenTicketEvents";
@@ -25,6 +26,13 @@ interface MutationResult {
 interface SyncResult extends MutationResult {
   created: number;
   updated: number;
+}
+
+/** Fires due order-ahead orders. Cheap (one indexed lookup when nothing is due); the KDS calls it on every poll. */
+export async function releaseScheduledOrders(_root: unknown, _args: unknown, context: Context): Promise<number> {
+  if (!permissions.canManageKitchen({ session: context.session })) return 0;
+  const result = await releaseDueScheduledOrders(context.sudo() as Context);
+  return result.released;
 }
 
 export async function syncKitchenTickets(_root: unknown, _args: unknown, context: Context): Promise<SyncResult> {

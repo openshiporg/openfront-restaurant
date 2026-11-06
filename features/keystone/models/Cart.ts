@@ -1,5 +1,5 @@
 import { list, graphql } from "@keystone-6/core";
-import { relationship, select, text, virtual } from "@keystone-6/core/fields";
+import { relationship, select, text, timestamp, virtual } from "@keystone-6/core/fields";
 import { permissions } from "../access";
 import { trackingFields } from "./trackingFields";
 
@@ -58,6 +58,8 @@ export const Cart = list({
       ],
       defaultValue: "0",
     }),
+    // Order ahead: null means "as soon as possible".
+    scheduledFor: timestamp({ db: { isNullable: true } }),
     order: relationship({ ref: "RestaurantOrder" }),
     subtotal: virtual({
       field: graphql.field({

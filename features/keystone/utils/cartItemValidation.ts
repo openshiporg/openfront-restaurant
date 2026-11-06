@@ -1,5 +1,6 @@
 import { shopperError } from "./shopperError";
 import { assertOrderingAvailable } from "../../lib/restaurant-hours";
+import { leadForOrderType, orderAheadSlots } from "../../lib/order-ahead";
 import type { Context } from ".keystone/types";
 
 export type ValidatedCartItem = {
@@ -94,7 +95,8 @@ export async function validateCartItemInput(
     quantity: number;
     modifierIds?: string[] | null;
     specialInstructions?: string | null;
-  }
+  },
+  ordering: { at?: Date | string | null; allowLater?: boolean; orderType?: string | null } = {}
 ): Promise<ValidatedCartItem> {
   if (!input.menuItemId) throw shopperError("Menu item is required", "MENU_ITEM_REQUIRED");
 
@@ -124,8 +126,15 @@ export async function validateCartItemInput(
 
   if (!menuItem) throw shopperError("Menu item not found", "MENU_ITEM_NOT_FOUND");
   if (!menuItem.available) throw shopperError(`${menuItem.name || "Selected item"} is unavailable`, "ITEM_UNAVAILABLE");
-  const settings = await context.sudo().query.StoreSettings.findOne({ where: { id: "1" }, query: "name timezone hours" });
-  assertOrderingAvailable(settings, menuItem);
+  const settings = await context.sudo().query.StoreSettings.findOne({ where: { id: "1" }, query: "name timezone hours estimatedPickup estimatedDelivery" });
+  const hasLaterSlot = settings?.hours
+    ? orderAheadSlots(settings.hours, settings.timezone, leadForOrderType(settings, ordering.orderType)).length > 0
+    : false;
+  assertOrderingAvailable(settings, menuItem, new Date(), {
+    at: ordering.at ? new Date(ordering.at) : null,
+    allowLater: ordering.allowLater,
+    hasLaterSlot,
+  });
 
   const quantity = normalizeCartQuantity(input.quantity);
   const specialInstructions = normalizeSpecialInstructions(input.specialInstructions);

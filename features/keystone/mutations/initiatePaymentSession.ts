@@ -6,6 +6,7 @@ import { snapshotCheckoutRecipes } from "../utils/inventoryRecipeSnapshot";
 import { createPayment } from "../utils/paymentProviderAdapter";
 import { calculateRestaurantTotals } from "../../lib/restaurant-order-pricing";
 import { assertCanAccessCart } from "../utils/cartAccess";
+import { checkScheduledTime } from "../../lib/order-ahead";
 import { validateCartItemInput } from "../utils/cartItemValidation";
 import { resolveCartPromo } from "./storefrontPublic";
 import { isPaymentProviderConfigured } from "../utils/paymentProviderConfig";
@@ -43,7 +44,7 @@ export default async function initiatePaymentSession(
   let cart = await sudo.query.Cart.findOne({
     where: { id: cartId },
     query: `
-      id updatedAt orderType email customerName customerPhone deliveryAddress deliveryAddress2 deliveryCity deliveryState deliveryCountryCode deliveryZip tipPercent user { id }
+      id updatedAt orderType email customerName customerPhone deliveryAddress deliveryAddress2 deliveryCity deliveryState deliveryCountryCode deliveryZip tipPercent scheduledFor user { id }
       order { id }
       paymentCollection {
         id amount
@@ -80,13 +81,19 @@ export default async function initiatePaymentSession(
     throw new Error(`Payment provider ${paymentProviderId} is not installed and configured`);
   }
 
+  // Order ahead: the chosen time must still be on the store's slot grid when payment starts.
+  if (!activeAttempt?.data?.checkoutQuote && cart.scheduledFor) {
+    const hoursSettings = await sudo.query.StoreSettings.findOne({ where: { id: "1" }, query: "timezone hours estimatedPickup estimatedDelivery" });
+    const check = checkScheduledTime(hoursSettings, cart.orderType, cart.scheduledFor);
+    if (!check.ok) throw shopperError(check.message, "SCHEDULED_TIME_UNAVAILABLE");
+  }
   const validatedItems = activeAttempt?.data?.checkoutQuote?.items || await Promise.all(
     cart.items.map((item: any) => validateCartItemInput(context, {
       menuItemId: item.menuItem?.id,
       quantity: item.quantity,
       modifierIds: (item.modifiers || []).map((modifier: any) => modifier.id),
       specialInstructions: item.specialInstructions,
-    }))
+    }, { at: cart.scheduledFor || null, orderType: cart.orderType }))
   );
   const subtotal = validatedItems.reduce((sum: number, item: any) => sum + item.unitPrice * item.quantity, 0);
   const settings = await getStoreDeliverySettings(context);

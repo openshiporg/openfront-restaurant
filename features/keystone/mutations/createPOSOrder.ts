@@ -2,7 +2,8 @@ import { freezeOrderPricingPolicy } from "../utils/orderPricingPolicy";
 import crypto from "node:crypto";
 import { appendAuditEventWithClient } from "../utils/audit";
 import { assertTablesAvailable, serviceTransaction } from "../utils/serviceOrderState";
-import { syncKitchenTicketsForOrder } from "../utils/kitchenTicketSync";
+import { SCHEDULED_HOLD_REASON, syncKitchenTicketsForOrder } from "../utils/kitchenTicketSync";
+import { checkScheduledTime } from "../../lib/order-ahead";
 import type { Context } from ".keystone/types";
 import { permissions } from "../access";
 import { calculateRestaurantTotals } from "../../lib/restaurant-order-pricing";
@@ -24,6 +25,10 @@ interface CreatePOSOrderArgs {
   isUrgent?: boolean;
   specialInstructions?: string | null;
   items: POSOrderItemInput[];
+  /** Order ahead (takeout only): ISO pickup time from the store's slot grid. */
+  scheduledFor?: string | null;
+  customerName?: string | null;
+  customerPhone?: string | null;
 }
 
 function generateOrderNumber(): string {
@@ -66,6 +71,14 @@ export default async function createPOSOrder(
   }
 
   const sudo = context.sudo();
+  let schedule: { scheduledFor: Date; fireAt: Date } | null = null;
+  if (args.scheduledFor) {
+    if (orderType !== "takeout") throw new Error("Only takeout orders can be scheduled for later");
+    const hoursSettings = await sudo.query.StoreSettings.findOne({ where: { id: "1" }, query: "timezone hours estimatedPickup estimatedDelivery" });
+    const check = checkScheduledTime(hoursSettings, "pickup", args.scheduledFor);
+    if (!check.ok) throw new Error(check.message);
+    schedule = { scheduledFor: new Date(args.scheduledFor), fireAt: check.fireAt };
+  }
   const [storeSettings, validatedItems, tables] = await Promise.all([
     sudo.query.StoreSettings.findOne({ where: { id: "1" }, query: "currencyCode taxRate" }),
     Promise.all(
@@ -75,7 +88,7 @@ export default async function createPOSOrder(
           quantity: item.quantity,
           modifierIds: item.modifierIds || [],
           specialInstructions: item.specialInstructions,
-        })),
+        }, schedule ? { at: schedule.scheduledFor, orderType: "pickup" } : {})),
         courseNumber: Math.max(1, Math.floor(Number(item.courseNumber || 1))),
       }))
     ),
@@ -109,6 +122,8 @@ export default async function createPOSOrder(
       orderNumber: `POS-${crypto.createHash("sha256").update(requestKey).digest("hex").slice(0, 24)}`,
       orderType, orderSource: "pos", status: "sent_to_kitchen", guestCount: Math.max(1, args.guestCount || 1),
       subtotal, tax, total, isUrgent: Boolean(args.isUrgent), specialInstructions: args.specialInstructions || "", currencyCode,
+      customerName: (args.customerName || "").trim().slice(0, 160), customerPhone: (args.customerPhone || "").trim().slice(0, 64),
+      ...(schedule ? { scheduledFor: schedule.scheduledFor, fireAt: schedule.fireAt, onHold: true, holdReason: SCHEDULED_HOLD_REASON } : {}),
       tables: { connect: tableIds.map(id => ({ id })) }, serverId: context.session?.itemId, createdById: context.session?.itemId,
     } });
     await freezeOrderPricingPolicy(tx, order.id, storeSettings, context.session?.itemId);

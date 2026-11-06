@@ -18,6 +18,7 @@ export default async function getCustomerOrder(
       orderType
       orderSource
       status
+      scheduledFor
       guestCount
       specialInstructions
       subtotal

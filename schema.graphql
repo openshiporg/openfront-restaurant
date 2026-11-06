@@ -10,6 +10,7 @@ type User {
   apiKeys(where: ApiKeyWhereInput! = {}, orderBy: [ApiKeyOrderByInput!]! = [], take: Int, skip: Int! = 0, cursor: ApiKeyWhereUniqueInput): [ApiKey!]
   apiKeysCount(where: ApiKeyWhereInput! = {}): Int
   phone: String
+  hasAccount: Boolean
   restaurantOrders(where: RestaurantOrderWhereInput! = {}, orderBy: [RestaurantOrderOrderByInput!]! = [], take: Int, skip: Int! = 0, cursor: RestaurantOrderWhereUniqueInput): [RestaurantOrder!]
   restaurantOrdersCount(where: RestaurantOrderWhereInput! = {}): Int
   addresses(where: AddressWhereInput! = {}, orderBy: [AddressOrderByInput!]! = [], take: Int, skip: Int! = 0, cursor: AddressWhereUniqueInput): [Address!]
@@ -75,6 +76,7 @@ input UserWhereInput {
   role: RoleWhereInput
   apiKeys: ApiKeyManyRelationFilter
   phone: StringFilter
+  hasAccount: BooleanFilter
   restaurantOrders: RestaurantOrderManyRelationFilter
   addresses: AddressManyRelationFilter
   carts: CartManyRelationFilter
@@ -145,6 +147,11 @@ input ApiKeyManyRelationFilter {
   none: ApiKeyWhereInput
 }
 
+input BooleanFilter {
+  equals: Boolean
+  not: BooleanFilter
+}
+
 input RestaurantOrderManyRelationFilter {
   every: RestaurantOrderWhereInput
   some: RestaurantOrderWhereInput
@@ -200,11 +207,6 @@ input DecimalNullableFilter {
   not: DecimalNullableFilter
 }
 
-input BooleanFilter {
-  equals: Boolean
-  not: BooleanFilter
-}
-
 input DateTimeFilter {
   equals: DateTime
   in: [DateTime!]
@@ -224,6 +226,7 @@ input UserOrderByInput {
   id: OrderDirection
   name: OrderDirection
   phone: OrderDirection
+  hasAccount: OrderDirection
   employeeId: OrderDirection
   staffRole: OrderDirection
   hireDate: OrderDirection
@@ -251,6 +254,7 @@ input UserUpdateInput {
   role: RoleRelateToOneForUpdateInput
   apiKeys: ApiKeyRelateToManyForUpdateInput
   phone: String
+  hasAccount: Boolean
   restaurantOrders: RestaurantOrderRelateToManyForUpdateInput
   addresses: AddressRelateToManyForUpdateInput
   carts: CartRelateToManyForUpdateInput
@@ -1294,6 +1298,8 @@ type RestaurantOrder {
   specialInstructions: String
   onHold: Boolean
   holdReason: String
+  scheduledFor: DateTime
+  fireAt: DateTime
   isUrgent: Boolean
   subtotal: Int
   tax: Int
@@ -1352,6 +1358,8 @@ input RestaurantOrderWhereInput {
   specialInstructions: StringFilter
   onHold: BooleanFilter
   holdReason: StringFilter
+  scheduledFor: DateTimeNullableFilter
+  fireAt: DateTimeNullableFilter
   isUrgent: BooleanFilter
   subtotal: IntNullableFilter
   tax: IntNullableFilter
@@ -1424,6 +1432,8 @@ input RestaurantOrderOrderByInput {
   specialInstructions: OrderDirection
   onHold: OrderDirection
   holdReason: OrderDirection
+  scheduledFor: OrderDirection
+  fireAt: OrderDirection
   isUrgent: OrderDirection
   subtotal: OrderDirection
   tax: OrderDirection
@@ -1456,6 +1466,8 @@ input RestaurantOrderUpdateInput {
   specialInstructions: String
   onHold: Boolean
   holdReason: String
+  scheduledFor: DateTime
+  fireAt: DateTime
   isUrgent: Boolean
   subtotal: Int
   tax: Int
@@ -1543,6 +1555,8 @@ input RestaurantOrderCreateInput {
   specialInstructions: String
   onHold: Boolean
   holdReason: String
+  scheduledFor: DateTime
+  fireAt: DateTime
   isUrgent: Boolean
   subtotal: Int
   tax: Int
@@ -2621,6 +2635,7 @@ type Cart {
   deliveryCountryCode: String
   paymentCollection: PaymentCollection
   tipPercent: String
+  scheduledFor: DateTime
   order: RestaurantOrder
   subtotal: Int
   createdAt: DateTime
@@ -2652,6 +2667,7 @@ input CartWhereInput {
   deliveryCountryCode: StringFilter
   paymentCollection: PaymentCollectionWhereInput
   tipPercent: StringNullableFilter
+  scheduledFor: DateTimeNullableFilter
   order: RestaurantOrderWhereInput
   createdAt: DateTimeFilter
   updatedAt: DateTimeFilter
@@ -2676,6 +2692,7 @@ input CartOrderByInput {
   deliveryZip: OrderDirection
   deliveryCountryCode: OrderDirection
   tipPercent: OrderDirection
+  scheduledFor: OrderDirection
   createdAt: OrderDirection
   updatedAt: OrderDirection
 }
@@ -2695,6 +2712,7 @@ input CartUpdateInput {
   deliveryCountryCode: String
   paymentCollection: PaymentCollectionRelateToOneForUpdateInput
   tipPercent: String
+  scheduledFor: DateTime
   order: RestaurantOrderRelateToOneForUpdateInput
   createdAt: DateTime
   updatedAt: DateTime
@@ -2727,6 +2745,7 @@ input CartCreateInput {
   deliveryCountryCode: String
   paymentCollection: PaymentCollectionRelateToOneForCreateInput
   tipPercent: String
+  scheduledFor: DateTime
   order: RestaurantOrderRelateToOneForCreateInput
   createdAt: DateTime
   updatedAt: DateTime
@@ -5813,6 +5832,11 @@ type Mutation {
   createActiveCart(orderType: String): Cart
   addActiveCartItem(cartId: ID!, input: ActiveCartItemInput!): Cart
   updateActiveCart(cartId: ID!, data: ActiveCartUpdateInput!): Cart
+  createGuestReservation(date: String!, startsAt: String!, partySize: Int!, name: String!, email: String!, phone: String!, notes: String): JSON
+  startGiftCardPurchase(amount: Int!, purchaserEmail: String!, recipientName: String, recipientEmail: String, message: String): JSON
+  completeGiftCardPurchase(paymentIntentId: String!): JSON
+  applyPromoCode(cartId: ID!, code: String!): JSON
+  removePromoCode(cartId: ID!): JSON
   updateCartItemQuantity(cartItemId: ID!, quantity: Int!): Cart
   removeCartItem(cartItemId: ID!): Cart
   processPayment(orderId: String!, amount: Int, paymentMethod: String!, tipAmount: Int, idempotencyKey: String!): ProcessPaymentResult
@@ -5834,7 +5858,7 @@ type Mutation {
   initiatePaymentSession(cartId: ID!, paymentProviderId: String!): InitiatePaymentSessionResult
   completeActiveCart(cartId: ID!, paymentSessionId: ID): RestaurantOrder
   transitionRestaurantOrder(orderId: ID!, status: String!, reason: String): RestaurantOrder
-  createPOSOrder(idempotencyKey: String!, orderType: String!, guestCount: Int, tableIds: [ID!], isUrgent: Boolean, specialInstructions: String, items: [POSOrderItemInput!]!): RestaurantOrder
+  createPOSOrder(idempotencyKey: String!, orderType: String!, guestCount: Int, tableIds: [ID!], isUrgent: Boolean, specialInstructions: String, items: [POSOrderItemInput!]!, scheduledFor: String, customerName: String, customerPhone: String): RestaurantOrder
   addServiceFloorItem(idempotencyKey: String!, orderId: ID, tableId: ID!, menuItemId: ID!, quantity: Int!, courseNumber: Int, seatNumber: Int, specialInstructions: String, modifierIds: [ID!]): RestaurantOrder
   updateServiceFloorItem(orderItemId: ID!, quantity: Int, courseNumber: Int, seatNumber: Int, specialInstructions: String, voidReason: String, managerApprovalId: ID): RestaurantOrder
   updateServiceFloorTableStatus(tableId: ID!, status: String!): ServiceFloorMutationResult
@@ -5856,6 +5880,7 @@ type Mutation {
   fireCourse(courseId: String!): CourseManagementResult
   recallCourse(courseId: String!): CourseManagementResult
   syncKitchenTickets: SyncKitchenTicketsResult
+  releaseScheduledOrders: Int!
   updateKitchenTicketStatus(ticketId: String!, status: String!): KitchenTicketMutationResult
   fulfillKitchenTicketItem(ticketId: String!, itemId: String!, fulfilled: Boolean!): KitchenTicketMutationResult
   handlePaymentProviderWebhook(providerCode: String!, event: JSON!, headers: JSON!, rawBody: String): HandleWebhookResult
@@ -6061,6 +6086,10 @@ type Query {
   getCustomerOrders(limit: Int, offset: Int): JSON
   unplacedCheckoutAttempts(skip: Int, take: Int): UnplacedCheckoutAttemptPage!
   lookupGiftCard(code: String!): JSON
+  reservationAvailability(date: String!, partySize: Int!): JSON
+  lookupGiftCardBalance(code: String!): JSON
+  lookupGuestOrder(orderNumber: String!, email: String!): JSON
+  cartPromo(cartId: ID!): JSON
 }
 
 union AuthenticatedItem = User
@@ -6222,6 +6251,7 @@ input ActiveCartUpdateInput {
   deliveryCountryCode: String
   tipPercent: String
   userId: ID
+  scheduledFor: String
 }
 
 input ActiveCartItemInput {

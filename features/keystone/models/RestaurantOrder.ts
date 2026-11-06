@@ -131,6 +131,10 @@ export const RestaurantOrder = list({
     specialInstructions: text({ ui: { displayMode: "textarea" } }),
     onHold: checkbox({ defaultValue: false }),
     holdReason: text(),
+    // Order ahead: the guest's pickup/delivery time, and when the kitchen should start it.
+    // A scheduled order stays held (no kitchen ticket) until fireAt.
+    scheduledFor: timestamp({ db: { isNullable: true }, ui: { itemView: { fieldMode: "read" } } }),
+    fireAt: timestamp({ db: { isNullable: true }, ui: { itemView: { fieldMode: "read" } } }),
     isUrgent: checkbox({ defaultValue: false }),
     subtotal: integer({ defaultValue: 0 }),
     tax: integer({ defaultValue: 0 }),

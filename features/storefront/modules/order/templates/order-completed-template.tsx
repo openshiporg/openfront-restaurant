@@ -1,3 +1,4 @@
+import { ScheduledTime } from "../components/scheduled-time";
 import { OrderStatusTimeline, OrderStatus, OrderType } from "../components/order-status-timeline";
 import { OrderItemsList } from "../components/order-items-list";
 import { OrderSummary } from "../components/order-summary";
@@ -29,6 +30,7 @@ interface RestaurantOrder {
   deliveryZip?: string;
   deliveryCountryCode?: string;
   createdAt: string;
+  scheduledFor?: string | null;
   updatedAt: string;
   checkAllocation?: { sourceOrderNumber: string; ordinal: number; guestCount: number; allocatedTotals: { total: number } } | null;
   orderItems: any[];
@@ -76,6 +78,11 @@ export default function OrderCompletedTemplate({ order }: OrderCompletedTemplate
               <p className="mt-1 text-[0.85rem] text-muted-foreground sm:text-base">
                 {typeLabel} · {new Date(order.createdAt).toLocaleDateString()}
               </p>
+              {order.scheduledFor ? (
+                <p className="mt-1 text-sm font-semibold text-foreground" data-testid="order-scheduled-for">
+                  {order.orderType === "delivery" ? "Delivery" : "Pickup"} scheduled for <ScheduledTime value={order.scheduledFor} />
+                </p>
+              ) : null}
             </div>
             <div className="rounded-full bg-mint px-3 py-1 text-[0.8rem] font-medium text-leaf">
               {statusLabel}

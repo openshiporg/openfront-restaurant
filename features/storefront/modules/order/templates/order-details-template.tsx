@@ -1,3 +1,4 @@
+import { ScheduledTime } from "../components/scheduled-time";
 import { OrderStatusTimeline, OrderType, OrderStatus } from "../components/order-status-timeline";
 import { OrderItemsList } from "../components/order-items-list";
 import { OrderSummary } from "../components/order-summary";
@@ -30,6 +31,7 @@ interface RestaurantOrder {
   deliveryZip?: string;
   deliveryCountryCode?: string;
   createdAt: string;
+  scheduledFor?: string | null;
   updatedAt: string;
   checkAllocation?: { sourceOrderNumber: string; ordinal: number; guestCount: number; allocatedTotals: { total: number } } | null;
   orderItems: any[];
@@ -55,6 +57,11 @@ export default function OrderDetailsTemplate({ order }: OrderDetailsTemplateProp
           </Link>
           <div className="mt-4"><ReorderButton orderId={order.id} /></div>
           <OrderLiveRefresh status={order.status} />
+          {order.scheduledFor ? (
+            <p className="mt-3 text-sm font-semibold text-foreground" data-testid="order-scheduled-for">
+              {order.orderType === "delivery" ? "Delivery" : "Pickup"} scheduled for <ScheduledTime value={order.scheduledFor} />
+            </p>
+          ) : null}
         </div>
 
         <div className="grid gap-6 lg:grid-cols-2">

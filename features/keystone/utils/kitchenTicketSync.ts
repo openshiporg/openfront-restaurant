@@ -75,6 +75,11 @@ function displayStationName(value: string) {
     .join(" ");
 }
 
+/** A scheduled (order-ahead) order reaches the kitchen at its fire time, so ticket age counts from then. */
+function kitchenStartedAt(order: { createdAt?: string | Date; fireAt?: string | Date | null }) {
+  return new Date((order.fireAt || order.createdAt) as string);
+}
+
 export function isExpediterStation(stationName?: string | null) {
   const n = (stationName || "").toLowerCase();
   return n.includes("expo") || n.includes("expediter");
@@ -284,6 +289,7 @@ export async function syncKitchenTicketsForOrder(orderId: string, context: Conte
       isUrgent
       onHold
       createdAt
+      fireAt
       orderItems {
         id
         quantity
@@ -438,7 +444,7 @@ export async function syncKitchenTicketsForOrder(orderId: string, context: Conte
             status: nextStatus,
             completedAt: resumed ? null : undefined,
             recalledAt: resumed ? new Date() : undefined,
-            firedAt: current.firedAt || new Date(order.createdAt),
+            firedAt: current.firedAt || kitchenStartedAt(order),
           } });
           await appendKitchenTicketEventWithClient(tx, actorId, {
             eventType: "delta", ticketId: current.id, orderId: order.id,
@@ -466,7 +472,7 @@ export async function syncKitchenTicketsForOrder(orderId: string, context: Conte
           priority,
           ticketType,
           status: order.status === "ready" ? "new" : getTicketStatusForOrderStatus(order.status),
-          firedAt: new Date(order.createdAt),
+          firedAt: kitchenStartedAt(order),
         },
       });
       await appendKitchenTicketEventWithClient(tx, actorId, {
@@ -529,4 +535,34 @@ export async function syncKitchenTicketsForActiveOrders(context: Context) {
   }
 
   return { created, updated, removed };
+}
+
+/** Order-ahead orders wait off the line with this hold reason until their fire time. */
+export const SCHEDULED_HOLD_REASON = "Scheduled order";
+
+/** Fire every scheduled order whose kitchen start time has arrived (idempotent; safe to call on every KDS poll). */
+export async function releaseDueScheduledOrders(context: Context, now = new Date()) {
+  const prisma = context.prisma as any;
+  const due = await prisma.restaurantOrder.findMany({
+    where: {
+      onHold: true,
+      holdReason: SCHEDULED_HOLD_REASON,
+      fireAt: { lte: now },
+      status: { in: ["open", ...ACTIVE_ORDER_STATUSES] },
+    },
+    select: { id: true },
+    orderBy: { fireAt: "asc" },
+    take: 50,
+  });
+  let released = 0;
+  for (const order of due) {
+    const claimed = await prisma.restaurantOrder.updateMany({
+      where: { id: order.id, onHold: true, holdReason: SCHEDULED_HOLD_REASON },
+      data: { onHold: false, holdReason: "" },
+    });
+    if (!claimed.count) continue;
+    released += 1;
+    await syncKitchenTicketsForOrder(order.id, context);
+  }
+  return { released };
 }

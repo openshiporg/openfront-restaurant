@@ -34,7 +34,7 @@ import getCustomerOrders from "./getCustomerOrders";
 import activeCartPaymentProviders from "../queries/activeCartPaymentProviders";
 import { transferTable, combineTables, deleteUnusedRestaurantTable, setRestaurantTableCapacity } from "./tableManagement";
 import { fireCourse, recallCourse } from "./courseManagement";
-import { syncKitchenTickets, updateKitchenTicketStatus, fulfillKitchenTicketItem } from "./kdsTickets";
+import { syncKitchenTickets, releaseScheduledOrders, updateKitchenTicketStatus, fulfillKitchenTicketItem } from "./kdsTickets";
 import handlePaymentProviderWebhook from "./handlePaymentProviderWebhook";
 import retryVerifiedRefundWebhook from "./retryVerifiedRefundWebhook";
 import createPOSOrder from "./createPOSOrder";
@@ -79,6 +79,7 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
         deliveryCountryCode: String
         tipPercent: String
         userId: ID
+        scheduledFor: String
       }
 
       input ActiveCartItemInput {
@@ -270,6 +271,9 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
           isUrgent: Boolean
           specialInstructions: String
           items: [POSOrderItemInput!]!
+          scheduledFor: String
+          customerName: String
+          customerPhone: String
         ): RestaurantOrder
 
         addServiceFloorItem(
@@ -410,6 +414,7 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
         ): CourseManagementResult
 
         syncKitchenTickets: SyncKitchenTicketsResult
+        releaseScheduledOrders: Int!
 
         updateKitchenTicketStatus(
           ticketId: String!
@@ -647,6 +652,7 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
         fireCourse,
         recallCourse,
         syncKitchenTickets,
+        releaseScheduledOrders,
         updateKitchenTicketStatus,
         fulfillKitchenTicketItem,
         handlePaymentProviderWebhook,
