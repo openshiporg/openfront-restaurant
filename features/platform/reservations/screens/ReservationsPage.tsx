@@ -338,6 +338,7 @@ export function ReservationsPage() {
           <div className="px-4 md:px-6 flex items-center gap-2 h-11 border-b border-border">
             <button
               onClick={() => navigateDay(-1)}
+              aria-label="Previous day"
               className="w-8 h-8 rounded border border-border flex items-center justify-center hover:bg-muted transition-colors shrink-0"
             >
               <ChevronLeft size={13} />
@@ -353,7 +354,7 @@ export function ReservationsPage() {
             {!isToday && (
               <button
                 onClick={() => setSelectedDate(new Date())}
-                className="text-[10px] uppercase tracking-wider font-semibold border border-border rounded px-2.5 h-8 text-muted-foreground hover:bg-muted transition-colors"
+                className="text-xs uppercase tracking-wider font-semibold border border-border rounded px-2.5 h-8 text-muted-foreground hover:bg-muted transition-colors"
               >
                 Today
               </button>
@@ -361,12 +362,13 @@ export function ReservationsPage() {
 
             <button
               onClick={() => navigateDay(1)}
+              aria-label="Next day"
               className="w-8 h-8 rounded border border-border flex items-center justify-center hover:bg-muted transition-colors shrink-0"
             >
               <ChevronRight size={13} />
             </button>
 
-            <span className="ml-auto text-[11px] text-muted-foreground tabular-nums">
+            <span className="ml-auto text-xs text-muted-foreground tabular-nums">
               {reservations.length} reservation{reservations.length !== 1 ? 's' : ''}
             </span>
           </div>
@@ -380,7 +382,7 @@ export function ReservationsPage() {
                 activeStatusFilter === 'all' ? 'bg-muted/40' : 'hover:bg-muted/20'
               )}
             >
-              <p className="text-[10px] uppercase tracking-wider text-muted-foreground">All</p>
+              <p className="text-xs uppercase tracking-wider text-muted-foreground">All</p>
               <p className="text-lg font-semibold mt-0.5">{reservations.length}</p>
             </button>
             {Object.entries(STATUS_CONFIG).map(([key, cfg]) => (
@@ -392,7 +394,7 @@ export function ReservationsPage() {
                   activeStatusFilter === key ? 'bg-muted/40' : 'hover:bg-muted/20'
                 )}
               >
-                <p className="text-[10px] uppercase tracking-wider text-muted-foreground">{cfg.label}</p>
+                <p className="text-xs uppercase tracking-wider text-muted-foreground">{cfg.label}</p>
                 <p className={cn('text-lg font-semibold mt-0.5', cfg.text)}>{statusCounts[key] || 0}</p>
               </button>
             ))}
@@ -432,7 +434,7 @@ export function ReservationsPage() {
                     <div className="w-16 shrink-0 text-right pt-0.5">
                       <p className="text-sm font-semibold tabular-nums">{formatTime(r.reservationDate)}</p>
                       {r.duration && (
-                        <p className="text-[11px] text-muted-foreground">{r.duration}m</p>
+                        <p className="text-xs text-muted-foreground">{r.duration}m</p>
                       )}
                     </div>
 
@@ -477,7 +479,7 @@ export function ReservationsPage() {
                             value={r.status || 'pending'}
                             onChange={e => handleStatusChange(r.id, e.target.value)}
                             className={cn(
-                              'text-[11px] uppercase tracking-wider font-semibold border border-border rounded-full px-2.5 py-1 bg-background cursor-pointer outline-none',
+                              'text-xs uppercase tracking-wider font-semibold border border-border rounded-full px-2.5 py-1 bg-background cursor-pointer outline-none',
                               statusCfg.text
                             )}
                           >
@@ -490,7 +492,7 @@ export function ReservationsPage() {
                             <Button
                               size="sm"
                               variant="outline"
-                              className="h-7 px-2 text-[11px]"
+                              className="h-7 px-2 text-xs"
                               onClick={() => updateReservationAction(r.id, 'seat', r.assignedTable?.id || null)}
                               disabled={!r.assignedTable?.id}
                             >
@@ -501,7 +503,7 @@ export function ReservationsPage() {
                             <Button
                               size="sm"
                               variant="outline"
-                              className="h-7 px-2 text-[11px]"
+                              className="h-7 px-2 text-xs"
                               onClick={() => updateReservationAction(r.id, 'complete')}
                             >
                               Complete
@@ -511,7 +513,7 @@ export function ReservationsPage() {
                             <Button
                               size="sm"
                               variant="ghost"
-                              className="h-7 px-2 text-[11px] text-orange-600 hover:text-orange-700"
+                              className="h-7 px-2 text-xs text-orange-600 hover:text-orange-700"
                               onClick={() => updateReservationAction(r.id, 'no_show')}
                             >
                               No-show
