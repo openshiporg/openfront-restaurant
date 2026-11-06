@@ -10,6 +10,7 @@ export async function register() {
   globalState.scheduledOrderLoop = true
 
   let running = false
+  let passes = 0
   const pass = async () => {
     if (running) return
     running = true
@@ -19,6 +20,15 @@ export async function register() {
         import('./features/keystone/utils/kitchenTicketSync'),
       ])
       await releaseDueScheduledOrders(keystoneContext.sudo() as any)
+      // Reservation reminders: every 10th pass (~5 minutes), only with SMTP configured.
+      passes += 1
+      if (passes % 10 === 1 && process.env.SMTP_HOST && process.env.SMTP_FROM) {
+        const [{ sendDueReservationReminders }, { smtpNotificationTransport }] = await Promise.all([
+          import('./features/keystone/utils/restaurantNotifications'),
+          import('./features/integrations/notifications/smtp'),
+        ])
+        await sendDueReservationReminders(keystoneContext.sudo() as any, smtpNotificationTransport)
+      }
     } catch {
       console.error('[scheduled-orders] release pass failed; retrying on the next interval')
     } finally {

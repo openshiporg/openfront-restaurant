@@ -53,6 +53,18 @@ function throttle(context: Context, bucket: string, limit: number, windowMs = 60
   if (hits.size > 5000) for (const [k, v] of hits) if (!v.some((t) => now - t < windowMs)) hits.delete(k);
 }
 
+/** Guest confirmations go out right after the commit (only with SMTP configured); staff can still resend. */
+async function sendGuestEmailNow(context: Context, eventKey: string) {
+  if (!process.env.SMTP_HOST || !process.env.SMTP_FROM) return;
+  try {
+    const [{ deliverSystemNotificationNow }, { smtpNotificationTransport }] = await Promise.all([
+      import("../utils/restaurantNotifications"),
+      import("../../integrations/notifications/smtp"),
+    ]);
+    await deliverSystemNotificationNow(context.sudo() as Context, eventKey, smtpNotificationTransport);
+  } catch { /* stays queued in Notifications */ }
+}
+
 async function venue(context: Context) {
   const settings: any = await context.sudo().query.StoreSettings.findOne({ where: { id: "1" }, query: "name timezone hours currencyCode" });
   if (!settings?.timezone || !settings?.hours) throw new UserError("Reservations are not available right now.");
@@ -127,6 +139,7 @@ async function createGuestReservationRaw(
     });
     return { reservation, code };
   });
+  await sendGuestEmailNow(context, `reservation-confirmation:${created.reservation.id}`);
   return { success: true, code: created.code, startsAt: start.toISOString(), partySize: args.partySize, name, timezone: settings.timezone };
 }
 
@@ -205,6 +218,8 @@ async function completeGiftCardPurchaseRaw(_root: unknown, { paymentIntentId }: 
     if (intent.metadata.purchaserEmail) await enqueueRestaurantNotification(tx, null, { eventKey: `gift-receipt:${giftCard.id}`, entityType: "GiftCard", entityId: giftCard.id, to: intent.metadata.purchaserEmail, subject: `Your ${money} gift card`, text: `Thank you for your purchase.\n\nGift card code: ${code}\nValue: ${money}${recipient ? `\nSent to: ${recipient}` : ""}` });
     return giftCard;
   });
+  await sendGuestEmailNow(context, `gift-delivery:${card.id}`);
+  await sendGuestEmailNow(context, `gift-receipt:${card.id}`);
   return { status: "issued", code: card.code, amount: card.value, currencyCode, recipientEmail: intent.metadata.recipientEmail || "" };
 }
 

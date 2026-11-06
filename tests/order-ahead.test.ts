@@ -105,3 +105,32 @@ test("an online pickup order emails 'ready for pickup' once, and only online tak
   await notifyOnlinePickupReady(context, "o1", transport);
   assert.equal(sent.length, 1);
 });
+
+test("a reservation booked days ahead gets one reminder the day before; a same-day booking does not", async () => {
+  const { sendDueReservationReminders } = await import("../features/keystone/utils/restaurantNotifications");
+  const now = new Date("2026-11-06T12:00:00Z");
+  const events = new Map<string, any>();
+  const reservations = [
+    { id: "r1", customerName: "Ana", customerEmail: "ana@x.co", partySize: 2, reservationDate: new Date("2026-11-07T00:00:00Z"), createdAt: new Date("2026-11-01T00:00:00Z") },
+    { id: "r2", customerName: "Ben", customerEmail: "ben@x.co", partySize: 4, reservationDate: new Date("2026-11-07T00:00:00Z"), createdAt: new Date("2026-11-06T10:00:00Z") },
+  ];
+  const prisma: any = {
+    reservation: { findMany: async () => reservations },
+    storeSettings: { findUnique: async () => ({ name: "Stack Kitchen", timezone: "America/New_York", address: "742 Artisan Way", phone: "555-0100" }) },
+    auditEvent: {
+      upsert: async ({ where, create }: any) => { if (!events.has(where.eventKey)) events.set(where.eventKey, { id: `e${events.size}`, ...create }); return events.get(where.eventKey); },
+      findUnique: async ({ where }: any) => where.eventKey ? events.get(where.eventKey) : [...events.values()].find((e) => e.id === where.id),
+      findMany: async ({ where }: any) => [...events.values()].filter((e) => e.entityType === where.entityType && e.entityId === where.entityId),
+      create: async ({ data }: any) => { const row = { id: `e${events.size}`, ...data }; events.set(data.eventKey || row.id, row); return row; },
+    },
+    $transaction: async (fn: any) => fn(prisma),
+  };
+  const sent: any[] = [];
+  const transport = async (m: any) => { sent.push(m); return { accepted: true }; };
+  const context: any = { prisma, session: null, sudo: () => context };
+  await sendDueReservationReminders(context, transport, now);
+  await sendDueReservationReminders(context, transport, now);
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].to, "ana@x.co");
+  assert.match(sent[0].text, /table for 2 at Stack Kitchen on Friday, November 6 at 7:00 PM/);
+});

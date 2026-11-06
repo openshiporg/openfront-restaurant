@@ -26,7 +26,56 @@ async function recordState(tx: any, actorId: string | undefined, notificationId:
 }
 const ORDER_CONFIRMATION_PREFIX = "notification:order-confirmed:";
 const ORDER_READY_PREFIX = "notification:order-ready:";
-const SYSTEM_PREFIXES = [ORDER_CONFIRMATION_PREFIX, ORDER_READY_PREFIX];
+const RESERVATION_REMINDER_PREFIX = "reservation-reminder:";
+// Guest transactional mail the server sends on its own; everything else waits for staff in Notifications.
+const SYSTEM_PREFIXES = [ORDER_CONFIRMATION_PREFIX, ORDER_READY_PREFIX, "reservation-confirmation:", RESERVATION_REMINDER_PREFIX, "gift-delivery:", "gift-receipt:"];
+
+/** Sends one queued guest email by its event key, through the same claim state machine. Never throws. */
+export async function deliverSystemNotificationNow(context: Context, eventKey: string, transport: NotificationTransport) {
+  try {
+    if (!SYSTEM_PREFIXES.some((prefix) => eventKey.startsWith(prefix))) return { status: "not_system" };
+    const row = await (context.prisma as any).auditEvent.findUnique({ where: { eventKey } });
+    if (!row || row.eventType !== "notification.queued") return { status: "no_event" };
+    return await deliverQueuedNotification(context, row.id, transport, false, true);
+  } catch {
+    return { status: "failed" };
+  }
+}
+
+export const RESERVATION_REMINDER_HOURS = 24;
+/**
+ * Reservation reminder (OpenTable / Resy): one email the day before, for confirmed tables booked more
+ * than a day ahead. Queued once per reservation (unique event key) and sent through the claim machine.
+ */
+export async function sendDueReservationReminders(context: Context, transport: NotificationTransport, now = new Date()) {
+  const prisma = context.prisma as any;
+  const horizon = new Date(now.getTime() + RESERVATION_REMINDER_HOURS * 3600_000);
+  const due = await prisma.reservation.findMany({
+    where: { status: "confirmed", reservationDate: { gt: new Date(now.getTime() + 2 * 3600_000), lte: horizon }, customerEmail: { contains: "@" } },
+    select: { id: true, customerName: true, customerEmail: true, reservationDate: true, partySize: true, createdAt: true },
+    take: 50,
+  });
+  const fresh = due.filter((r: any) => r.reservationDate.getTime() - new Date(r.createdAt).getTime() > RESERVATION_REMINDER_HOURS * 3600_000);
+  if (!fresh.length) return { sent: 0 };
+  const settings = await prisma.storeSettings.findUnique({ where: { id: "1" }, select: { name: true, timezone: true, address: true, phone: true } });
+  const store = settings?.name?.trim() || "the restaurant";
+  let sent = 0;
+  for (const r of fresh) {
+    const eventKey = `${RESERVATION_REMINDER_PREFIX}${r.id}`;
+    const exists = await prisma.auditEvent.findUnique({ where: { eventKey } });
+    if (!exists) {
+      const when = new Intl.DateTimeFormat("en-US", { timeZone: settings?.timezone || "UTC", weekday: "long", month: "long", day: "numeric", hour: "numeric", minute: "2-digit" }).format(r.reservationDate);
+      await prisma.$transaction((tx: any) => enqueueRestaurantNotification(tx, null, {
+        eventKey, entityType: "Reservation", entityId: r.id, to: r.customerEmail,
+        subject: `See you tomorrow at ${store}`,
+        text: `Hi ${r.customerName || "there"},\n\nA reminder of your table for ${r.partySize} at ${store} on ${when}.${settings?.address ? `\n${settings.address}` : ""}\n\nCan't make it? ${settings?.phone ? `Call us on ${settings.phone}` : "Let us know"} so we can give the table to someone else.`,
+      }));
+    }
+    const result: any = await deliverSystemNotificationNow(context, eventKey, transport);
+    if (result?.status === "accepted") sent += 1;
+  }
+  return { sent };
+}
 /**
  * In-process delivery of ONE order's "received" confirmation right after checkout commits, so a guest
  * checkout does not depend on staff pressing Send. It can only deliver the row whose event key is
