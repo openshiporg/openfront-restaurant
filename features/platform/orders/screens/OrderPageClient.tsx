@@ -84,7 +84,12 @@ export function OrderPageClient({ order, currencyCode = "USD", locale = "en-US" 
   const activeStatus =
     statusConfig[currentStatus as keyof typeof statusConfig] || statusConfig.open;
 
-  const suggestedNextStatus = currentStatus === "ready" && order.orderType === "delivery" ? "dispatched" : NEXT_STATUS[currentStatus] || null;
+  const fullyRefunded =
+    Array.isArray(order.payments) &&
+    order.payments.length > 0 &&
+    order.payments.every((payment: any) => String(payment.status || "").toLowerCase() === "refunded");
+
+  const suggestedNextStatus = fullyRefunded ? null : currentStatus === "ready" && order.orderType === "delivery" ? "dispatched" : NEXT_STATUS[currentStatus] || null;
 
   const nextActionLabel = useMemo(() => {
     if (!suggestedNextStatus) return null;
@@ -149,6 +154,7 @@ export function OrderPageClient({ order, currencyCode = "USD", locale = "en-US" 
             size="icon"
             className="h-9 w-9 sm:h-8 sm:w-8"
             aria-label="Print order"
+            onClick={() => window.print()}
           >
             <Printer size={14} />
           </Button>
@@ -187,25 +193,25 @@ export function OrderPageClient({ order, currencyCode = "USD", locale = "en-US" 
       {/* Stat strip */}
       <div className="grid grid-cols-2 md:grid-cols-4 divide-x border-b border-border">
         <div className="px-5 py-3">
-          <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Total</p>
+          <p className="text-xs uppercase tracking-wider text-muted-foreground">Total</p>
           <p className="text-xl font-semibold mt-1">
             {formatCurrency(order.total, currencyConfig)}
           </p>
         </div>
         <div className="px-5 py-3">
-          <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Order Type</p>
+          <p className="text-xs uppercase tracking-wider text-muted-foreground">Order Type</p>
           <p className="text-sm font-semibold mt-1 capitalize">
             {order.orderType?.replace("_", " ") || "—"}
           </p>
         </div>
         <div className="px-5 py-3">
-          <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Placed</p>
+          <p className="text-xs uppercase tracking-wider text-muted-foreground">Placed</p>
           <p className="text-sm font-semibold mt-1">
-            <ViewerTime value={order.createdAt} style="date" /> <ViewerTime value={order.createdAt} style="datetime" />
+            <ViewerTime value={order.createdAt} style="datetime" />
           </p>
         </div>
         <div className="px-5 py-3">
-          <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Guests</p>
+          <p className="text-xs uppercase tracking-wider text-muted-foreground">Guests</p>
           <p className="text-sm font-semibold mt-1">
             {order.guestCount || 1} · {order.tables?.length ? order.tables.map((t: any) => `T${t.tableNumber}`).join(", ") : "No table"}
           </p>
@@ -257,7 +263,7 @@ export function OrderPageClient({ order, currencyCode = "USD", locale = "en-US" 
             {/* Special instructions */}
             {order.specialInstructions && (
               <div className="px-4 md:px-6 py-4 border-b border-border bg-amber-50/40 dark:bg-amber-950/10">
-                <p className="text-[11px] uppercase tracking-wider text-amber-700 dark:text-amber-400 mb-1">Kitchen Note</p>
+                <p className="text-xs uppercase tracking-wider text-amber-700 dark:text-amber-400 mb-1">Kitchen Note</p>
                 <p className="text-sm">{order.specialInstructions}</p>
               </div>
             )}
@@ -310,6 +316,11 @@ export function OrderPageClient({ order, currencyCode = "USD", locale = "en-US" 
 
               {order.payments?.length > 0 && (
                 <div className="px-4 md:px-6 pb-4 space-y-2">
+                  {fullyRefunded && (
+                    <p className="text-sm text-muted-foreground">
+                      Fully refunded. Nothing more to prepare for this order.
+                    </p>
+                  )}
                   {order.payments.map((payment: any) => (
                     <div key={payment.id} className="rounded-lg border border-border px-3 py-2.5 flex items-center justify-between">
                       <span className="text-sm text-muted-foreground">
