@@ -51,12 +51,13 @@ type UpcomingOrder = {
   orderItems: { id: string; quantity: number }[]
 }
 
-function clockTime(value: string) {
-  return new Date(value).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+// The kitchen works to the restaurant's clock, whatever zone the screen's browser is set to.
+function clockTime(value: string, timeZone?: string | null) {
+  return new Date(value).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', ...(timeZone ? { timeZone } : {}) })
 }
 
 /** Scheduled (order-ahead) orders that reach the line later; each fires at its start time. */
-function UpcomingStrip({ orders, now }: { orders: UpcomingOrder[]; now: Date }) {
+function UpcomingStrip({ orders, now, timeZone }: { orders: UpcomingOrder[]; now: Date; timeZone?: string | null }) {
   if (!orders.length) return null
   return (
     <section aria-label="Upcoming scheduled orders" className="px-4 sm:px-8 py-3 border-b border-border" data-testid="kds-upcoming">
@@ -67,9 +68,9 @@ function UpcomingStrip({ orders, now }: { orders: UpcomingOrder[]; now: Date }) 
           const items = order.orderItems.reduce((sum, item) => sum + (item.quantity || 1), 0)
           return (
             <li key={order.id} className="shrink-0 rounded-lg border border-border bg-card px-3 py-2 text-sm min-w-[180px]">
-              <p className="font-semibold">#{order.orderNumber.slice(-6)} · {order.orderType === 'delivery' ? 'Delivery' : 'Pickup'} {clockTime(order.scheduledFor)}</p>
+              <p className="font-semibold">#{order.orderNumber.slice(-6)} · {order.orderType === 'delivery' ? 'Delivery' : 'Pickup'} {clockTime(order.scheduledFor, timeZone)}</p>
               <p className="text-xs text-muted-foreground">
-                {order.customerName ? `${order.customerName} · ` : ''}{items} item{items === 1 ? '' : 's'} · fires {minutes < 60 ? `in ${minutes} min` : `at ${clockTime(order.fireAt)}`}
+                {order.customerName ? `${order.customerName} · ` : ''}{items} item{items === 1 ? '' : 's'} · fires {minutes < 60 ? `in ${minutes} min` : `at ${clockTime(order.fireAt, timeZone)}`}
               </p>
             </li>
           )
@@ -133,6 +134,7 @@ const GET_UPCOMING = gql`
       fireAt
       orderItems { id quantity }
     }
+    storeSettings { timezone }
   }
 `
 
@@ -644,6 +646,7 @@ export function KDSClient() {
   const [viewMode, setViewMode] = useState<ViewMode>('tickets')
   const [mutationError, setMutationError] = useState<string | null>(null)
   const [upcoming, setUpcoming] = useState<UpcomingOrder[]>([])
+  const [storeTimeZone, setStoreTimeZone] = useState<string | null>(null)
   const [now, setNow] = useState(new Date())
 
   const fetchKDS = async () => {
@@ -654,6 +657,7 @@ export function KDSClient() {
         request('/api/graphql', GET_UPCOMING, { now: new Date().toISOString() }).catch(() => null),
       ])
       setUpcoming(upcomingRes?.restaurantOrders || [])
+      if (upcomingRes?.storeSettings?.timezone) setStoreTimeZone(upcomingRes.storeSettings.timezone)
 
       setStations((res.kitchenStations || []).map((s: any) => ({ id: s.id, name: s.name })))
       setTickets((res.kitchenTickets || []).map((ticket: any) => ({
@@ -774,7 +778,7 @@ export function KDSClient() {
           {mutationError}
         </div>
       )}
-      <UpcomingStrip orders={upcoming} now={now} />
+      <UpcomingStrip orders={upcoming} now={now} timeZone={storeTimeZone} />
       <StationMetrics tickets={stationFiltered} />
       {viewMode === 'all-day' ? (
         <AllDayView tickets={stationFiltered} />
