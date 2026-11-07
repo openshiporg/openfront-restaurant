@@ -10,6 +10,7 @@ import Iron from "@hapi/iron";
 import * as cookie from "cookie";
 import { getRuntimeConfig } from "./runtimeConfig";
 import { authenticateApiKey, refreshHumanSession } from "./utils/requestAuthentication";
+import { pooledDatabaseUrl } from './database-url';
 
 const runtimeConfig = getRuntimeConfig();
 const { databaseURL, sessionSecret } = runtimeConfig;
@@ -214,7 +215,7 @@ export default withAuth(
   config({
     db: {
       provider: "postgresql",
-      url: databaseURL,
+      url: pooledDatabaseUrl(databaseURL),
     },
     lists: models,
     storage: {
