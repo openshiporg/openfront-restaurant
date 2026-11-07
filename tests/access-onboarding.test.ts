@@ -156,12 +156,22 @@ test("onboarding StoreSettings boundary requires explicit validated delivery con
   assert.equal(normalized.deliveryEnabled, true);
   assert.deepEqual(normalized.deliveryPostalCodes, ["11201"]);
   const updateErrors: string[] = [];
+  // Keystone always passes inputData on update; only saves that change delivery are checked (31a9793).
   hooks.validate.update({
+    inputData: { deliveryPostalCodes: [] },
     item: { deliveryEnabled: true, countryCode: "US", deliveryPostalCodes: ["11201"] },
     resolvedData: { deliveryPostalCodes: [] },
     addValidationError: (message: string) => updateErrors.push(message),
   });
   assert.match(updateErrors.join(" "), /explicit delivery postal code/);
+  const echoedSaveErrors: string[] = [];
+  hooks.validate.update({
+    inputData: { name: "Cafe 2", deliveryEnabled: true, countryCode: "US", deliveryPostalCodes: ["11201"] },
+    item: { deliveryEnabled: true, countryCode: "US", deliveryPostalCodes: ["11201"] },
+    resolvedData: { name: "Cafe 2", deliveryEnabled: true, countryCode: "US", deliveryPostalCodes: ["11201"] },
+    addValidationError: (message: string) => echoedSaveErrors.push(message),
+  });
+  assert.deepEqual(echoedSaveErrors, []);
 });
 
 test("setup input boundary preserves safety while Keystone write hooks stay in the transaction", () => {
