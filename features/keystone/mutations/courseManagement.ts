@@ -1,7 +1,7 @@
 import type { Context } from ".keystone/types";
 import { permissions } from "../access";
 import { appendKitchenTicketEventWithClient } from "../utils/kitchenTicketEvents";
-import { syncKitchenTicketsForOrder } from "../utils/kitchenTicketSync";
+import { reconcileRestaurantOrderStatus, syncKitchenTicketsForOrder } from "../utils/kitchenTicketSync";
 import { serviceTransaction } from "../utils/serviceOrderState";
 async function changeCourse(courseId: string, fire: boolean, context: Context) {
   if (!permissions.canManageKitchen({ session: context.session }) && !permissions.canManageOrders({ session: context.session })) return { success: false, error: "Not authorized" };
@@ -17,11 +17,14 @@ async function changeCourse(courseId: string, fire: boolean, context: Context) {
       await tx.orderItem.updateMany({ where: { courseId, isVoided: false }, data: {
         sentToKitchen: fire ? now : null, firedAt: fire ? now : null, kitchenStatus: fire ? "new" : "recalled", recalledAt: fire ? undefined : now,
       } });
-      if (fire) await tx.restaurantOrder.update({ where: { id: course.orderId }, data: { status: "sent_to_kitchen", onHold: false } });
+      // Only an open check becomes sent_to_kitchen; a check already in progress/ready keeps its status and the ticket reconcile below moves it from real kitchen state.
+      if (fire) await tx.restaurantOrder.updateMany({ where: { id: course.orderId, status: "open" }, data: { status: "sent_to_kitchen", onHold: false } });
+      if (fire) await tx.restaurantOrder.updateMany({ where: { id: course.orderId, status: { not: "open" } }, data: { onHold: false } });
       await appendKitchenTicketEventWithClient(tx, context.session?.itemId, { eventType: fire ? "dispatch" : "recall", orderId: course.orderId, payload: { courseId, action: fire ? "fire" : "recall" } });
       return course.orderId;
     });
     await syncKitchenTicketsForOrder(orderId, context);
+    await reconcileRestaurantOrderStatus(orderId, context);
     return { success: true, error: null };
   } catch (error) { return { success: false, error: error instanceof Error ? error.message : "Unknown error" }; }
 }

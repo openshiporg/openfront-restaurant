@@ -42,7 +42,7 @@ export async function recordRestaurantAttendance(_root: unknown, args: { action:
       if (args.shiftId && (!shift || shift.staffId !== actor.id || shift.status !== "scheduled")) throw new Error("Scheduled shift does not belong to you or has already started");
       const entry = await tx.timeEntry.create({ data: { staffId: actor.id, clockIn: now, hourlyRate: shift?.hourlyRate || actor.hourlyRate, role: shift?.role || (actor.staffRole === "admin" ? "manager" : actor.staffRole === "chef" ? "cook" : actor.staffRole) || "manager", breakMinutes: "0" } });
       const state = await writeAttendanceState(tx, actor.id, entry.id, { revision: 0 }, { shiftId: shift?.id || null, attested: false, approved: false });
-      if (shift) await tx.shift.update({ where: { id: shift.id }, data: { status: "started", clockIn: now } });
+      if (shift) await tx.shift.updateMany({ where: { id: shift.id, status: "scheduled" }, data: { status: "started", clockIn: now } });
       return { entryId: entry.id, state };
     }
     const entry = await tx.timeEntry.findUnique({ where: { id: args.entryId || "" } });
@@ -79,7 +79,7 @@ export async function recordRestaurantAttendance(_root: unknown, args: { action:
       if (previous.breakStartedAt) throw new Error("End your break before clocking out");
       validateTimeWindow(entry.clockIn, now, entry.breakMinutes || 0);
       await tx.timeEntry.update({ where: { id: entry.id }, data: { clockOut: now } });
-      if (previous.shiftId) await tx.shift.update({ where: { id: previous.shiftId }, data: { status: "completed", clockOut: now } });
+      if (previous.shiftId) await tx.shift.updateMany({ where: { id: previous.shiftId, status: "started" }, data: { status: "completed", clockOut: now } });
       const state = await writeAttendanceState(tx, actor.id, entry.id, previous, { attested: false, approved: false });
       return { entryId: entry.id, state };
     }
@@ -115,7 +115,7 @@ export async function approveRestaurantTimeCorrection(_root: unknown, args: { re
     const overlap = await tx.timeEntry.findFirst({ where: { staffId: entry.staffId, id: { not: entry.id }, clockIn: { lt: proposed.clockOut }, OR: [{ clockOut: null }, { clockOut: { gt: proposed.clockIn } }] } });
     if (overlap) throw new Error("Correction overlaps another time entry");
     await tx.timeEntry.update({ where: { id: entry.id }, data: proposed });
-    if (state.shiftId) await tx.shift.update({ where: { id: state.shiftId }, data: { status: "completed", clockIn: proposed.clockIn, clockOut: proposed.clockOut } });
+    if (state.shiftId) await tx.shift.updateMany({ where: { id: state.shiftId, status: { in: ["started", "completed"] } }, data: { status: "completed", clockIn: proposed.clockIn, clockOut: proposed.clockOut } });
     await writeAttendanceState(tx, actor.id, entry.id, state, { breakStartedAt: null, attested: false, approved: false });
     await appendAuditEventWithClient(tx, actor.id, { eventKey: `attendance:correction-approved:${request.id}`, eventType: "attendance.correction_approved", entityType: "TimeEntry", entityId: entry.id, reason: request.reason, approverId: actor.id, before: request.before, after: request.after, metadata: { requestedBy: request.actorId, requestId: request.id } });
     return { entryId: entry.id, requestId: request.id };

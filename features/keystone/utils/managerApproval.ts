@@ -26,6 +26,12 @@ function canRequestAction(context: Context, actionType: ManagerApprovalAction) {
     : permissions.canManageOrders({ session: context.session });
 }
 
+/** Pending approvals past their expiry become `expired` in the data, not only when someone happens to touch them. */
+export async function expireStaleManagerApprovals(prisma: any) {
+  const result = await prisma.managerApproval.updateMany({ where: { status: "pending", expiresAt: { lte: new Date() } }, data: { status: "expired" } });
+  return result.count as number;
+}
+
 export async function requestManagerApproval(
   _root: unknown,
   input: ManagerApprovalRequest,
@@ -39,6 +45,7 @@ export async function requestManagerApproval(
   if (!input.reason?.trim()) throw new Error("Approval reason is required");
 
   const requestPayload = normalizedRequest(input);
+  await expireStaleManagerApprovals(context.prisma as any);
   return (context.prisma as any).managerApproval.create({
     data: {
       actionType: input.actionType,

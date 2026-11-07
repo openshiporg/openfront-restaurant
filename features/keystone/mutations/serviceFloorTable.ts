@@ -49,6 +49,7 @@ export async function updateServiceFloorTableStatus(
         tx.reservation.count({ where: { assignedTableId: args.tableId, status: "seated" } }),
         tx.waitlistEntry.count({ where: { tableId: args.tableId, status: "seated" } }),
       ]);
+      if (!(checks || reservations || waitlist) && args.status === "occupied") throw new Error("A table is occupied only while it has an active check or a seated party");
       if ((checks || reservations || waitlist) && args.status !== "occupied") throw new Error("Finish active checks and seated parties before releasing this table");
       await tx.table.update({ where: { id: args.tableId }, data: { status: args.status } });
     });
@@ -89,7 +90,7 @@ export async function updateServiceFloorCheckStatus(
         const courses = await tx.orderCourse.findMany({ where: { orderId: current.id, status: "pending", onHold: false } });
         await tx.orderCourse.updateMany({ where: { id: { in: courses.map((course: any) => course.id) } }, data: { status: "fired", fireTime: now } });
         await tx.orderItem.updateMany({ where: { orderId: current.id, courseId: { in: courses.map((course: any) => course.id) }, isVoided: false }, data: { sentToKitchen: now, firedAt: now, kitchenStatus: "new" } });
-        await tx.restaurantOrder.update({ where: { id: current.id }, data: { status: "sent_to_kitchen" } });
+        await tx.restaurantOrder.updateMany({ where: { id: current.id, status: "open" }, data: { status: "sent_to_kitchen" } });
       });
       await syncKitchenTicketsForOrder(args.orderId, context);
     } else if (args.action === "mark_served" || args.action === "close_check") {
