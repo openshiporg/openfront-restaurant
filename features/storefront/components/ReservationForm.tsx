@@ -6,6 +6,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Field, FormError, inputClass } from "@/features/storefront/components/forms/Field"
 import { bookReservation, getReservationSlots } from "@/features/storefront/lib/data/public"
 import { cn } from "@/lib/utils"
+import { timeZoneLabel } from "@/features/lib/time-zone-label"
 
 type Slot = { time: string; startsAt: string }
 type Booked = { code: string; startsAt: string; partySize: number; name: string; timezone: string }
@@ -87,7 +88,7 @@ export default function ReservationForm({ today, maxDate, timezone, locale, rest
       </div>
 
       <fieldset>
-        <legend className="mb-2 text-sm font-medium text-ink">Time</legend>
+        <legend className="mb-2 text-sm font-medium text-ink">Time <span className="font-normal text-ink-soft">· {timeZoneLabel(timezone)}</span></legend>
         {slots === null ? (
           <p className="text-ink-soft">Checking tables…</p>
         ) : loadError ? (

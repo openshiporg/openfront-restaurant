@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toCsv } from '@/features/lib/financial-ledger';
+import { timeZoneLabel } from '@/features/lib/time-zone-label'
 
 export function ReconciliationPage() {
   const [days, setDays] = useState<any[]>([]), [selected, setSelected] = useState(''), [day, setDay] = useState<any>(null);
@@ -55,7 +56,7 @@ export function ReconciliationPage() {
     </section>
     <Label>Business day<select className="block border rounded p-2" value={selected} onChange={e => setSelected(e.target.value)}><option value="">Choose a day</option>{days.map(d => <option key={d.id} value={d.entityId}>{d.entityId}</option>)}</select></Label>
     {day && <>
-      <p>{day.closed ? 'Closed' : 'Open'} · {day.summary.currencyCode} · {day.summary.timezone} · Expected cash: {day.summary.expectedCash}{day.closed && ` · Counted: ${day.summary.countedCash} · Variance: ${day.summary.variance}`}</p>
+      <p>{day.closed ? 'Closed' : 'Open'} · {day.summary.currencyCode} · {timeZoneLabel(day.summary.timezone)} · Expected cash: {day.summary.expectedCash}{day.closed && ` · Counted: ${day.summary.countedCash} · Variance: ${day.summary.variance}`}</p>
       <Label>Reason / variance explanation<Input value={reason} onChange={e => setReason(e.target.value)} maxLength={500} /></Label>
       {!day.closed && <div className="flex gap-3"><select aria-label="Cash movement direction" value={direction} onChange={e => setDirection(e.target.value)}><option value="in">Paid in</option><option value="out">Paid out</option></select><Button disabled={busy} onClick={() => run('movement')}>Record cash movement</Button><Button disabled={busy} onClick={() => run('close')}>Close with counted cash</Button></div>}
       <table className="w-full text-left"><thead><tr><th>Tender</th><th>Gross</th><th>Refunds</th><th>Net</th><th>Tips included</th></tr></thead><tbody>{Object.entries(day.summary.tenders).map(([name, row]: [string, any]) => <tr key={name}><td>{name}</td><td>{row.gross}</td><td>{row.refunds}</td><td>{row.net}</td><td>{row.tips}</td></tr>)}</tbody></table>

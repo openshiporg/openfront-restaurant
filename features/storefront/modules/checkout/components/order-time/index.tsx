@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { setCheckoutTime } from "@/features/storefront/lib/data/cart"
 import { orderingWindow } from "@/features/lib/restaurant-hours"
+import { timesInLabel } from "@/features/lib/time-zone-label"
 import {
   formatScheduled,
   formatSlotTime,
@@ -131,6 +132,7 @@ export default function OrderTime({
             <p className="text-sm font-semibold">
               {selected && selectedValid ? `Scheduled for ${formatScheduled(selected, timeZone, locale, now)}` : "Schedule for later"}
             </p>
+            <p className="mt-0.5 text-xs text-muted-foreground">{timesInLabel(timeZone, { locale })}</p>
             <div className="mt-3 flex flex-wrap gap-2" role="tablist" aria-label="Day">
               {groups.map((group) => (
                 <button

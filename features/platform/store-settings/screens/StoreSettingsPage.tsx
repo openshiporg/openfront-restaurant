@@ -35,6 +35,7 @@ import { normalizeStoreLogoColor } from '@/features/platform/store-settings/lib/
 import { LOGO_ICONS, HUE_PRESETS } from '@/features/platform/store-settings/lib/icon-registry'
 import { updateStoreSettings } from '@/features/platform/store-settings/actions'
 import { StoreSettingsSaveBar } from '@/features/platform/store-settings/components/StoreSettingsSaveBar'
+import { timeZoneLabel } from '@/features/lib/time-zone-label'
 
 interface StoreSettingsData {
   id?: string
@@ -379,7 +380,7 @@ export function StoreSettingsPage({ initialSettings }: { initialSettings: StoreS
         </div>
         <div className="px-5 py-3">
           <p className="text-xs uppercase tracking-wider text-muted-foreground">Timezone</p>
-          <p className="text-sm font-semibold mt-1 truncate">{form.timezone.split('/').pop()?.replace('_', ' ')}</p>
+          <p className="text-sm font-semibold mt-1 truncate">{timeZoneLabel(form.timezone, { city: true })}</p>
         </div>
       </div>
 
@@ -483,7 +484,7 @@ export function StoreSettingsPage({ initialSettings }: { initialSettings: StoreS
                 <p className="text-xs uppercase tracking-wider text-muted-foreground">Timezone</p>
                 <Select value={form.timezone} onValueChange={(v) => setForm((f) => ({ ...f, timezone: v }))}>
                   <SelectTrigger className={fieldSelect}><SelectValue /></SelectTrigger>
-                  <SelectContent>{timezoneOptions.map((tz) => <SelectItem key={tz} value={tz}>{tz}</SelectItem>)}</SelectContent>
+                  <SelectContent>{timezoneOptions.map((tz) => <SelectItem key={tz} value={tz}>{timeZoneLabel(tz, { city: true })}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div className="px-5 py-3">
