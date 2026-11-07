@@ -11,6 +11,7 @@ import * as cookie from "cookie";
 import { getRuntimeConfig } from "./runtimeConfig";
 import { authenticateApiKey, refreshHumanSession } from "./utils/requestAuthentication";
 import { pooledDatabaseUrl } from './database-url';
+import { throwKeystonePrismaErrors } from './lib/keystonePrismaErrors';
 
 const runtimeConfig = getRuntimeConfig();
 const { databaseURL, sessionSecret } = runtimeConfig;
@@ -216,6 +217,8 @@ export default withAuth(
     db: {
       provider: "postgresql",
       url: pooledDatabaseUrl(databaseURL),
+      // Keystone returns failed queries as values; this makes them throw so transactions roll back.
+      extendPrismaClient: throwKeystonePrismaErrors,
     },
     lists: models,
     storage: {
