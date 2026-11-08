@@ -183,7 +183,7 @@ export async function adjustInventory(
       }
       const ingredient = await tx.ingredient.findUnique({ where: { id: args.ingredientId } });
       if (!ingredient) throw new Error("Ingredient not found");
-      if (Number(ingredient.currentStock || 0) + quantity < -1e-9) throw new Error(stockShortMessage(ingredient, -quantity, "adjust"));
+      if (quantity < 0 && Number(ingredient.currentStock || 0) + quantity < -1e-9) throw new Error(stockShortMessage(ingredient, -quantity, "adjust"));
       const movement = await tx.stockMovement.create({
         data: {
           eventKey: args.idempotencyKey,

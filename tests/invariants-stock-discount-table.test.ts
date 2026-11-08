@@ -51,6 +51,13 @@ test('manual adjustment cannot take stock below zero, additions still work', asy
   assert.equal(f.stock.currentStock, '5.00');
 });
 
+test('adding stock to an ingredient that is already below zero is allowed', async () => {
+  const f = inventory('-300.00');
+  const added = await adjustInventory(null, { ingredientId: 'ing', quantity: '2', reason: 'Found case', idempotencyKey: 'adjust-key-3' }, f.context);
+  assert.equal(added.success, true, String(added.error));
+  assert.equal(f.stock.currentStock, '-298.00');
+});
+
 test('shortage message for an empty ingredient', () => {
   assert.match(stockShortMessage({ name: 'Maggi', unit: 'g', currentStock: '0.00' }, 300, 'waste'), /^Maggi has none on hand, so 300 g can't be written off/);
 });
