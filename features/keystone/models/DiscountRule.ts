@@ -18,6 +18,14 @@ export const DiscountRule = list({
       initialColumns: ["description", "type", "value"],
     },
   },
+  hooks: {
+    validateInput: ({ resolvedData, item, addValidationError }: any) => {
+      const type = resolvedData.type !== undefined ? resolvedData.type : item?.type;
+      const value = resolvedData.value !== undefined ? resolvedData.value : item?.value;
+      if (typeof value === "number" && value < 0) addValidationError("A discount can't take off a negative amount.");
+      if (type === "percentage" && typeof value === "number" && value > 100) addValidationError("A percentage discount can be at most 100%.");
+    },
+  },
   fields: {
     description: text(),
     type: select({

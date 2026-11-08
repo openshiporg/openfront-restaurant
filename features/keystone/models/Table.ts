@@ -18,6 +18,23 @@ export const Table = list({
       initialColumns: ["tableNumber", "capacity", "section", "status"],
     },
   },
+  hooks: {
+    validateInput: async ({ resolvedData, item, context, addValidationError }: any) => {
+      if (resolvedData.tableNumber === undefined && resolvedData.floor === undefined) return;
+      const tableNumber = String(resolvedData.tableNumber !== undefined ? resolvedData.tableNumber : item?.tableNumber || "").trim();
+      if (!tableNumber) return;
+      const floorId = resolvedData.floor !== undefined ? (resolvedData.floor?.connect?.id ?? null) : (item?.floorId ?? null);
+      const clash = await (context.prisma as any).table.findFirst({
+        where: {
+          tableNumber: { equals: tableNumber, mode: "insensitive" },
+          floorId,
+          ...(item?.id ? { id: { not: item.id } } : {}),
+        },
+        select: { id: true },
+      });
+      if (clash) addValidationError(`Table ${tableNumber} already exists on this floor. Give this table a different number.`);
+    },
+  },
   fields: {
     tableNumber: text({
       validation: { isRequired: true },

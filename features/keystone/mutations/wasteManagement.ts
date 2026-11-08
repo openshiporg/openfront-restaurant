@@ -10,6 +10,17 @@ interface WasteResult {
   error: string | null;
 }
 
+/** Manual waste and adjustments may not record more stock leaving than is on hand. */
+export function stockShortMessage(ingredient: { name?: string | null; unit?: string | null; currentStock?: unknown }, removing: number, kind: "waste" | "adjust") {
+  const onHand = Number(ingredient.currentStock || 0);
+  const unit = ingredient.unit || "";
+  const name = ingredient.name || "this ingredient";
+  const has = onHand > 0 ? `Only ${onHand.toFixed(2).replace(/\.00$/, "")} ${unit} of ${name} is on hand` : `${name} has none on hand`;
+  return kind === "waste"
+    ? `${has}, so ${removing} ${unit} can't be written off. Count the stock or receive the delivery first.`
+    : `${has}, so stock can't go down by ${removing} ${unit}. Count the stock instead if the shelf has a different amount.`;
+}
+
 function normalizeQuantity(value: unknown) {
   const quantity = Number(value);
   if (!Number.isFinite(quantity) || quantity <= 0) {
@@ -74,6 +85,7 @@ export async function recordWaste(
       const ingredient = await tx.ingredient.findUnique({ where: { id: args.ingredientId } });
       if (!ingredient) throw new Error("Ingredient not found");
       const nextStock = Number(ingredient.currentStock || 0) - quantity;
+      if (nextStock < -1e-9) throw new Error(stockShortMessage(ingredient, quantity, "waste"));
       const wasteLog = await tx.wasteLog.create({
         data: {
           eventKey: args.idempotencyKey,
@@ -171,6 +183,7 @@ export async function adjustInventory(
       }
       const ingredient = await tx.ingredient.findUnique({ where: { id: args.ingredientId } });
       if (!ingredient) throw new Error("Ingredient not found");
+      if (Number(ingredient.currentStock || 0) + quantity < -1e-9) throw new Error(stockShortMessage(ingredient, -quantity, "adjust"));
       const movement = await tx.stockMovement.create({
         data: {
           eventKey: args.idempotencyKey,

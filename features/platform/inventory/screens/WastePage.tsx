@@ -2,6 +2,7 @@
 import { ViewerTime } from '@/features/dashboard/components/ViewerTime';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -153,6 +154,7 @@ export function WastePage() {
       fetchData()
     } catch (err) {
       console.error('Error:', err)
+      toast.error(err instanceof Error ? err.message : 'Unable to record waste')
     }
   }
 
@@ -171,6 +173,7 @@ export function WastePage() {
       fetchData()
     } catch (err) {
       console.error('Error:', err)
+      toast.error(err instanceof Error ? err.message : 'Unable to reverse waste')
     }
   }
 
