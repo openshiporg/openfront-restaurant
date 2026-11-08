@@ -14,7 +14,7 @@ function requestProof(context: Context): string | undefined {
   const headers = context.req?.headers as Record<string, any> | undefined;
   const header = headers?.["x-restaurant-cart-proof"];
   if (typeof header === "string") return header;
-  try { return cookie.parse(headers?.cookie || "")._restaurant_cart_proof; } catch { return undefined; }
+  try { const jar = cookie.parse(headers?.cookie || ""); return jar._restaurant_cart_p || jar._restaurant_cart_proof; } catch { return undefined; }
 }
 function canBypass(context: Context, mode: CartAccessMode) {
   return permissions.canManageOrders({ session: context.session }) ||

@@ -11,10 +11,9 @@ const CART_QUERY = gql`
 
 const getCartId = () => {
   if (typeof window === "undefined") return null;
-  return document.cookie
-    .split("; ")
-    .find((row) => row.startsWith("_restaurant_cart_id="))
-    ?.split("=")[1];
+  const rows = document.cookie.split("; ");
+  const read = (name: string) => rows.find((row) => row.startsWith(`${name}=`))?.split("=")[1];
+  return read("_restaurant_cart") || read("_restaurant_cart_id");
 };
 
 export async function fetchCart(cartId?: string) {
@@ -30,6 +29,8 @@ export async function fetchCart(cartId?: string) {
     if (!activeCart) {
       if (typeof window !== "undefined") {
         document.cookie = "_restaurant_cart_id=; path=/; max-age=-1";
+      document.cookie = `_restaurant_cart=; path=/; max-age=-1${window.location.protocol === "https:" ? "; samesite=none; secure; partitioned" : ""}`;
+        document.cookie = `_restaurant_cart=; path=/; max-age=-1${window.location.protocol === "https:" ? "; samesite=none; secure; partitioned" : ""}`;
       }
       return null;
     }
@@ -39,6 +40,7 @@ export async function fetchCart(cartId?: string) {
     console.error('Error fetching cart:', error);
     if (typeof window !== "undefined") {
       document.cookie = "_restaurant_cart_id=; path=/; max-age=-1";
+      document.cookie = `_restaurant_cart=; path=/; max-age=-1${window.location.protocol === "https:" ? "; samesite=none; secure; partitioned" : ""}`;
     }
     return null;
   }
