@@ -32,6 +32,14 @@ import {
 } from 'lucide-react'
 import { gql, request } from 'graphql-request'
 import { cn } from '@/lib/utils'
+import { publicGraphQLErrorMessage } from '@/features/dashboard/lib/security'
+
+// A failed GraphQL request shows only its user-facing message; a refusal returned as
+// { success:false, error } is thrown as a plain Error and shown as is.
+function tableErrorMessage(err: unknown) {
+  if ((err as any)?.response) return publicGraphQLErrorMessage(err)
+  return err instanceof Error ? err.message : 'Unable to save table changes'
+}
 import { PageBreadcrumbs } from '@/features/dashboard/components/PageBreadcrumbs'
 
 interface Table {
@@ -140,7 +148,7 @@ export function TablesPage() {
       setFloors(res.floors || [])
     } catch (err) {
       console.error(err)
-      toast.error(err instanceof Error ? err.message : "Unable to save table changes")
+      toast.error(tableErrorMessage(err))
     } finally {
       setLoading(false)
     }
@@ -202,7 +210,7 @@ export function TablesPage() {
       await fetchData()
     } catch (err) {
       console.error(err)
-      toast.error(err instanceof Error ? err.message : "Unable to save table changes")
+      toast.error(tableErrorMessage(err))
     } finally {
       setIsSaving(false)
     }
@@ -217,7 +225,7 @@ export function TablesPage() {
       await fetchData()
     } catch (err) {
       console.error(err)
-      toast.error(err instanceof Error ? err.message : "Unable to save table changes")
+      toast.error(tableErrorMessage(err))
     } finally {
       setDeletingId(null)
     }
@@ -233,7 +241,7 @@ export function TablesPage() {
       await fetchData()
     } catch (err) {
       console.error(err)
-      toast.error(err instanceof Error ? err.message : "Unable to save table changes")
+      toast.error(tableErrorMessage(err))
     } finally {
       setIsSaving(false)
     }

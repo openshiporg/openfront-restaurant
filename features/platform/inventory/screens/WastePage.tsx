@@ -3,6 +3,7 @@ import { ViewerTime } from '@/features/dashboard/components/ViewerTime';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { toast } from 'sonner'
+import { publicGraphQLErrorMessage } from '@/features/dashboard/lib/security'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -154,7 +155,7 @@ export function WastePage() {
       fetchData()
     } catch (err) {
       console.error('Error:', err)
-      toast.error(err instanceof Error ? err.message : 'Unable to record waste')
+      toast.error((err as any)?.response ? publicGraphQLErrorMessage(err) : err instanceof Error ? err.message : 'Unable to record waste')
     }
   }
 
@@ -173,7 +174,7 @@ export function WastePage() {
       fetchData()
     } catch (err) {
       console.error('Error:', err)
-      toast.error(err instanceof Error ? err.message : 'Unable to reverse waste')
+      toast.error((err as any)?.response ? publicGraphQLErrorMessage(err) : err instanceof Error ? err.message : 'Unable to reverse waste')
     }
   }
 
