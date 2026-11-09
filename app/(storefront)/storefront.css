@@ -387,6 +387,7 @@
   position: relative;
 }
 .storefront-ui {
+  position: relative;
   overflow-x: clip;
 }
 .storefront-ui::before {
