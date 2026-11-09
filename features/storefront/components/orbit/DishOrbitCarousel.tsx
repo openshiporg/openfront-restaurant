@@ -484,8 +484,7 @@ export function DishOrbitCarousel({
         </svg>
 
         <div className="dsh-top">
-          {searchHref ? <a className="dsh-btn" href={searchHref} aria-label="Search the menu">{Icon.search}</a> : null}
-          {searchHref ? <a className="dsh-btn" href={searchHref} aria-label="Full menu">{Icon.menu}</a> : null}
+          {searchHref ? <a className="dsh-btn" href={searchHref} aria-label="Browse the full menu">{Icon.menu}</a> : null}
         </div>
 
         <div className="dsh-pager" role="tablist" aria-label="Choose a dish">
@@ -535,7 +534,7 @@ export function DishOrbitCarousel({
               <div key={i} ref={(el) => { bodies.current[i] = el }} className="dsh-body" aria-hidden={i !== index}>
                 <div className="dsh-rate">
                   <div className="dsh-badge" style={{ background: d.accent }}>
-                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2.5 2.9 6 6.6.8-4.9 4.6 1.3 6.6L12 17.2l-5.9 3.3 1.3-6.6-4.9-4.6 6.6-.8z" /></svg>
+                    {d.rating != null ? <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2.5 2.9 6 6.6.8-4.9 4.6 1.3 6.6L12 17.2l-5.9 3.3 1.3-6.6-4.9-4.6 6.6-.8z" /></svg> : null}
                   </div>
                   {d.rating != null ? (
                     <span className="dsh-num" aria-label={"Rated " + d.rating.toFixed(1) + " out of 5"}>{d.rating.toFixed(1)}</span>

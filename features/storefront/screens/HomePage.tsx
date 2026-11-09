@@ -26,7 +26,7 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 const PASTELS = ["#ffb8a8", "#b9d8ff", "#ffe08a", "#c4e8b5", "#e0c6ff", "#ffc9e0", "#a9e6dc", "#ffd0a0"]
-const MAX_DISHES = 8
+const MAX_DISHES = 6
 
 function readyIn(estimate?: string | null) {
   const value = (estimate || "").trim()

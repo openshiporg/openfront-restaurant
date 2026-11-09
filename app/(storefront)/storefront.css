@@ -386,6 +386,9 @@
 .storefront-ui > div > main {
   position: relative;
 }
+.storefront-ui {
+  overflow-x: clip;
+}
 .storefront-ui::before {
   content: "";
   position: absolute;
@@ -403,3 +406,59 @@
   -webkit-mask-image: linear-gradient(180deg, transparent 52%, #000 66%, transparent 100%);
 }
 .storefront-ui > * { position: relative; z-index: 1; }
+
+/* Phone: the carousel's container-query layout, with 44px touch targets. */
+@media (max-width: 639px) {
+  .storefront-ui header a,
+  .storefront-ui header button {
+    min-height: 2.75rem;
+  }
+  .orbit-host .dsh-top {
+    position: absolute;
+    right: 8px;
+    top: 4px;
+    z-index: 2;
+  }
+  .orbit-host .dsh-top .dsh-btn {
+    width: 44px;
+    height: 44px;
+  }
+  .orbit-host .dsh-pager {
+    position: relative;
+    left: auto;
+    top: auto;
+    flex-direction: row;
+    gap: 0;
+    margin: 0 auto 0 -8px;
+    align-self: flex-start;
+  }
+  .orbit-host .dsh-dot,
+  .orbit-host .dsh-dot[aria-current] {
+    width: 44px;
+    height: 44px;
+  }
+  .orbit-host .dsh-dot i {
+    width: 10px;
+    height: 3px;
+  }
+  .orbit-host .dsh-dot[aria-current] i {
+    width: 22px;
+    height: 3px;
+  }
+  .orbit-host .dsh-plates {
+    width: min(52vw, 26svh);
+    height: min(52vw, 26svh);
+  }
+  .orbit-host .dsh-acts .dsh-btn {
+    min-height: 44px;
+    min-width: 44px;
+    padding: 4px 10px;
+  }
+  .orbit-host .dsh-tab {
+    min-height: 44px;
+    padding: 0 8px;
+  }
+  .orbit-host .dsh-tabs {
+    margin-bottom: 4px;
+  }
+}
