@@ -1,21 +1,20 @@
 import { Metadata } from "next"
-import Image from "next/image"
-import { Leaf } from "lucide-react"
+import { existsSync } from "node:fs"
+import { join } from "node:path"
 import {
   getMenuCategories,
   getMenuItems,
   getStoreSettings,
 } from "@/features/storefront/lib/data/menu"
-import { retrieveCart } from "@/features/storefront/lib/data/cart"
 import { StorefrontDataUnavailableError } from "@/features/storefront/lib/data/errors"
 import { type MenuCategory, type MenuItem } from "@/features/storefront/lib/store-data"
 import { getCurrencyConfig, formatCurrency } from "@/features/storefront/lib/currency"
 import { getMenuItemDescriptionText } from "@/features/storefront/lib/menu-item-utils"
 import { getServiceStatus } from "@/features/storefront/lib/store-hours-display"
-import { buildMenuVisibility, selectHeroMenuItems } from "@/features/storefront/lib/menu-visibility"
+import { buildMenuVisibility } from "@/features/storefront/lib/menu-visibility"
 import { StorefrontUnavailable } from "@/features/storefront/components/StorefrontUnavailable"
 import { MenuGrid, type GridItem, type GridTab } from "@/features/storefront/components/antares/MenuGrid"
-import { OrderBag } from "@/features/storefront/components/antares/OrderBag"
+import { HomeOrbit, type OrbitDish } from "@/features/storefront/components/orbit/HomeOrbit"
 import { PickupSummary } from "@/features/storefront/components/PickupSummary"
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -26,7 +25,8 @@ export async function generateMetadata(): Promise<Metadata> {
   }
 }
 
-const HERO_PHOTO = "/images/bacon-bbq-burger-onion-rings.png"
+const PASTELS = ["#ffb8a8", "#b9d8ff", "#ffe08a", "#c4e8b5", "#e0c6ff", "#ffc9e0", "#a9e6dc", "#ffd0a0"]
+const MAX_DISHES = 8
 
 function readyIn(estimate?: string | null) {
   const value = (estimate || "").trim()
@@ -34,10 +34,16 @@ function readyIn(estimate?: string | null) {
   return /min|hour|hr/i.test(value) ? value : `${value} min`
 }
 
-/** Splits a headline into lines at sentence ends so "Craft Burgers. Real Good." stacks like the menu board. */
-function headlineLines(headline: string) {
-  const parts = headline.match(/[^.!?]+[.!?]*/g)?.map((part) => part.trim()).filter(Boolean) || [headline]
-  return parts.length > 1 && parts.length <= 3 ? parts : [headline]
+function plateSlug(name: string) {
+  return name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")
+}
+
+/** "Classic Burger" -> thin "Classic" over heavy "Burger". A one-word name sits under its section. */
+function splitName(name: string, section: string) {
+  const words = name.trim().split(/\s+/)
+  if (words.length === 1) return { title: section, subtitle: words[0] }
+  const cut = words.length === 2 ? 1 : Math.ceil(words.length / 2)
+  return { title: words.slice(0, cut).join(" "), subtitle: words.slice(cut).join(" ") }
 }
 
 export default async function HomePage() {
@@ -65,20 +71,13 @@ export default async function HomePage() {
     />
   }
 
-  const cart = await retrieveCart().catch(() => null)
   const currency = getCurrencyConfig(storeSettings)
   const timezone = storeSettings.timezone || "America/New_York"
   const status = getServiceStatus(storeSettings.hours, timezone, currency.locale)
   const ready = readyIn(storeSettings.estimatedPickup)
   const storeName = String(storeSettings.name || "").trim()
-  const headline = storeSettings.heroHeadline || storeName
-  const subheadline = storeSettings.heroSubheadline || storeSettings.tagline || ""
-  const madeFresh = (storeSettings.heroTagline || "").split("·")[0]?.trim()
 
   const { featuredItems, popularItems } = buildMenuVisibility<MenuItem, MenuCategory>(allItems, categories)
-  const heroItem = selectHeroMenuItems(allItems, featuredItems, popularItems).find((item) => item.thumbnail)
-  // A composed counter shot reads better at hero width than a square menu crop.
-  const hero = heroItem ? { name: heroItem.name, thumbnail: HERO_PHOTO } : null
 
   const usedCategories = categories.filter((category) =>
     allItems.some((item) => (typeof item.category === "object" ? item.category?.id : item.category) === category.id),
@@ -123,69 +122,53 @@ export default async function HomePage() {
     }
   })
 
+  const categoryName = (item: MenuItem) => (typeof item.category === "object" ? item.category?.name : "") || ""
+  const hasPlate = (item: MenuItem) => existsSync(join(process.cwd(), "public", "images", "plates", `${plateSlug(item.name)}.webp`))
+  const stationLabel = (value?: string | null) => (value ? `${value.charAt(0).toUpperCase()}${value.slice(1)} station` : undefined)
+  const spotlight = [...new Map([...featuredItems, ...popularItems, ...ordered].map((item) => [item.id, item])).values()]
+    .filter((item) => item.available !== false && hasPlate(item))
+    .slice(0, MAX_DISHES)
+  const optionNames = (item: MenuItem) => [...new Set((item.modifiers || []).map((modifier) => modifier.name))].slice(0, 8)
+  const orbitDishes: OrbitDish[] = spotlight.map((item, index) => {
+    const grid = gridItems.find((entry) => entry.id === item.id)!
+    const { title, subtitle } = splitName(item.name, categoryName(item) || "House")
+    const facts = [item.calories ? `${item.calories} cal` : "", item.prepTime ? `ready in about ${item.prepTime} min` : ""].filter(Boolean).join(" · ")
+    return {
+      id: item.id,
+      needsChoice: grid.needsChoice,
+      defaultModifierIds: grid.defaultModifierIds,
+      title,
+      subtitle,
+      image: `/images/plates/${plateSlug(item.name)}.webp`,
+      alt: item.name,
+      eyebrow: `${grid.price}${categoryName(item) ? ` · ${categoryName(item)}` : ""}`,
+      label: item.name,
+      badge: item.prepTime ? String(item.prepTime) : undefined,
+      badgeUnit: item.prepTime ? "min" : undefined,
+      chef: storeName,
+      kitchen: stationLabel(item.kitchenStation),
+      description: grid.description || facts || `${item.name}, made to order.`,
+      ingredients: optionNames(item),
+      accent: PASTELS[index % PASTELS.length],
+    }
+  })
+
   return (
     <div className="bg-white">
-      {/* Phone: one store block with where and when to collect. */}
-      <section className="storefront-shell pt-4 md:hidden">
-        <PickupSummary name={storeName} address={storeSettings.address} status={status} readyIn={ready} nameAsHeading />
+      {orbitDishes.length > 0 ? (
+        <HomeOrbit dishes={orbitDishes} backdrop="/images/kitchen-backdrop.webp" />
+      ) : (
+        <section className="storefront-shell pt-6">
+          <h1 className="sf-page-title">{storeName}</h1>
+        </section>
+      )}
+
+      <section className="storefront-shell pt-8 md:pt-10">
+        <PickupSummary name={storeName} address={storeSettings.address} status={status} readyIn={ready} nameAsHeading={orbitDishes.length === 0} />
       </section>
 
-      {/* Wider: hero with the order bag floating over its right edge. */}
-      <div className="relative">
-        <section className="relative hidden overflow-hidden bg-[oklch(0.965_0.003_90)] md:block">
-          {hero?.thumbnail ? (
-            <div className="absolute inset-y-0 right-0 aspect-[5/4] lg:right-[19rem] xl:right-[21rem]">
-              <Image src={hero.thumbnail} alt={hero.name} fill priority sizes="40vw" className="object-cover" />
-              <span aria-hidden="true" className="absolute inset-y-0 left-0 w-2/5 bg-gradient-to-r from-[oklch(0.965_0.003_90)] via-[oklch(0.965_0.003_90/0.55)] to-transparent" />
-            </div>
-          ) : null}
-          <div className="storefront-shell relative py-9 lg:py-10">
-            <div className="max-w-[34rem] lg:max-w-[42%]">
-              <h1 className="font-serif text-[2.6rem] font-bold leading-[1.02] tracking-[-0.02em] text-ink lg:text-[3.05rem]">
-                {headlineLines(headline).map((line) => (
-                  <span key={line} className="block">{line}</span>
-                ))}
-              </h1>
-              <span aria-hidden="true" className="mt-4 block h-1 w-12 rounded-full bg-leaf" />
-              {subheadline ? <p className="mt-4 max-w-[46ch] text-pretty text-[1rem] text-ink">{subheadline}</p> : null}
-              {madeFresh ? (
-                <p className="mt-6 flex items-center gap-2.5 text-[0.95rem] text-ink"><Leaf className="size-5 fill-leaf text-leaf" aria-hidden="true" />{madeFresh}</p>
-              ) : null}
-              {/* Below lg the order bag is hidden, so the store block lives in the hero. */}
-              <PickupSummary
-                name={storeName}
-                address={storeSettings.address}
-                status={status}
-                readyIn={ready}
-                size="hero"
-                className="mt-6 lg:hidden"
-              />
-            </div>
-          </div>
-        </section>
-
-        <div className="storefront-shell pb-16 pt-5 md:pt-8 lg:grid lg:grid-cols-[minmax(0,1fr)_18rem] lg:gap-8 xl:grid-cols-[minmax(0,1fr)_20rem]">
-          <MenuGrid tabs={tabs} items={gridItems} />
-        </div>
-
-        {/* The bag starts at the hero's top edge and follows the guest down the menu. */}
-        <div className="pointer-events-none absolute inset-0 hidden lg:block">
-          <div className="storefront-shell flex h-full justify-end pb-16 pt-8">
-            <div className="pointer-events-auto w-[18rem] xl:w-[20rem]">
-              <div className="sticky top-28">
-                <OrderBag
-                  cart={cart}
-                  currencyCode={currency.currencyCode}
-                  locale={currency.locale}
-                  readyIn={ready}
-                  address={storeSettings.address}
-                  storeName={storeName}
-                  status={status}
-                />
-              </div>
-            </div>
-          </div>
-        </div>
+      <div className="storefront-shell pb-16 pt-5 md:pt-8">
+        <MenuGrid tabs={tabs} items={gridItems} />
       </div>
     </div>
   )

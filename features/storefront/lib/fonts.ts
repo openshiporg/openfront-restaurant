@@ -1,17 +1,18 @@
-import { Figtree, Source_Serif_4 } from "next/font/google"
+import { Outfit } from "next/font/google"
 
-// A friendly sans for guest-facing copy and store names, and a sturdy serif for page titles.
-const sans = Figtree({
+// Outfit throughout, the dish carousel's own face: light for names, heavy for emphasis.
+const outfit = Outfit({
   variable: "--font-storefront",
   subsets: ["latin", "latin-ext"],
+  weight: ["200", "300", "400", "500", "600", "700", "800"],
   display: "swap",
 })
 
-const serif = Source_Serif_4({
+const outfitDisplay = Outfit({
   variable: "--font-storefront-serif",
   subsets: ["latin", "latin-ext"],
-  weight: ["600", "700"],
+  weight: ["300", "700", "800"],
   display: "swap",
 })
 
-export const storefrontFont = { variable: `${sans.variable} ${serif.variable}` }
+export const storefrontFont = { variable: `${outfit.variable} ${outfitDisplay.variable}` }

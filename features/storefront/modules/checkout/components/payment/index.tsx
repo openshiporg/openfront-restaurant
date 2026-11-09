@@ -94,8 +94,8 @@ const Payment = ({ cart, availablePaymentMethods, storeSettings }: PaymentProps)
     return {
       style: {
         base: {
-          // The storefront's ink and type (Figtree, loaded into the Stripe frame by StripeWrapper).
-          fontFamily: "Figtree, ui-sans-serif, system-ui, sans-serif",
+          // The storefront's ink and type (Outfit, loaded into the Stripe frame by StripeWrapper).
+          fontFamily: "Outfit, ui-sans-serif, system-ui, sans-serif",
           fontSize: "16px",
           color: "#1d2a24",
           iconColor: "#1d2a24",

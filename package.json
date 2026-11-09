@@ -76,6 +76,7 @@
     "graphql-request": "^5.0.0",
     "graphql-upload": "^15.0.2",
     "graphql-yoga": "^3.1.0",
+    "gsap": "^3.15.1",
     "input-otp": "^1.4.2",
     "lucide-react": "^0.511.0",
     "marked": "^16.1.1",

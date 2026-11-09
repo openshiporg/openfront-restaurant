@@ -210,13 +210,14 @@
     @apply mx-auto w-full max-w-[90rem] px-4 sm:px-6 lg:px-10;
   }
 
+  /* The glass card from the dish display: frosted, borderless, soft lift. */
   .storefront-card {
-    @apply rounded-2xl border border-border bg-card;
-    box-shadow: 0 1px 2px oklch(0.27 0.025 160 / 0.04), 0 8px 24px oklch(0.27 0.025 160 / 0.05);
+    @apply rounded-[20px] bg-card/70 backdrop-blur-[14px];
+    box-shadow: 0 1px 0 color-mix(in oklab, var(--foreground) 6%, transparent) inset, 0 18px 40px -24px rgb(0 0 0 / 0.25);
   }
 
   .storefront-surface {
-    @apply rounded-2xl border border-border bg-card;
+    @apply rounded-[20px] border border-border/60 bg-card/75 backdrop-blur-[14px];
   }
 
   .storefront-surface-soft {
@@ -227,7 +228,7 @@
   /* Antares type scale: page titles, section titles, card titles. Phone first. */
   .storefront-heading,
   .sf-page-title {
-    @apply text-balance font-serif text-[1.6rem] font-bold leading-[1.05] tracking-[-0.015em] sm:text-[2.4rem] lg:text-[2.8rem];
+    @apply text-balance font-serif text-[1.6rem] font-extrabold uppercase leading-[1.05] tracking-[-0.025em] sm:text-[2.4rem] lg:text-[2.8rem];
   }
   .sf-section-title {
     @apply font-serif text-[1.15rem] font-bold leading-tight sm:text-[1.5rem];
@@ -272,7 +273,8 @@
   /* Surfaces that used to be paper tickets are rounded cards in this design. */
   .ticket,
   .ticket-top {
-    @apply rounded-2xl border border-border bg-paper text-ink;
+    @apply rounded-[20px] bg-paper/75 text-ink backdrop-blur-[14px];
+    box-shadow: 0 1px 0 color-mix(in oklab, var(--foreground) 6%, transparent) inset, 0 18px 40px -24px rgb(0 0 0 / 0.25);
   }
 
   /* The status dot: green while the kitchen takes orders. */
@@ -364,3 +366,40 @@
     animation: none;
   }
 }
+
+/* Dish Orbit: Outfit, pastel arcs and a glass card; the stage pins under the sticky header. */
+.orbit-host {
+  --sf-nav: 5rem;
+  --sf-bottom: 0px;
+}
+.orbit-host .dsh-root {
+  top: var(--sf-nav);
+}
+@media (max-width: 767px) {
+  .orbit-host {
+    --sf-bottom: calc(3.1rem + env(safe-area-inset-bottom));
+  }
+}
+
+/* Pastel arc behind inner pages, the dish display's band at rest. */
+.storefront-ui main,
+.storefront-ui > div > main {
+  position: relative;
+}
+.storefront-ui::before {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  top: 4rem;
+  left: 50%;
+  width: min(150vw, 1400px);
+  aspect-ratio: 1;
+  translate: -50% -62%;
+  border-radius: 50%;
+  border: clamp(3rem, 9vw, 7.4rem) solid #b9d8ff;
+  opacity: 0.28;
+  pointer-events: none;
+  mask-image: linear-gradient(180deg, transparent 52%, #000 66%, transparent 100%);
+  -webkit-mask-image: linear-gradient(180deg, transparent 52%, #000 66%, transparent 100%);
+}
+.storefront-ui > * { position: relative; z-index: 1; }
