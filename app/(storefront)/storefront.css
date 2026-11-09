@@ -473,6 +473,6 @@
   .orbit-host .dsh-desc, .orbit-host .dsh-ing { min-height: 0; }
 }
 @container (max-width: 359px) {
-  .orbit-host .dsh-hd { transform: scale(.6); }
+  .orbit-host .dsh-hd { zoom: .76; }
   .orbit-host .dsh-head { height: 96px; }
 }
