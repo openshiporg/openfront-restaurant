@@ -463,3 +463,16 @@
     margin-bottom: 4px;
   }
 }
+
+@container (max-width: 639px) {
+  .orbit-host .dsh-head { height: 112px; margin-top: 6px; }
+  .orbit-host .dsh-card { padding: 8px 18px 14px; margin-top: 4px; }
+  .orbit-host .dsh-rate { height: 52px; margin-bottom: 8px; }
+  .orbit-host .dsh-badge { height: 52px; }
+  .orbit-host .dsh-num { top: 2px; }
+  .orbit-host .dsh-desc, .orbit-host .dsh-ing { min-height: 0; }
+}
+@container (max-width: 359px) {
+  .orbit-host .dsh-hd { transform: scale(.6); }
+  .orbit-host .dsh-head { height: 96px; }
+}

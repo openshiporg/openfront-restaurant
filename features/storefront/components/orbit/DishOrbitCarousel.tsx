@@ -533,7 +533,7 @@ export function DishOrbitCarousel({
             {dishes.map((d, i) => (
               <div key={i} ref={(el) => { bodies.current[i] = el }} className="dsh-body" aria-hidden={i !== index}>
                 <div className="dsh-rate">
-                  <div className="dsh-badge" style={{ background: d.accent }}>
+                  <div className="dsh-badge" style={{ background: d.accent, width: d.rating == null ? 84 : undefined }}>
                     {d.rating != null ? <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2.5 2.9 6 6.6.8-4.9 4.6 1.3 6.6L12 17.2l-5.9 3.3 1.3-6.6-4.9-4.6 6.6-.8z" /></svg> : null}
                   </div>
                   {d.rating != null ? (
