@@ -1,5 +1,4 @@
-import ReservationsPage, { generateMetadata } from "@/features/storefront/screens/ReservationsPage"
+import { OrbitReservationsPage, reservationsMetadata } from "@/features/storefront/orbit/Pages"
 
-export { generateMetadata }
-
-export default ReservationsPage
+export const generateMetadata = reservationsMetadata
+export default OrbitReservationsPage

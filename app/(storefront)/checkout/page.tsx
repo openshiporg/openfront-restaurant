@@ -1,3 +1,4 @@
-import { CheckoutPage } from "@/features/storefront/screens/CheckoutPage";
+import { OrbitCheckoutPage, checkoutMetadata } from "@/features/storefront/orbit/Checkout"
 
-export default CheckoutPage;
+export const metadata = checkoutMetadata
+export default OrbitCheckoutPage

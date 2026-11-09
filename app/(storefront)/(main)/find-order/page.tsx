@@ -1,5 +1,4 @@
-import FindOrderPage, { metadata } from "@/features/storefront/screens/FindOrderPage"
+import { OrbitFindOrderPage, findOrderMetadata } from "@/features/storefront/orbit/Pages"
 
-export { metadata }
-
-export default FindOrderPage
+export const metadata = findOrderMetadata
+export default OrbitFindOrderPage

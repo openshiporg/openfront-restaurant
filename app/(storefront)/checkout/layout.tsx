@@ -1,3 +1,3 @@
-import { CheckoutLayout } from "@/features/storefront/screens/CheckoutPage";
+import { OrbitCheckoutLayout } from "@/features/storefront/orbit/Checkout"
 
-export default CheckoutLayout;
+export default OrbitCheckoutLayout

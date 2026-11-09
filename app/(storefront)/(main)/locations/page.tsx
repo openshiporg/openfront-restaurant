@@ -1,5 +1,4 @@
-import LocationsPage, { generateMetadata } from "@/features/storefront/screens/LocationsPage"
+import { OrbitLocationsPage, locationsMetadata } from "@/features/storefront/orbit/Pages"
 
-export { generateMetadata }
-
-export default LocationsPage
+export const generateMetadata = locationsMetadata
+export default OrbitLocationsPage

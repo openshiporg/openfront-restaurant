@@ -1,4 +1,4 @@
-import { OrderConfirmedPage } from "@/features/storefront/screens/OrderConfirmedPage";
+import { OrbitOrderConfirmedPage, confirmedMetadata } from "@/features/storefront/orbit/Pages"
 
-export { OrderConfirmedPage as default };
-export { metadata } from "@/features/storefront/screens/OrderConfirmedPage";
+export const metadata = confirmedMetadata
+export default OrbitOrderConfirmedPage

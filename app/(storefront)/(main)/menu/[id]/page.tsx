@@ -1,9 +1,4 @@
-import MenuItemPage, {
-  generateMetadata as generateMenuItemMetadata,
-} from "@/features/storefront/screens/MenuItemPage"
+import OrbitItemPage, { generateMetadata } from "@/features/storefront/orbit/ItemPage"
 
-export async function generateMetadata(props: { params: Promise<{ id: string }> }) {
-  return generateMenuItemMetadata(props)
-}
-
-export default MenuItemPage
+export { generateMetadata }
+export default OrbitItemPage

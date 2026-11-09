@@ -66,7 +66,7 @@ export default function GiftCardPurchase({ locale, currencyCode }: { locale: str
   const [pending, start] = useTransition()
 
   const effective = custom ? Math.round(parseFloat(custom) * 100) || 0 : amount
-  const options = useMemo(() => intent ? { clientSecret: intent.clientSecret, fonts: [{ cssSrc: "https://fonts.googleapis.com/css2?family=Figtree:wght@400;500&display=swap" }], appearance: { variables: { fontFamily: "Figtree, ui-sans-serif, system-ui, sans-serif", colorPrimary: "#2c983a", colorText: "#1d2a24", borderRadius: "12px" } } } : undefined, [intent])
+  const options = useMemo(() => intent ? { clientSecret: intent.clientSecret, fonts: [{ cssSrc: "https://fonts.googleapis.com/css2?family=Outfit:wght@400;500&display=swap" }], appearance: { variables: { fontFamily: "Outfit, ui-sans-serif, system-ui, sans-serif", colorPrimary: "#2c983a", colorText: "#1d2a24", borderRadius: "12px" } } } : undefined, [intent])
 
   // Return from a redirect-based payment method.
   useEffect(() => {

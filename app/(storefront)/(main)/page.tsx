@@ -1,6 +1,4 @@
-import { generateMetadata } from "@/features/storefront/screens/HomePage"
-import HomePage from "@/features/storefront/screens/HomePage"
+import OrbitHomePage, { generateMetadata } from "@/features/storefront/orbit/HomePage"
 
 export { generateMetadata }
-
-export default HomePage
+export default OrbitHomePage

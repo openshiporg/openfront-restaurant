@@ -65,9 +65,9 @@ export default function OrderCompletedTemplate({ order }: OrderCompletedTemplate
   return (
     <div className="py-5 sm:py-10 lg:py-14">
       <div className="storefront-shell">
-        <Link href="/account/orders" className="-ml-2 inline-flex items-center gap-2 rounded-full px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-mint hover:text-leaf">
+        <Link href="/menu" className="-ml-2 inline-flex min-h-11 items-center gap-2 rounded-full px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-mint hover:text-leaf">
           <ArrowLeft size={14} />
-          Back to orders
+          Back to the menu
         </Link>
 
         <OrderLiveRefresh status={order.status} />

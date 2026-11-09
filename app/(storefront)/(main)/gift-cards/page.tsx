@@ -1,5 +1,4 @@
-import GiftCardsPage, { generateMetadata } from "@/features/storefront/screens/GiftCardsPage"
+import { OrbitGiftCardsPage, giftCardsMetadata } from "@/features/storefront/orbit/Pages"
 
-export { generateMetadata }
-
-export default GiftCardsPage
+export const generateMetadata = giftCardsMetadata
+export default OrbitGiftCardsPage
