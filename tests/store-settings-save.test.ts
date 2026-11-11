@@ -2,11 +2,18 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { buildStoreSettingsPayload } from "../features/platform/store-settings/lib/store-settings-payload";
-import { LOGO_ICONS } from "../features/platform/store-settings/lib/icon-registry";
+import { HUE_PRESETS, LOGO_ICONS } from "../features/platform/store-settings/lib/icon-registry";
 import { changesDeliveryConfig } from "../features/keystone/models/StoreSettings";
 
 const SEED = readFileSync(new URL("../features/platform/onboarding/lib/seed.json", import.meta.url), "utf8");
 const seedLogo = JSON.parse(SEED).storeInfo.logoIcon as string;
+const seedHue = JSON.parse(SEED).storeInfo.logoColor as string;
+
+test("onboarding seeds a mark and hue the Store Settings pickers offer, never a pasted drawing", () => {
+  assert.equal(LOGO_ICONS.find((icon) => icon.lightSvg === seedLogo)?.id, "layers");
+  assert.equal(HUE_PRESETS.some((preset) => String(preset.value) === seedHue), true);
+  assert.equal(seedHue, "120");
+});
 
 test("a preset icon and hue go into the mutation payload unchanged", () => {
   const result = buildStoreSettingsPayload({ name: "Stack Kitchen", logoIcon: LOGO_ICONS[3].lightSvg, logoColor: "120" });
@@ -15,7 +22,7 @@ test("a preset icon and hue go into the mutation payload unchanged", () => {
   assert.deepEqual(result.data, { name: "Stack Kitchen", logoIcon: LOGO_ICONS[3].lightSvg, logoColor: "120" });
 });
 
-test("a pasted custom SVG (the seeded store mark) is kept", () => {
+test("the seeded store mark is kept as saved, whitespace trimmed", () => {
   const result = buildStoreSettingsPayload({ logoIcon: `\n${seedLogo}  `, logoColor: "0" });
   assert.equal(result.success, true);
   if (!result.success) return;

@@ -9,15 +9,12 @@ import { storefrontFont } from "@/features/storefront/lib/fonts"
 import { CartButton } from "./cart"
 import { MORE_LINKS, NAV_LINKS } from "./links"
 
-/** The store's mark and its name set the way every title is: first word thin, the rest heavy, in capitals. */
+/** The store's mark (the icon saved in Store Settings, tinted by its Logo Color) beside its name in the wordmark face. */
 export function Brand({ name, mark, hue, style }: { name: string; mark: string; hue?: string | null; style?: React.CSSProperties }) {
-  const [first, ...rest] = name.trim().split(/\s+/)
   return (
     <Link href="/" className="o-brand" aria-label={`${name}, home`} style={style}>
       {mark ? <span className="o-brand-mark" style={{ filter: `hue-rotate(${hue || "0"}deg)` }} dangerouslySetInnerHTML={{ __html: mark }} aria-hidden="true" /> : null}
-      <span className="o-brand-name" aria-hidden="true">
-        {rest.length ? <><span className="o-thin">{first}</span> <span className="o-heavy">{rest.join(" ")}</span></> : <span className="o-heavy">{first}</span>}
-      </span>
+      <span className="o-brand-name" aria-hidden="true">{name.trim()}</span>
     </Link>
   )
 }
