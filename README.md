@@ -174,3 +174,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ---
 
 Built on top of [next-keystone-starter](https://github.com/junaid33/next-keystone-starter)
+
+## No background loops
+
+Nothing in this app runs on a timer on the server (no `instrumentation.ts`, cron, worker or outbox). Time-based state advances on the request that touches it: due order-ahead orders are released to the kitchen whenever the KDS loads or polls and by the staff **Refresh** button on the KDS. Customer email goes out only from the checkout/status action that triggers it. External events go through Openfront Commerce webhooks.

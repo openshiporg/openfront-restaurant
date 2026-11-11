@@ -112,7 +112,7 @@ const GET_KDS_DATA = gql`
 `
 
 // Order ahead: paid scheduled orders waiting for their kitchen start time. Syncing first releases
-// any that are due, so the board fires them on time even between server release passes.
+// any that are due, so the board fires them on time; the Refresh button runs the same release.
 const RELEASE_SCHEDULED = gql`
   mutation ReleaseScheduledOrders {
     releaseScheduledOrders
@@ -778,6 +778,15 @@ export function KDSClient() {
           {mutationError}
         </div>
       )}
+      <div className="flex justify-end px-8 py-2">
+        <button
+          type="button"
+          onClick={() => { void fetchKDS() }}
+          className="inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm font-medium hover:bg-muted"
+        >
+          <RefreshCw className="h-4 w-4" /> Refresh
+        </button>
+      </div>
       <UpcomingStrip orders={upcoming} now={now} timeZone={storeTimeZone} />
       <StationMetrics tickets={stationFiltered} />
       {viewMode === 'all-day' ? (

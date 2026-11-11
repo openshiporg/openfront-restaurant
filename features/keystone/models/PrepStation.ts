@@ -17,7 +17,7 @@ export const PrepStation = list({
     listView: {
       initialColumns: ["menuItem", "station", "preparationTime"],
     },
-    labelField: "menuItem",
+    labelField: "id",
   },
   fields: {
     menuItem: relationship({
