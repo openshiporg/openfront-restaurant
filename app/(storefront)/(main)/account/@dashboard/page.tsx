@@ -28,22 +28,22 @@ export default async function AccountOverviewPage() {
         <p className="mt-2 text-base text-muted-foreground">Welcome back to your account.</p>
       </div>
 
-      <div className="grid gap-4 py-6 sm:grid-cols-3">
-        <div className="storefront-surface-soft bg-background px-5 py-4">
+      <div className="o-acct-stats">
+        <div className="o-acct-stat">
           <p className="text-sm font-medium text-primary">Profile</p>
           <p className="mt-2 text-[1.3rem] font-semibold text-foreground sm:text-3xl">{completion}%</p>
           <Link href="/account/profile" className="mt-3 inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-primary">
             Edit profile <ChevronRight size={14} />
           </Link>
         </div>
-        <div className="storefront-surface-soft bg-background px-5 py-4">
+        <div className="o-acct-stat">
           <p className="text-sm font-medium text-primary">Addresses</p>
           <p className="mt-2 text-[1.3rem] font-semibold text-foreground sm:text-3xl">{user.addresses?.length || 0}</p>
           <Link href="/account/addresses" className="mt-3 inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-primary">
             Manage <ChevronRight size={14} />
           </Link>
         </div>
-        <div className="storefront-surface-soft bg-background px-5 py-4">
+        <div className="o-acct-stat">
           <p className="text-sm font-medium text-primary">Orders</p>
           <p className="mt-2 text-[1.3rem] font-semibold text-foreground sm:text-3xl">{orders.length}</p>
           <Link href="/account/orders" className="mt-3 inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-primary">
@@ -54,7 +54,7 @@ export default async function AccountOverviewPage() {
 
       <div className="pt-6">
         <div className="mb-4 flex items-center justify-between gap-3">
-          <h2 className="font-serif text-2xl font-semibold text-foreground">Recent orders</h2>
+          <h2 className="o-acct-h2">Recent orders</h2>
           {orders.length > 0 ? (
             <Link href="/account/orders" className="inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-primary">
               View all <ChevronRight size={14} />
@@ -71,12 +71,12 @@ export default async function AccountOverviewPage() {
             </Link>
           </div>
         ) : (
-          <div className=" bg-background">
+          <div className="o-acct-rows">
             {orders.slice(0, 4).map((order: any) => (
               <Link
                 key={order.id}
                 href={`/account/orders/details/${order.id}`}
-                className="flex items-center justify-between gap-4 px-5 py-4 transition-colors last:-0 hover:bg-muted/30"
+                className="o-acct-row"
               >
                 <div>
                   <p className="text-base font-medium text-foreground">#{order.orderNumber}</p>

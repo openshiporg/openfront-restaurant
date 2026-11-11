@@ -6,6 +6,7 @@ import { OrderDetailsCard } from "../components/order-details-card";
 import Link from "next/link";
 import { OrderLiveRefresh } from "../components/order-live-refresh";
 import { ArrowLeft } from "lucide-react";
+import { withDishCutouts } from "./order-details-template";
 
 interface RestaurantOrder {
   id: string;
@@ -117,7 +118,7 @@ export default function OrderCompletedTemplate({ order }: OrderCompletedTemplate
           <div className="space-y-6">
             <div className="storefront-surface bg-card p-4 sm:p-6">
               {order.checkAllocation && <p className="mb-3 rounded-xl bg-muted p-3">Independent check {order.checkAllocation.ordinal} of {order.checkAllocation.guestCount} from service {order.checkAllocation.sourceOrderNumber}. Your allocated charge is shown in the total. Any food details below describe the original service and are not charged again in full.</p>}
-              <OrderItemsList items={order.orderItems} />
+              <OrderItemsList items={withDishCutouts(order.orderItems)} />
             </div>
             <div className="storefront-surface bg-card p-4 sm:p-6">
               <OrderSummary

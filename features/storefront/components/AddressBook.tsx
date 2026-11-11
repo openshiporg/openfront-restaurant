@@ -74,8 +74,8 @@ export function AddressBook({ addresses }: { addresses: any[] }) {
                   <div>
                     <p className="text-base font-medium text-foreground">{address.name}</p>
                     <div className="mt-2 flex flex-wrap gap-2">
-                      {address.isDefault ? <span className=" bg-card px-2 py-0.5 text-xs text-primary">Default</span> : null}
-                      {address.isBilling ? <span className=" bg-card px-2 py-0.5 text-xs text-primary">Billing</span> : null}
+                      {address.isDefault ? <span className="o-tag">Default</span> : null}
+                      {address.isBilling ? <span className="o-tag">Billing</span> : null}
                     </div>
                   </div>
                 </div>

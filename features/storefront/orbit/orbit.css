@@ -423,3 +423,37 @@
 @keyframes spin { to { transform: rotate(360deg); } }
 .o-cart-label { display: none; }
 @media (min-width: 480px) { .o-cart-label { display: inline; } }
+
+/* Account: tabs beside one panel; inside the panel sections are divided by hairlines, never boxed again. */
+.o-acct-grid { display: grid; gap: 1.25rem; }
+.o-acct-nav { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+.o-acct-link { display: inline-flex; align-items: center; min-height: 44px; padding: 0 1.05rem; border: 0; border-radius: 999px; background: none; font: inherit; font-size: 0.98rem; font-weight: 500; color: var(--o-ink); text-decoration: none; white-space: nowrap; cursor: pointer; transition: background-color 150ms; }
+.o-acct-link:hover { background: color-mix(in oklab, var(--o-ink) 6%, transparent); }
+.o-acct-link[aria-current="page"] { background: var(--o-peach); font-weight: 600; }
+.o-acct-out { color: var(--o-ink-soft); }
+@media (min-width: 1024px) {
+  .o-acct-grid { grid-template-columns: 190px minmax(0, 1fr); gap: 2.5rem; align-items: start; }
+  .o-acct-nav { flex-direction: column; align-items: flex-start; }
+  .o-acct-out { margin-top: 0.75rem; }
+}
+.o-acct-panel { padding: 1.5rem 1.25rem; }
+@media (min-width: 640px) { .o-acct-panel { padding: 2.25rem; } }
+.o-acct .sf-page-title, .o-acct .sf-section-title { margin-top: 0; text-transform: none; font-size: clamp(1.5rem, 1.25rem + 1vw, 1.9rem); font-weight: 700; letter-spacing: -0.015em; line-height: 1.15; }
+.o-acct-h2 { font-size: 1.15rem; font-weight: 700; letter-spacing: -0.01em; text-transform: none; }
+.o-acct-small { font-size: 0.9rem; line-height: 1.5; color: var(--o-ink-soft); max-width: 60ch; }
+.o-acct-stats { display: grid; gap: 0.75rem; padding-block: 1.5rem; }
+@media (min-width: 640px) { .o-acct-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.o-acct-stat { padding: 1rem 1.15rem; border-radius: var(--o-r-m); background: color-mix(in oklab, var(--o-ink) 4%, transparent); }
+.o-acct-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; min-height: 64px; padding: 0.85rem 0.25rem; border-top: 1px solid var(--o-line); color: var(--o-ink); text-decoration: none; transition: background-color 150ms; }
+.o-acct-row:hover { background: color-mix(in oklab, var(--o-ink) 3%, transparent); }
+.o-acct-dot { flex: none; width: 9px; height: 9px; margin-top: 0.5rem; border-radius: 99px; background: var(--o-peach); box-shadow: 0 0 0 1px color-mix(in oklab, var(--o-ink) 22%, transparent); }
+.o-acct-dot-done { background: var(--o-ink); box-shadow: none; }
+.o-acct-dot-off { background: transparent; }
+.o-acct-panel .border-dashed { border: 0; border-radius: var(--o-r-m); background: color-mix(in oklab, var(--o-ink) 4%, transparent); }
+.o-acct .o-acct-panel .storefront-surface { border-top: 1px solid var(--o-line) !important; border-radius: 0; background: none !important; -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: none; padding: 1.5rem 0; }
+.o-acct .o-acct-panel .grid > .storefront-surface { border-top: 0 !important; border-radius: var(--o-r-m); background: color-mix(in oklab, var(--o-ink) 4%, transparent) !important; padding: 1.15rem; }
+.o-acct-privacy { display: grid; gap: 0.9rem; margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid var(--o-line); }
+.o-acct-btn { min-height: 44px; padding-inline: 1.05rem !important; border-radius: 999px !important; background: #fff !important; font-size: 0.95rem !important; box-shadow: none !important; }
+.o-acct .pass-action { align-self: flex-start; }
+.o-acct .ord-all { display: none; }
+.o-acct .ord-now { display: block; }

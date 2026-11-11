@@ -7,6 +7,7 @@ import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { ReorderButton } from "../components/reorder-button";
 import { OrderLiveRefresh } from "../components/order-live-refresh";
+import { plateFor } from "@/features/storefront/orbit/lib";
 
 interface RestaurantOrder {
   id: string;
@@ -42,9 +43,18 @@ interface OrderDetailsTemplateProps {
   order: RestaurantOrder;
 }
 
+/** Each line shows the same dish cut-out as the menu and the cart; a dish without one keeps its own photo. */
+export function withDishCutouts(items: any[]) {
+  return (items || []).map((item) => {
+    const name = item?.itemNameSnapshot || item?.menuItem?.name;
+    const plate = name ? plateFor({ name, thumbnail: null }) : null;
+    return plate?.cutout ? { ...item, itemThumbnailSnapshot: plate.src } : item;
+  });
+}
+
 export default function OrderDetailsTemplate({ order }: OrderDetailsTemplateProps) {
   return (
-    <div className="py-8">
+    <div className="ord-details">
       <div className="grid gap-6">
         <div className=" pb-6">
           <Link href="/account" className="-ml-2 inline-flex items-center gap-2 rounded-full px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-mint hover:text-leaf">
@@ -91,7 +101,7 @@ export default function OrderDetailsTemplate({ order }: OrderDetailsTemplateProp
           <div className="space-y-6">
             <div className="storefront-surface bg-background p-6">
               {order.checkAllocation && <p className="mb-3 rounded-xl bg-muted p-3">Independent check {order.checkAllocation.ordinal} of {order.checkAllocation.guestCount} from service {order.checkAllocation.sourceOrderNumber}. Your allocated charge is shown in the total. Any food details below describe the original service and are not charged again in full.</p>}
-              <OrderItemsList items={order.orderItems} />
+              <OrderItemsList items={withDishCutouts(order.orderItems)} />
             </div>
             <div className="storefront-surface bg-background p-6">
               <OrderSummary

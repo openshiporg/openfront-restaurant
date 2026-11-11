@@ -76,7 +76,7 @@ export function OrderStatusTimeline({ status, orderType }: OrderStatusTimelinePr
     return (
       <div>
         <p className="text-sm font-medium text-primary">Status</p>
-        <div className="mt-4 border border-destructive/30 bg-destructive/10 p-4 text-sm font-medium text-destructive">
+        <div className="mt-4 rounded-2xl bg-destructive/10 p-4 text-sm font-medium text-destructive">
           Order cancelled
         </div>
       </div>
@@ -92,11 +92,11 @@ export function OrderStatusTimeline({ status, orderType }: OrderStatusTimelinePr
           <div key={step.status} className={`h-1.5 flex-1 rounded-full ${index <= currentIndex ? "bg-primary" : "bg-muted"}`} />
         ))}
       </div>
-      <p className="mt-3 text-[0.95rem] font-medium text-foreground sm:hidden">
+      <p className="ord-now mt-3 text-[0.95rem] font-medium text-foreground sm:hidden">
         {steps[currentIndex]?.label}
         <span className="font-normal text-muted-foreground"> · step {currentIndex + 1} of {steps.length}</span>
       </p>
-      <ol className="mt-3 hidden gap-1.5 sm:flex">
+      <ol className="ord-all mt-3 hidden gap-1.5 sm:flex">
         {steps.map((step, index) => (
           <li
             key={step.status}

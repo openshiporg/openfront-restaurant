@@ -11,19 +11,10 @@ export const metadata: Metadata = {
   description: "View your order history.",
 }
 
-const STATUS_COLORS: Record<string, string> = {
-  completed: "bg-emerald-500",
-  cancelled: "bg-red-500",
-  open: "bg-blue-500",
-  in_progress: "bg-amber-500",
-  ready: "bg-lamp",
-  served: "bg-teal-500",
-  sent_to_kitchen: "bg-orange-500",
-}
-
+/** Done is ink, cancelled is hollow, anything still moving is the peach of a chosen option. */
 function StatusDot({ status }: { status: string }) {
-  const color = STATUS_COLORS[status] ?? "bg-zinc-400"
-  return <span className={`inline-block size-2 rounded-full shrink-0 ${color}`} />
+  const kind = status === "completed" || status === "served" ? "done" : status === "cancelled" ? "off" : "live"
+  return <span className={`o-acct-dot o-acct-dot-${kind}`} aria-hidden="true" />
 }
 
 export default async function AccountOrdersPage() {
@@ -60,12 +51,12 @@ export default async function AccountOrdersPage() {
             </Link>
           </div>
         ) : (
-          <div className=" bg-background">
+          <div className="o-acct-rows">
             {orders.map((order: any) => (
               <Link
                 key={order.id}
                 href={`/account/orders/details/${order.id}`}
-                className="flex items-center justify-between gap-4 px-5 py-4 transition-colors last:-0 hover:bg-muted/30"
+                className="o-acct-row"
               >
                 <div className="flex min-w-0 items-start gap-3">
                   <StatusDot status={order.status} />

@@ -46,12 +46,13 @@ export function OrderItemsList({ items, currencyCode = "USD", locale = "en-US" }
           // Paid orders keep what was bought as a snapshot; the live menu item may be gone or changed.
           const name = item.itemNameSnapshot || item.menuItem?.name || "Item";
           const thumbnail = item.itemThumbnailSnapshot || item.thumbnail || item.menuItem?.thumbnail || null;
+          const cutout = !!thumbnail && thumbnail.startsWith("/images/dishes/");
           const modifiers = item.modifiers?.length ? item.modifiers : Array.isArray(item.modifiersSnapshot) ? item.modifiersSnapshot : [];
           return (
           <div key={item.id} className="flex gap-4 py-4 first:pt-0 last:-0 last:pb-0">
-            <div className="relative size-18 shrink-0 overflow-hidden rounded-xl bg-muted">
+            <div className={`relative size-18 shrink-0 overflow-hidden rounded-xl ${cutout ? "" : "bg-muted"}`}>
               {thumbnail ? (
-                <Image src={thumbnail} alt={name} fill className="object-cover" sizes="72px" />
+                <Image src={thumbnail} alt={name} fill className={cutout ? "object-contain" : "object-cover"} sizes="72px" />
               ) : (
                 <div className="flex size-full items-center justify-center p-2 text-center text-xs text-muted-foreground">
                   {name}
