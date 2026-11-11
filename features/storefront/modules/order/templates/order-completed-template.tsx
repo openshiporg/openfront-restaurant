@@ -74,7 +74,7 @@ export default function OrderCompletedTemplate({ order }: OrderCompletedTemplate
         <div className="mt-3 pb-2 sm:mt-6 sm:pb-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <h1 className="break-words sf-section-title text-foreground sm:text-[2rem]">Order #{order.orderNumber}</h1>
+              <h2 className="break-words sf-section-title text-foreground sm:text-[2rem]">Order #{order.orderNumber}</h2>
               <p className="mt-1 text-[0.85rem] text-muted-foreground sm:text-base">
                 {typeLabel} · {new Date(order.createdAt).toLocaleDateString()}
               </p>
