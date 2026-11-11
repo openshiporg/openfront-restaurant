@@ -14,14 +14,14 @@ export function plateSlug(name: string) {
 
 const plateCache = new Map<string, boolean>()
 function hasPlateFile(slug: string) {
-  if (!plateCache.has(slug)) plateCache.set(slug, existsSync(join(process.cwd(), "public", "images", "plates", `${slug}.webp`)))
+  if (!plateCache.has(slug)) plateCache.set(slug, existsSync(join(process.cwd(), "public", "images", "dishes", `${slug}.webp`)))
   return plateCache.get(slug)!
 }
 
-/** The top-down plate cut-out for a dish, falling back to its own photo. */
+/** The cut-out of a dish (the food alone, no plate), falling back to its own photo. */
 export function plateFor(item: Pick<MenuItem, "name" | "thumbnail">): { src: string | null; cutout: boolean } {
   const slug = plateSlug(item.name)
-  if (slug && hasPlateFile(slug)) return { src: `/images/plates/${slug}.webp`, cutout: true }
+  if (slug && hasPlateFile(slug)) return { src: `/images/dishes/${slug}.webp`, cutout: true }
   return { src: item.thumbnail || null, cutout: false }
 }
 
@@ -111,7 +111,7 @@ export function toPlateCard(item: MenuItem, index: number, currency: Required<Cu
   }
 }
 
-/** The hero's dishes: featured, then popular, then the rest of the menu, only ones with a plate cut-out. */
+/** The hero's dishes: featured, then popular, then the rest of the menu, only ones with a cut-out. */
 export function orbitDishes(items: MenuItem[], storeName: string, currency: Required<CurrencyConfig>, max = 6): OrbitDish[] {
   const ordered = [
     ...items.filter((item) => item.featured),

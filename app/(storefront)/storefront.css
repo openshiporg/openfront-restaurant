@@ -124,7 +124,7 @@
 @layer components {
   .storefront-shell { @apply mx-auto w-full max-w-[76rem] px-4 sm:px-6 lg:px-10; }
   .storefront-card, .storefront-surface {
-    border-radius: 22px;
+    border-radius: 26px;
     background: rgb(255 255 255 / 0.72);
     -webkit-backdrop-filter: blur(14px);
     backdrop-filter: blur(14px);
@@ -150,7 +150,7 @@
     text-decoration-color: color-mix(in oklab, var(--ink) 35%, transparent);
   }
   .pass-link:hover { text-decoration-color: var(--ink); }
-  .ticket, .ticket-top { border-radius: 22px; background: rgb(255 255 255 / 0.72); color: var(--ink); }
+  .ticket, .ticket-top { border-radius: 26px; background: rgb(255 255 255 / 0.72); color: var(--ink); }
   .lamp { @apply inline-block shrink-0 rounded-full; width: 0.45em; height: 0.45em; background: var(--steel-deep); }
   .lamp[data-on='true'] { background: var(--lamp); }
   .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }

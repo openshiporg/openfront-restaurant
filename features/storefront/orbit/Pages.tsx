@@ -17,13 +17,12 @@ import { mapsHref } from "./lib"
 import { Arcs } from "./Arcs"
 import { Unavailable } from "./Unavailable"
 
-/** The top of every inner page: the washed kitchen, pastel arcs, and a thin-over-heavy title. */
+/** The top of every inner page: light on paper, a pastel arc, and a thin-over-heavy title. */
 export function PageHero({ thin, heavy, lede, children }: { thin: string; heavy: string; lede?: React.ReactNode; children?: React.ReactNode }) {
   return (
     <section className="o-pagehero">
-      <img src="/images/kitchen-backdrop.webp" alt="" />
       <Arcs variant="page" />
-      <div className="o-shell" style={{ position: "relative", zIndex: 1 }}>
+      <div className="o-shell">
         <h1 className="o-split o-split-xl"><span className="o-thin">{thin}</span><span className="o-heavy">{heavy}</span></h1>
         {lede ? <p className="o-lede" style={{ marginTop: 12 }}>{lede}</p> : null}
         {children}

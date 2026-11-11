@@ -6,7 +6,7 @@ import { DishOrbit, type OrbitDish } from "./DishOrbit"
 import { useOrbitCart } from "./cart"
 
 /** The dish orbit at the top of the home page. "Order food" puts the showing dish in the real cart. */
-export function HomeHero({ dishes, backdrop }: { dishes: OrbitDish[]; backdrop?: string }) {
+export function HomeHero({ dishes }: { dishes: OrbitDish[] }) {
   const router = useRouter()
   const { add } = useOrbitCart()
   const [state, setState] = useState<{ id: string; s: "adding" | "error" } | null>(null)
@@ -15,7 +15,6 @@ export function HomeHero({ dishes, backdrop }: { dishes: OrbitDish[]; backdrop?:
     <>
       <DishOrbit
         dishes={dishes}
-        backdrop={backdrop}
         orderBusy={state?.s === "adding"}
         orderLabel={(dish) => (state?.id === dish.id ? (state.s === "adding" ? "Adding…" : "Try again") : dish.needsChoice ? "Choose & order" : "Order food")}
         onOrder={async (dish) => {

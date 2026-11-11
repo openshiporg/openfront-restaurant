@@ -14,12 +14,13 @@ export default function LoginPage() {
   const [signupError, signupAction, isSignupPending] = useActionState(signUp, null)
 
   return (
-    <div className="grid w-full max-w-5xl overflow-hidden bg-card lg:grid-cols-[0.9fr_1.1fr]">
-      <div className="rounded-2xl bg-mint p-6 sm:p-10 lg:p-12">
-        <h1 className="sf-page-title text-foreground">
-          {view === "signin" ? "Welcome back." : "Create your account."}
-        </h1>
-        <p className="mt-4 max-w-[40ch] text-pretty text-lg leading-relaxed text-ink">
+    <div className="storefront-card grid w-full max-w-5xl overflow-hidden lg:grid-cols-[0.9fr_1.1fr]">
+      <div className="bg-[color-mix(in_oklab,var(--o-peach,#ffb8a8)_26%,white)] p-6 sm:p-10 lg:p-12">
+        <h2 className="text-[1.6rem] uppercase leading-none tracking-[-0.02em] text-foreground sm:text-[2rem]">
+          <span className="block font-extralight">{view === "signin" ? "Welcome" : "Create your"}</span>
+          <span className="block font-extrabold">{view === "signin" ? "Back" : "Account"}</span>
+        </h2>
+        <p className="mt-4 max-w-[40ch] text-pretty text-base leading-relaxed text-ink">
           {view === "signin"
             ? "Sign in to reorder past favorites, manage saved addresses, and move through checkout faster."
             : "Save your profile for faster checkout, order history, and easier address management."}
@@ -32,7 +33,7 @@ export default function LoginPage() {
         </ul>
       </div>
 
-      <div className="p-8 sm:p-10 lg:p-12">
+      <div className="p-6 sm:p-10 lg:p-12">
         <div className="mb-8 flex items-start justify-between gap-3">
           <div>
             <p className="sf-card-title">
@@ -46,7 +47,7 @@ export default function LoginPage() {
           </div>
           <Link
             href="/"
-            className="-mr-2 inline-flex h-10 shrink-0 items-center gap-2 px-2 text-base font-medium text-ink transition-colors hover:bg-mint"
+            className="-mr-2 inline-flex h-11 shrink-0 items-center gap-2 rounded-full px-3 text-base font-medium text-ink transition-colors hover:bg-white"
           >
             <ArrowLeft className="size-4" aria-hidden="true" />
             <span>Menu</span>

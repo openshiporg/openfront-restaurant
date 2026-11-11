@@ -1,48 +1,31 @@
-/** Soft pastel bands sweeping behind a section, the same arcs the hero's plates ride on. Purely decorative. */
-const SETS: Record<string, Array<{ c: string; x: string; y: string; s: string; w: number; r: number }>> = {
-  menu: [
-    { c: "#ffb8a8", x: "-18%", y: "-30%", s: "62vw", w: 46, r: -18 },
-    { c: "#b9d8ff", x: "-14%", y: "-24%", s: "58vw", w: 40, r: -18 },
-    { c: "#c4e8b5", x: "70%", y: "-10%", s: "46vw", w: 40, r: 30 },
-  ],
-  popular: [
-    { c: "#ffe08a", x: "78%", y: "8%", s: "52vw", w: 44, r: 40 },
-    { c: "#e0c6ff", x: "82%", y: "14%", s: "48vw", w: 38, r: 40 },
-  ],
-  visit: [
-    { c: "#ffb8a8", x: "-22%", y: "30%", s: "50vw", w: 44, r: -10 },
-    { c: "#e0c6ff", x: "-18%", y: "36%", s: "46vw", w: 38, r: -10 },
-    { c: "#c4e8b5", x: "74%", y: "-30%", s: "44vw", w: 40, r: 20 },
-  ],
-  footer: [
-    { c: "#c4e8b5", x: "70%", y: "-60%", s: "50vw", w: 40, r: 10 },
-    { c: "#b9d8ff", x: "74%", y: "-54%", s: "46vw", w: 34, r: 10 },
-  ],
-  page: [
-    { c: "#ffb8a8", x: "56%", y: "-50%", s: "70vw", w: 50, r: 0 },
-    { c: "#ffe08a", x: "60%", y: "-44%", s: "66vw", w: 44, r: 0 },
-    { c: "#c4e8b5", x: "64%", y: "-38%", s: "62vw", w: 40, r: 0 },
-  ],
+import { arcPath } from "./geometry"
+
+/**
+ * Pastel bands behind a section: the same tapered arc the hero's dishes ride on,
+ * coming in from one edge of the page. They are clipped to their own section, so
+ * they never reach into the next one, and they stay clear of the headings.
+ */
+type Band = { side: "left" | "right"; y: string; colors: [string, string?] }
+const SETS: Record<string, Band[]> = {
+  menu: [{ side: "right", y: "70%", colors: ["#ffb8a8", "#b9d8ff"] }],
+  popular: [{ side: "left", y: "64%", colors: ["#ffe08a", "#e0c6ff"] }],
+  visit: [{ side: "right", y: "30%", colors: ["#c4e8b5", "#ffb8a8"] }],
+  footer: [{ side: "right", y: "46%", colors: ["#c4e8b5", "#b9d8ff"] }],
+  page: [{ side: "right", y: "0%", colors: ["#ffb8a8", "#ffe08a"] }],
 }
 
 export function Arcs({ variant }: { variant: keyof typeof SETS }) {
   return (
     <div className="o-arcs" aria-hidden="true">
-      {SETS[variant].map((a, i) => (
-        <i
-          key={i}
-          style={{
-            left: a.x,
-            top: a.y,
-            width: `max(${a.s}, 360px)`,
-            height: `max(${a.s}, 360px)`,
-            borderWidth: a.w,
-            borderTopColor: a.c,
-            borderRightColor: a.c,
-            transform: `rotate(${a.r}deg)`,
-          }}
-        />
-      ))}
+      {SETS[variant].map((band, i) => {
+        const [a0, a1] = band.side === "right" ? [96, 264] : [-84, 84]
+        return (
+          <svg key={i} viewBox="0 0 400 400" data-side={band.side} style={{ top: band.y }}>
+            <path d={arcPath(a0, a1, 200, 200, 172, 46)} fill={band.colors[0]} />
+            {band.colors[1] ? <path d={arcPath(a0 + 14, a1 - 14, 200, 200, 118, 34)} fill={band.colors[1]} /> : null}
+          </svg>
+        )
+      })}
     </div>
   )
 }

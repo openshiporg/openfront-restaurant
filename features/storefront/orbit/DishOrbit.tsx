@@ -9,8 +9,8 @@ export { arcPath }
 
 /*
  * Dish Orbit: the storefront hero, built from the owner's DishOrbitCarousel.
- * The plated dish sits on the left; changing dish swings it out over the top on
- * a wide orbit while the next plate swings in from the other side. The two-weight
+ * The dish sits on the left; changing dish swings it out over the top on
+ * a wide orbit while the next dish swings in from the other side. The two-weight
  * title wipes out and back in, the glass card cross-fades, and the pastel arc
  * turns and takes the dish's colour.
  *
@@ -83,6 +83,8 @@ const ORBIT_X = 299
 const ORBIT_Y = -450
 const ORBIT_R = 650
 const SWING = 50
+// A second, quieter band further out on the same centre: it passes behind the glass card and off the top right.
+const FAR_ARC = arcPath(18, 60, ORBIT_X, ORBIT_Y, ORBIT_R + 150, 54)
 const HIDE_1 = "inset(0% 0% 0% 100%)"
 const HIDE_2 = "inset(0% 100% 0% 0%)"
 const SHOW = "inset(0% 0% 0% 0%)"
@@ -95,7 +97,6 @@ const Icon = {
 
 export function DishOrbit({
   dishes,
-  backdrop,
   height = "clamp(560px, calc(100svh - 76px), 820px)",
   autoplayMs = 7000,
   orderLabel,
@@ -103,7 +104,6 @@ export function DishOrbit({
   onOrder,
 }: {
   dishes: OrbitDish[]
-  backdrop?: string
   /** Desktop stage height. The stage never pins; on phones it is as tall as its content. */
   height?: string
   /** Slow autoplay; 0 turns it off. Reduced-motion guests never get it. */
@@ -276,7 +276,7 @@ export function DishOrbit({
       <div
         ref={rootRef}
         className="dsh-root"
-        style={{ "--dsh-h": height } as React.CSSProperties}
+        style={{ "--dsh-h": height, "--dsh-accent": dish?.accent } as React.CSSProperties}
         role="region"
         aria-roledescription="carousel"
         aria-label="Dishes from the kitchen"
@@ -290,12 +290,13 @@ export function DishOrbit({
         onPointerUp={onPointerUp}
         onPointerCancel={() => (swipe.current = null)}
       >
-        {backdrop ? <img className="dsh-bd" src={backdrop} alt="" width={1200} height={900} fetchPriority="high" /> : null}
-        {backdrop ? <div className="dsh-wash" /> : null}
-
         <div className="dsh-canvas">
+          {/* The orbit itself: the dotted track the dishes ride, a far band behind the card, and the band that turns with each dish. */}
           <svg className="dsh-arc" viewBox="0 0 960 520" aria-hidden="true">
-            <path ref={arcRef} style={{ opacity: 0.34 }} />
+            <circle className="dsh-ring" cx={ORBIT_X} cy={ORBIT_Y} r={ORBIT_R} />
+            <circle className="dsh-ring" cx={ORBIT_X} cy={ORBIT_Y} r={ORBIT_R + 150} style={{ opacity: 0.09 }} />
+            <path className="dsh-arc-far" d={FAR_ARC} />
+            <path ref={arcRef} style={{ opacity: 0.36 }} />
           </svg>
 
           <div className="dsh-pager" role="tablist" aria-label="Choose a dish">
@@ -308,6 +309,7 @@ export function DishOrbit({
           </div>
 
           <div className="dsh-plates">
+            <span className="dsh-floor" aria-hidden="true" />
             {dishes.map((d, i) => (
               <div key={d.id} ref={(el) => { orbits.current[i] = el }} className={"dsh-orbit" + (i === 0 ? " dsh-on" : "")} aria-hidden={i !== index}>
                 <img src={d.image} alt={d.alt} width={245} height={245} draggable={false} fetchPriority={i === 0 ? "high" : "low"} loading={i === 0 ? "eager" : "lazy"} />

@@ -5,6 +5,7 @@ import { StorefrontDataUnavailableError } from "@/features/storefront/lib/data/e
 import type { MenuCategory, MenuItem } from "@/features/storefront/lib/store-data"
 import { getCurrencyConfig } from "@/features/storefront/lib/currency"
 import { PlateCard } from "./PlateCard"
+import { Arcs } from "./Arcs"
 import { categoryIdOf, inMenuOrder, sectionTitle, toPlateCard, usedCategories } from "./lib"
 import { Unavailable } from "./Unavailable"
 
@@ -33,7 +34,7 @@ export default async function OrbitMenuPage() {
   return (
     <>
       <section className="o-pagehero">
-        <img src="/images/kitchen-backdrop.webp" alt="" />
+        <Arcs variant="page" />
         <div className="o-shell">
           <h1 className="o-split o-split-xl"><span className="o-thin">The</span><span className="o-heavy">Menu</span></h1>
           <p className="o-lede" style={{ marginTop: 12 }}>

@@ -55,10 +55,10 @@ export default async function OrbitHomePage() {
   return (
     <>
       {dishes.length ? (
-        <HomeHero dishes={dishes} backdrop="/images/kitchen-backdrop.webp" />
+        <HomeHero dishes={dishes} />
       ) : (
         <section className="o-pagehero">
-          <img src="/images/kitchen-backdrop.webp" alt="" />
+          <Arcs variant="page" />
           <div className="o-shell"><h1 className="o-split o-split-xl"><span className="o-thin">Order</span><span className="o-heavy">{name}</span></h1></div>
         </section>
       )}
@@ -77,10 +77,10 @@ export default async function OrbitHomePage() {
             {sections.map((category) => {
               const inside = ordered.filter((item) => categoryIdOf(item) === category.id)
               const lead = inside.find((item) => plateFor(item).cutout) || inside[0]
-              const plate = lead ? plateFor(lead).src : null
+              const picture = lead ? plateFor(lead) : null
               return (
                 <Link key={category.id} href={`/menu#c-${category.id}`} className="o-cat o-glass">
-                  {plate ? <img src={plate} alt="" width={60} height={60} loading="lazy" /> : null}
+                  {picture?.src ? <img src={picture.src} className={picture.cutout ? undefined : "o-photo"} alt="" width={56} height={56} loading="lazy" /> : null}
                   <strong>
                     {category.name}
                     <small>{inside.length} dish{inside.length === 1 ? "" : "es"}</small>

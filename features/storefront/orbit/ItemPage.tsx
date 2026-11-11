@@ -69,7 +69,7 @@ export default async function OrbitItemPage(props: Props) {
         <div className="o-item">
           <div className="o-item-stage">
             <svg viewBox="0 0 400 400" aria-hidden="true"><path d={arcPath(110, 250, 200, 200, 175, 64)} fill={hue} opacity={0.55} /><path d={arcPath(-70, 40, 200, 200, 175, 48)} fill={pastel(item.name.length + 2)} opacity={0.45} /></svg>
-            {plate.src ? <img src={plate.src} alt={item.name} width={520} height={520} fetchPriority="high" style={plate.cutout ? undefined : { borderRadius: "50%", objectFit: "cover" }} /> : null}
+            {plate.src ? <img src={plate.src} className={plate.cutout ? undefined : "o-photo"} alt={item.name} width={520} height={520} fetchPriority="high" /> : <span className="o-noimg" aria-hidden="true">{item.name.trim().charAt(0)}</span>}
           </div>
           <div>
             {category ? <p className="o-eyebrow">{category.name}</p> : null}

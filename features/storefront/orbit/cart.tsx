@@ -3,7 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import { addToCart, removeLineItem, updateLineItem } from "@/features/storefront/lib/data/cart"
 import { formatCurrency } from "@/features/storefront/lib/currency"
 import { getMenuItemHref } from "@/features/storefront/lib/menu-item-utils"
@@ -63,6 +63,8 @@ export function OrbitCartProvider({
   children: React.ReactNode
 }) {
   const router = useRouter()
+  // The "View order" pill stays off pages made of forms, where it would sit on top of the fields.
+  const pathname = usePathname()
   const [isOpen, setOpen] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
   const [mounted, setMounted] = useState(false)
@@ -192,7 +194,7 @@ export function OrbitCartProvider({
     <CartContext.Provider value={{ count, open, add }}>
       {children}
       {mounted && drawer ? createPortal(drawer, document.body) : null}
-      {mounted && count > 0 && !isOpen ? createPortal(
+      {mounted && count > 0 && !isOpen && !/^\/(account|order)(\/|$)/.test(pathname || "") ? createPortal(
         <button type="button" className={`o-floating orbit-ui ${storefrontFont.variable}`} onClick={open} aria-label={`Open your order, ${count} item${count === 1 ? "" : "s"}, ${formatCurrency(subtotal, money)}`}>
           <Bag />
           <span>View order · {formatCurrency(subtotal, money)}</span>

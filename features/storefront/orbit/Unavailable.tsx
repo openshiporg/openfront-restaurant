@@ -1,11 +1,12 @@
 import Link from "next/link"
+import { Arcs } from "./Arcs"
 
 export function Unavailable({ title, message, action = true }: { title: string; message: string; action?: boolean }) {
   const words = title.split(" ")
   const cut = Math.ceil(words.length / 2)
   return (
     <section className="o-pagehero" style={{ minHeight: "60dvh", display: "grid", alignItems: "center" }}>
-      <img src="/images/kitchen-backdrop.webp" alt="" />
+      <Arcs variant="page" />
       <div className="o-shell">
         <h1 className="o-split o-split-lg" style={{ maxWidth: "18ch" }}>
           <span className="o-thin">{words.slice(0, cut).join(" ")}</span>
