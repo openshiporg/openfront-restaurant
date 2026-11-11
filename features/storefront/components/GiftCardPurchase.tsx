@@ -119,7 +119,7 @@ export default function GiftCardPurchase({ locale, currencyCode }: { locale: str
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {AMOUNTS.map((value) => (
             <button key={value} type="button" aria-pressed={!custom && amount === value} onClick={() => { setAmount(value); setCustom("") }}
-              className={cn("h-11 rounded-xl border text-base tabular-nums transition-colors", !custom && amount === value ? "border-leaf bg-mint font-medium text-leaf" : "border-border bg-background text-ink hover:border-leaf/40")}>
+              className={cn("h-11 rounded-full border text-base tabular-nums transition-colors", !custom && amount === value ? "border-transparent bg-[color-mix(in_oklab,var(--o-peach,#ffb8a8)_45%,white)] font-semibold text-ink" : "border-border bg-white text-ink hover:border-leaf/40")}>
               {money(value)}
             </button>
           ))}

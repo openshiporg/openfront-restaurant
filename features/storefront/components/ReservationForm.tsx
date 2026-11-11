@@ -105,7 +105,7 @@ export default function ReservationForm({ today, maxDate, timezone, locale, rest
                 type="button"
                 aria-pressed={chosen === slot.startsAt}
                 onClick={() => setChosen(slot.startsAt)}
-                className={cn("h-11 rounded-xl border text-base tabular-nums transition-colors", chosen === slot.startsAt ? "border-leaf bg-mint font-medium text-leaf" : "border-border bg-background text-ink hover:border-leaf/40")}
+                className={cn("h-11 rounded-full border text-base tabular-nums transition-colors", chosen === slot.startsAt ? "border-transparent bg-[color-mix(in_oklab,var(--o-peach,#ffb8a8)_45%,white)] font-semibold text-ink" : "border-border bg-white text-ink hover:border-leaf/40")}
               >
                 {formatTime(slot.startsAt, timezone, locale)}
               </button>

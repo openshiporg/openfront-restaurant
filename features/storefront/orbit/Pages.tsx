@@ -45,8 +45,8 @@ export function OrbitFindOrderPage() {
   return (
     <>
       <PageHero thin="Find your" heavy="Order" lede="See where your order is with its number and your email. No account needed." />
-      <div className="o-shell" style={{ paddingBottom: "4rem" }}>
-        <div className="o-glass" style={{ maxWidth: 560, padding: "clamp(1.25rem, 4vw, 2rem)" }}><FindOrderForm /></div>
+      <div className="o-shell o-checkout" style={{ paddingBottom: "4rem" }}>
+        <div style={{ maxWidth: 560 }}><FindOrderForm /></div>
       </div>
     </>
   )
@@ -64,7 +64,7 @@ export async function OrbitGiftCardsPage() {
   return (
     <>
       <PageHero thin="Gift" heavy="Cards" lede={`Send a meal at ${storeName(settings)} by email, or keep one for yourself.`} />
-      <div className="o-shell" style={{ paddingBottom: "4rem", display: "grid", gap: "1.5rem", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 22rem), 1fr))", alignItems: "start" }}>
+      <div className="o-shell o-checkout" style={{ paddingBottom: "4rem", display: "grid", gap: "1.5rem", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 22rem), 1fr))", alignItems: "start" }}>
         <section className="o-glass" style={{ padding: "clamp(1.25rem, 4vw, 2rem)", gridColumn: "span 1" }} aria-labelledby="buy-heading">
           <h2 id="buy-heading" className="o-split o-split-sm" style={{ marginBottom: 18 }}><span className="o-thin">Buy a</span><span className="o-heavy">Gift card</span></h2>
           <GiftCardPurchase locale={currency.locale} currencyCode={currency.currencyCode} />
@@ -91,8 +91,8 @@ export async function OrbitReservationsPage() {
   return (
     <>
       <PageHero thin="Reserve a" heavy="Table" lede="Pick a day, your party size and a time. You'll get a confirmation straight away." />
-      <div className="o-shell" style={{ paddingBottom: "4rem" }}>
-        <div className="o-glass" style={{ maxWidth: 820, padding: "clamp(1.25rem, 4vw, 2rem)" }}>
+      <div className="o-shell o-checkout" style={{ paddingBottom: "4rem" }}>
+        <div style={{ maxWidth: 820 }}>
           <ReservationForm today={today} maxDate={addDays(today, 60)} timezone={timezone} locale={getCurrencyConfig(settings).locale} restaurantName={storeName(settings)} />
         </div>
         {settings.phone ? <p style={{ marginTop: 20, color: "var(--o-ink-soft)" }}>Larger group? Call <a className="o-link" href={`tel:${String(settings.phone).replace(/[^\d+]/g, "")}`}>{settings.phone}</a>.</p> : null}
@@ -127,7 +127,7 @@ export async function OrbitLocationsPage() {
           {status.isOpen ? "Open now" : "Closed now"}{status.detail ? ` · ${status.detail}` : ""}
         </p>
       </PageHero>
-      <div className="o-shell" style={{ paddingBottom: "4rem", display: "grid", gap: "1.5rem", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 22rem), 1fr))", alignItems: "start" }}>
+      <div className="o-shell o-checkout" style={{ paddingBottom: "4rem", display: "grid", gap: "1.5rem", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 22rem), 1fr))", alignItems: "start" }}>
         <section className="o-glass" style={{ padding: "clamp(1.25rem, 4vw, 2rem)" }} aria-labelledby="find-us">
           <h2 id="find-us" className="o-split o-split-sm"><span className="o-thin">Find</span><span className="o-heavy">Us</span></h2>
           {settings.address ? <a className="o-link" style={{ display: "block", fontSize: "1.2rem", marginTop: 12, maxWidth: "26ch" }} href={mapsHref(settings.address)} target="_blank" rel="noreferrer">{settings.address}</a> : <p className="o-lede">The address hasn&apos;t been published yet.</p>}

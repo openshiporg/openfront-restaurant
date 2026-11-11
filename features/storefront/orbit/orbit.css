@@ -266,7 +266,7 @@
 /* A chosen option (pickup or delivery, a time slot, a gift amount) is a peach tile, the same as a chosen dish option. */
 .o-checkout [role="radio"][data-state="checked"] + label { background: color-mix(in oklab, var(--o-peach) 45%, white) !important; border-color: transparent !important; }
 .o-checkout [role="radio"] + label { border-radius: var(--o-r-m) !important; }
-.o-checkout [data-slot="input"], .o-checkout [data-slot="select-trigger"], .o-checkout [data-slot="textarea"] { border-radius: var(--o-r-s); background: color-mix(in oklab, #fff 82%, transparent); min-height: 44px; }
+.o-checkout [data-slot="input"], .o-checkout [data-slot="select-trigger"], .o-checkout [data-slot="textarea"] { border-radius: var(--o-r-s); background: #fff !important; min-height: 44px; }
 
 /* Order status: pastel dots */
 .o-steps { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 0; list-style: none; padding: 0; margin: 0; }
