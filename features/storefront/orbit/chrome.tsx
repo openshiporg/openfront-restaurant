@@ -69,6 +69,7 @@ export function Header({
   }, [menuOpen])
 
   return (
+    <>
     <header className="o-header">
       <div className="o-shell o-header-row">
         <Brand name={name} mark={mark} hue={hue} />
@@ -85,7 +86,6 @@ export function Header({
           </button>
         </div>
       </div>
-      {banner ? <p className="o-banner">{banner}</p> : null}
       {menuOpen ? createPortal(
         <>
           <div className="o-drawer-backdrop" onClick={() => setMenuOpen(false)} aria-hidden="true" />
@@ -108,5 +108,8 @@ export function Header({
         document.body,
       ) : null}
     </header>
+    {/* The offer line scrolls away with the page; only the bar above stays, so nothing below hides under it. */}
+    {banner ? <p className="o-banner">{banner}</p> : null}
+    </>
   )
 }

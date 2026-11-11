@@ -104,7 +104,7 @@
 .o-rel > :not(.o-arcs) { position: relative; z-index: 1; }
 
 /* Header */
-.o-header { position: sticky; top: 0; z-index: 50; background: color-mix(in oklab, var(--o-bg) 92%, transparent); -webkit-backdrop-filter: blur(16px) saturate(1.2); backdrop-filter: blur(16px) saturate(1.2); border-bottom: 1px solid var(--o-line); }
+.o-header { position: sticky; top: 0; z-index: 50; background: var(--o-bg); border-bottom: 1px solid var(--o-line); }
 .o-header-row { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; height: 60px; }
 @media (min-width: 768px) { .o-header-row { height: 76px; } }
 .o-brand { display: flex; align-items: center; gap: 0.6rem; min-width: 0; color: var(--o-ink); text-decoration: none; min-height: 44px; }
@@ -185,7 +185,7 @@
 .o-band { display: grid; gap: 1.5rem; padding-block: 2.5rem; border-top: 1px solid var(--o-line); scroll-margin-top: 140px; }
 @media (min-width: 900px) { .o-band { grid-template-columns: 15rem minmax(0, 1fr); gap: 2.5rem; padding-block: 3.5rem; } .o-band-head { position: sticky; top: 150px; align-self: start; } }
 .o-band:first-of-type { border-top: 0; }
-.o-chiprow { position: sticky; top: 60px; z-index: 30; background: color-mix(in oklab, var(--o-bg) 88%, transparent); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); border-bottom: 1px solid var(--o-line); }
+.o-chiprow { position: sticky; top: 60px; z-index: 30; background: var(--o-bg); border-bottom: 1px solid var(--o-line); }
 @media (min-width: 768px) { .o-chiprow { top: 76px; } }
 .o-chips { display: flex; gap: 0.5rem; overflow-x: auto; padding-block: 0.7rem; scrollbar-width: none; }
 .o-chips::-webkit-scrollbar { display: none; }
