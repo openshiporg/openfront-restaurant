@@ -55,7 +55,7 @@ export default async function OrbitHomePage() {
   return (
     <>
       {dishes.length ? (
-        <HomeHero dishes={dishes} />
+        <HomeHero dishes={dishes} money={{ currencyCode: money.currencyCode, locale: money.locale }} />
       ) : (
         <section className="o-pagehero">
           <Arcs variant="page" />

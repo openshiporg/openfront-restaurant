@@ -209,8 +209,11 @@ export function CartButton() {
   const { count, open } = useOrbitCart()
   return (
     <button type="button" className="o-cart-btn" onClick={open} aria-label={count ? `Your order, ${count} item${count === 1 ? "" : "s"}` : "Your order"}>
-      <Bag />
-      <span className="o-cart-label">Cart{count ? ` (${count})` : ""}</span>
+      <span className="o-cart-ico">
+        <Bag />
+        {count ? <span className="o-badge" aria-hidden="true">{count > 99 ? "99+" : count}</span> : null}
+      </span>
+      <span className="o-cart-label">Cart</span>
     </button>
   )
 }

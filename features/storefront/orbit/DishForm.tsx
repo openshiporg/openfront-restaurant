@@ -4,29 +4,7 @@ import { useMemo, useState } from "react"
 import { formatCurrency } from "@/features/storefront/lib/currency"
 import type { MenuItem } from "@/features/storefront/lib/store-data"
 import { Minus, Plus, useOrbitCart } from "./cart"
-
-type Group = { id: string; name: string; required: boolean; min: number; max: number; options: Array<{ id: string; name: string; price: number; default: boolean }> }
-
-function groupsOf(item: MenuItem): Group[] {
-  const map = new Map<string, Group>()
-  for (const m of item.modifiers || []) {
-    const key = m.modifierGroup || "other"
-    const group = map.get(key) || {
-      id: key,
-      name: m.modifierGroupLabel || key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, " "),
-      required: false,
-      min: 0,
-      max: 0,
-      options: [],
-    }
-    group.required ||= Boolean(m.required)
-    group.min = Math.max(group.min, m.minSelections || 0)
-    group.max = Math.max(group.max, m.maxSelections || 0)
-    group.options.push({ id: m.id, name: m.name, price: Number(m.priceAdjustment || 0), default: Boolean(m.defaultSelected) })
-    map.set(key, group)
-  }
-  return [...map.values()].map((g) => ({ ...g, max: g.max || g.options.length, min: g.required ? Math.max(1, g.min) : g.min }))
-}
+import { groupsOf, toggleOption, type OptionGroup as Group } from "./options"
 
 /** Modifier choices, a note, quantity, and the one dark button that adds the dish to the real cart. */
 export function DishForm({ item, money }: { item: MenuItem; money: { currencyCode: string; locale: string } }) {
@@ -40,18 +18,7 @@ export function DishForm({ item, money }: { item: MenuItem; money: { currencyCod
   const [state, setState] = useState<"idle" | "adding" | "added">("idle")
   const [error, setError] = useState<string | null>(null)
 
-  const toggle = (g: Group, id: string) => {
-    setPicked((prev) => {
-      const now = prev[g.id] || []
-      if (now.includes(id)) {
-        if (now.length <= g.min) return prev
-        return { ...prev, [g.id]: now.filter((x) => x !== id) }
-      }
-      if (g.max === 1) return { ...prev, [g.id]: [id] }
-      if (now.length >= g.max) return prev
-      return { ...prev, [g.id]: [...now, id] }
-    })
-  }
+  const toggle = (g: Group, id: string) => setPicked((prev) => ({ ...prev, [g.id]: toggleOption(prev[g.id] || [], g, id) }))
   const missing = groups.filter((g) => (picked[g.id] || []).length < g.min)
   const extras = groups.flatMap((g) => g.options.filter((o) => (picked[g.id] || []).includes(o.id))).reduce((s, o) => s + o.price, 0)
   const total = (Number(item.price) + extras) * qty

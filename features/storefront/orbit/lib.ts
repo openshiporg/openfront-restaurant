@@ -4,6 +4,7 @@ import type { MenuCategory, MenuItem } from "@/features/storefront/lib/store-dat
 import { getMenuItemDescriptionText, getMenuItemHref } from "@/features/storefront/lib/menu-item-utils"
 import { formatCurrency, type CurrencyConfig } from "@/features/storefront/lib/currency"
 import type { OrbitDish } from "./DishOrbit"
+import { groupsOf } from "./options"
 
 export const PASTELS = ["#ffb8a8", "#b9d8ff", "#ffe08a", "#c4e8b5", "#e0c6ff", "#ffc9e0", "#a9e6dc", "#ffd0a0"]
 export const pastel = (i: number) => PASTELS[((i % PASTELS.length) + PASTELS.length) % PASTELS.length]
@@ -123,7 +124,7 @@ export function orbitDishes(items: MenuItem[], storeName: string, currency: Requ
     .slice(0, max)
   return unique.map((item, index) => {
     const { thin, heavy } = splitName(item.name, categoryNameOf(item) || "House")
-    const facts = [item.calories ? `${item.calories} cal` : "", item.prepTime ? `ready in about ${item.prepTime} min` : ""].filter(Boolean).join(" · ")
+    const facts = [item.calories ? `${item.calories} cal` : "", ...(item.dietaryFlags || []).map((flag: string) => flag.replace(/_/g, " "))].filter(Boolean)
     const description = getMenuItemDescriptionText(item.description).trim()
     const station = item.kitchenStation ? `${item.kitchenStation.charAt(0).toUpperCase()}${item.kitchenStation.slice(1)} station` : undefined
     return {
@@ -136,10 +137,11 @@ export function orbitDishes(items: MenuItem[], storeName: string, currency: Requ
       label: item.name,
       badge: item.prepTime ? String(item.prepTime) : undefined,
       badgeUnit: item.prepTime ? "min" : undefined,
-      heading: storeName,
-      subheading: station,
-      description: description || facts || `${item.name}, made to order.`,
-      options: [...new Set((item.modifiers || []).map((modifier) => modifier.name))].slice(0, 8),
+      station,
+      facts,
+      description: description || `${item.name}, made to order at ${storeName}.`,
+      price: Number(item.price) || 0,
+      groups: groupsOf(item),
       accent: pastel(index),
       href: getMenuItemHref(item.id),
       needsChoice: needsChoice(item),

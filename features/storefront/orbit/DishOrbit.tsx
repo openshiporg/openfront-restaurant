@@ -4,6 +4,8 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { gsap } from "gsap"
 import { arcPath } from "./geometry"
+import { formatCurrency } from "@/features/storefront/lib/currency"
+import { toggleOption, type OptionGroup } from "./options"
 
 export { arcPath }
 
@@ -12,7 +14,8 @@ export { arcPath }
  * The dish sits on the left; changing dish swings it out over the top on
  * a wide orbit while the next dish swings in from the other side. The two-weight
  * title wipes out and back in, the glass card cross-fades, and the pastel arc
- * turns and takes the dish's colour.
+ * turns and takes the dish's colour. The card is the one place to read about the
+ * showing dish, choose its options and add it to the cart.
  *
  * It never touches the page scroll. The stage is an ordinary block in the page
  * flow: no pinning, no scroll-driven progress, no wheel or touchmove listeners.
@@ -37,13 +40,15 @@ export type OrbitDish = {
   /** Badge number, e.g. prep minutes. Omitted when the kitchen hasn't set one. */
   badge?: string
   badgeUnit?: string
-  /** Bold line in the card (the store name). */
-  heading: string
-  /** Small line under it (the kitchen station). */
-  subheading?: string
+  /** Where it is cooked, e.g. "Grill station". */
+  station?: string
+  /** Short real facts: calories, dietary flags. */
+  facts: string[]
   description: string
-  /** Real modifier names for the Options tab. */
-  options: string[]
+  /** Menu price in the store's own units, before options. */
+  price: number
+  /** The dish's real modifier groups, chosen in the Options tab. */
+  groups: OptionGroup[]
   accent: string
   href: string
   needsChoice: boolean
@@ -99,18 +104,17 @@ export function DishOrbit({
   dishes,
   height = "clamp(560px, calc(100svh - 76px), 820px)",
   autoplayMs = 7000,
-  orderLabel,
-  orderBusy = false,
-  onOrder,
+  money,
+  onAdd,
 }: {
   dishes: OrbitDish[]
   /** Desktop stage height. The stage never pins; on phones it is as tall as its content. */
   height?: string
   /** Slow autoplay; 0 turns it off. Reduced-motion guests never get it. */
   autoplayMs?: number
-  orderLabel?: (dish: OrbitDish) => string
-  orderBusy?: boolean
-  onOrder?: (dish: OrbitDish, index: number) => void
+  money: { currencyCode: string; locale: string }
+  /** Puts the dish in the real cart with the chosen options. */
+  onAdd: (dish: OrbitDish, modifierIds: string[]) => Promise<{ ok: boolean; message?: string }>
 }) {
   const n = dishes.length
   const [index, setIndex] = useState(0)
@@ -121,6 +125,12 @@ export function DishOrbit({
   const [chosen, setChosen] = useState(false)
   const [reduced, setReduced] = useState(false)
   const [tick, setTick] = useState(0)
+  // Chosen options per dish and group, starting from the kitchen's defaults.
+  const [picked, setPicked] = useState<Record<string, Record<string, string[]>>>(() =>
+    Object.fromEntries(dishes.map((d) => [d.id, Object.fromEntries(d.groups.map((g) => [g.id, g.options.filter((o) => o.default).map((o) => o.id)]))])),
+  )
+  const [adding, setAdding] = useState<"idle" | "adding" | "added">("idle")
+  const [note, setNote] = useState<string | null>(null)
 
   const rootRef = useRef<HTMLDivElement | null>(null)
   const orbits = useRef<(HTMLDivElement | null)[]>([])
@@ -224,6 +234,7 @@ export function DishOrbit({
   }, [index, n, dishes, reduced])
 
   useEffect(() => () => { tlRef.current?.kill() }, [])
+  useEffect(() => { setNote(null); setAdding("idle") }, [index])
 
   const go = (to: number, dir?: 1 | -1) => {
     if (n < 2) return
@@ -270,6 +281,33 @@ export function DishOrbit({
   const visible = compact ? 3 : 4
   const start = stripStart(index, n, visible)
   const dish = dishes[index]
+  const chosen_ = (dish && picked[dish.id]) || {}
+  const missing = dish ? dish.groups.filter((g) => (chosen_[g.id] || []).length < g.min) : []
+  const extras = dish ? dish.groups.flatMap((g) => g.options.filter((o) => (chosen_[g.id] || []).includes(o.id))).reduce((sum, o) => sum + o.price, 0) : 0
+  const toggle = (d: OrbitDish, g: OptionGroup, id: string) => {
+    setChosen(true)
+    setNote(null)
+    setPicked((prev) => ({ ...prev, [d.id]: { ...prev[d.id], [g.id]: toggleOption(prev[d.id]?.[g.id] || [], g, id) } }))
+  }
+  const addDish = async () => {
+    if (!dish || adding === "adding") return
+    setChosen(true)
+    if (missing.length) {
+      setTab("options")
+      setNote(`Choose ${missing.map((g) => g.name.toLowerCase()).join(" and ")} first.`)
+      return
+    }
+    setNote(null)
+    setAdding("adding")
+    const result = await onAdd(dish, Object.values(chosen_).flat())
+    if (!result.ok) {
+      setAdding("idle")
+      setNote(result.message || "That couldn't be added. Try again.")
+      return
+    }
+    setAdding("added")
+    window.setTimeout(() => setAdding("idle"), 1600)
+  }
 
   return (
     <div className="dsh-host">
@@ -324,13 +362,13 @@ export function DishOrbit({
                 {/* The first dish's name is the page's heading; the rest are its siblings. */}
                 {i === 0 ? (
                   <h1 className="dsh-h">
-                    <span className="dsh-t1" style={{ fontSize: `min(${fitSize(d.title.length, 56, 330, 0.56)}px, ${(86 / (Math.max(1, d.title.length) * 0.56)).toFixed(2)}cqi, var(--dsh-tmax1))` }}>{d.title}</span>
-                    <span className="dsh-t2" style={{ fontSize: `min(${fitSize(d.subtitle.length, 62, 320, 0.64)}px, ${(86 / (Math.max(1, d.subtitle.length) * 0.64)).toFixed(2)}cqi, var(--dsh-tmax2))` }}>{d.subtitle}</span>
+                    <span className="dsh-t1" style={{ fontSize: `min(${fitSize(d.title.length, 56, 300, 0.56)}px, ${(86 / (Math.max(1, d.title.length) * 0.56)).toFixed(2)}cqi, var(--dsh-tmax1))` }}>{d.title}</span>
+                    <span className="dsh-t2" style={{ fontSize: `min(${fitSize(d.subtitle.length, 62, 296, 0.64)}px, ${(86 / (Math.max(1, d.subtitle.length) * 0.64)).toFixed(2)}cqi, var(--dsh-tmax2))` }}>{d.subtitle}</span>
                   </h1>
                 ) : (
                   <h2 className="dsh-h">
-                    <span className="dsh-t1" style={{ fontSize: `min(${fitSize(d.title.length, 56, 330, 0.56)}px, ${(86 / (Math.max(1, d.title.length) * 0.56)).toFixed(2)}cqi, var(--dsh-tmax1))` }}>{d.title}</span>
-                    <span className="dsh-t2" style={{ fontSize: `min(${fitSize(d.subtitle.length, 62, 320, 0.64)}px, ${(86 / (Math.max(1, d.subtitle.length) * 0.64)).toFixed(2)}cqi, var(--dsh-tmax2))` }}>{d.subtitle}</span>
+                    <span className="dsh-t1" style={{ fontSize: `min(${fitSize(d.title.length, 56, 300, 0.56)}px, ${(86 / (Math.max(1, d.title.length) * 0.56)).toFixed(2)}cqi, var(--dsh-tmax1))` }}>{d.title}</span>
+                    <span className="dsh-t2" style={{ fontSize: `min(${fitSize(d.subtitle.length, 62, 296, 0.64)}px, ${(86 / (Math.max(1, d.subtitle.length) * 0.64)).toFixed(2)}cqi, var(--dsh-tmax2))` }}>{d.subtitle}</span>
                   </h2>
                 )}
               </div>
@@ -338,42 +376,7 @@ export function DishOrbit({
           </div>
 
           <div className="dsh-acts">
-            <button type="button" className="dsh-btn dsh-order" disabled={orderBusy} onClick={() => dish && onOrder?.(dish, index)}>
-              {Icon.order}{dish ? (orderLabel?.(dish) ?? "Order food") : "Order food"}
-            </button>
-            {dish ? <Link className="dsh-btn dsh-more" href={dish.href}>{dish.needsChoice ? "See options" : "Details"}</Link> : null}
-          </div>
-
-          <div className="dsh-card">
-            <div className="dsh-tabs" role="tablist" aria-label="Dish details">
-              {(["overview", "options"] as const).map((t) => (
-                <button key={t} type="button" role="tab" className="dsh-btn dsh-tab" aria-selected={tab === t} onClick={() => setTab(t)}>
-                  {t === "overview" ? "Overview" : "Options"}
-                </button>
-              ))}
-            </div>
-            <div className="dsh-bodies">
-              {dishes.map((d, i) => (
-                <div key={d.id} ref={(el) => { bodies.current[i] = el }} className={"dsh-body" + (i === 0 ? " dsh-on" : "")} aria-hidden={i !== index}>
-                  <div className="dsh-rate">
-                    {d.badge ? (
-                      <div className="dsh-badge" style={{ background: d.accent }}>
-                        <span className="dsh-num">{d.badge}<small>{d.badgeUnit}</small></span>
-                      </div>
-                    ) : <div className="dsh-badge dsh-badge-dot" style={{ background: d.accent }} />}
-                  </div>
-                  <p className="dsh-chef">{d.heading}</p>
-                  <p className="dsh-kit">{d.subheading ?? "\u00a0"}</p>
-                  {tab === "overview" ? (
-                    <p className="dsh-desc">{d.description}</p>
-                  ) : d.options.length ? (
-                    <ul className="dsh-ing">{d.options.map((x) => <li key={x}>{x}</li>)}</ul>
-                  ) : (
-                    <p className="dsh-desc">Served as it comes. No choices to make.</p>
-                  )}
-                </div>
-              ))}
-            </div>
+            {dish ? <Link className="dsh-btn dsh-more" href={dish.href}>Full details</Link> : null}
           </div>
 
           <div className="dsh-strip" style={{ "--dsh-vis": visible } as React.CSSProperties}>
@@ -391,6 +394,57 @@ export function DishOrbit({
               </div>
             </div>
             <button type="button" className="dsh-btn dsh-arrow" aria-label="Next dish" onClick={() => step(1)}>{Icon.next}</button>
+          </div>
+          <div className="dsh-card">
+            <div className="dsh-tabs" role="tablist" aria-label="About this dish">
+              {(["overview", "options"] as const).map((t) => (
+                <button key={t} type="button" role="tab" className="dsh-btn dsh-tab" aria-selected={tab === t} onClick={() => { setChosen(true); setTab(t) }}>
+                  {t === "overview" ? "Overview" : "Options"}
+                </button>
+              ))}
+            </div>
+            <div className="dsh-bodies">
+              {dishes.map((d, i) => (
+                <div key={d.id} ref={(el) => { bodies.current[i] = el }} className={"dsh-body" + (i === 0 ? " dsh-on" : "") + (i === index ? " dsh-cur" : "")} aria-hidden={i !== index} inert={i !== index}>
+                  <div className="dsh-meta">
+                    {d.badge ? <span className="dsh-badge" style={{ background: d.accent }}><b>{d.badge}</b>{d.badgeUnit}</span> : null}
+                    <span className="dsh-kit">{[d.station, ...d.facts].filter(Boolean).join(" · ")}</span>
+                  </div>
+                  {tab === "overview" ? (
+                    <p className="dsh-desc">{d.description}</p>
+                  ) : d.groups.length ? (
+                    <div className="dsh-opts">
+                      {d.groups.map((g) => {
+                        const multi = g.max > 1
+                        const now = picked[d.id]?.[g.id] || []
+                        return (
+                          <div key={g.id} className="dsh-group" role={multi ? "group" : "radiogroup"} aria-label={g.name}>
+                            <p className="dsh-gname"><b>{g.name}</b><span>{g.min > 0 ? (g.min > 1 ? `Choose ${g.min}` : "Required") : "Optional"}{multi && g.max < g.options.length ? `, up to ${g.max}` : ""}</span></p>
+                            <div className="dsh-ing">
+                              {g.options.map((o) => (
+                                <button key={o.id} type="button" className="dsh-btn dsh-opt" role={multi ? "checkbox" : "radio"} aria-checked={now.includes(o.id)} onClick={() => toggle(d, g, o.id)}>
+                                  {o.name}{o.price > 0 ? <small>+{formatCurrency(o.price, money)}</small> : null}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  ) : (
+                    <p className="dsh-desc">Served as it comes. No choices to make.</p>
+                  )}
+                </div>
+              ))}
+            </div>
+            <div className="dsh-foot">
+              <button type="button" className="dsh-btn dsh-order" disabled={adding === "adding"} onClick={addDish}>
+                {Icon.order}
+                <span>{adding === "adding" ? "Adding…" : adding === "added" ? "Added to cart" : "Add to cart"}</span>
+                {dish && adding === "idle" ? <span className="dsh-total">{formatCurrency(dish.price + extras, money)}</span> : null}
+              </button>
+              {note ? <p className="dsh-note" role="status">{note}</p> : null}
+            </div>
           </div>
         </div>
         <p className="dsh-sr" aria-live="polite">{dish ? `Dish ${index + 1} of ${n}: ${dish.label}` : ""}</p>

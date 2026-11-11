@@ -70,6 +70,8 @@ export function Header({
 
   return (
     <>
+    {/* The offer line sits above the bar and scrolls away with the page; the bar itself stays. */}
+    {banner ? <p className="o-banner">{banner}</p> : null}
     <header className="o-header">
       <div className="o-shell o-header-row">
         <Brand name={name} mark={mark} hue={hue} />
@@ -108,8 +110,6 @@ export function Header({
         document.body,
       ) : null}
     </header>
-    {/* The offer line scrolls away with the page; only the bar above stays, so nothing below hides under it. */}
-    {banner ? <p className="o-banner">{banner}</p> : null}
     </>
   )
 }
