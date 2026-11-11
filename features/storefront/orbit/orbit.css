@@ -457,3 +457,9 @@
 .o-acct .pass-action { align-self: flex-start; }
 .o-acct .ord-all { display: none; }
 .o-acct .ord-now { display: block; }
+
+/* Order pages (confirmation and the account's order view): one title size, peach for the live state, labels with air under them. */
+.ord-label { margin-bottom: 0.85rem; font-weight: 600; }
+.ord-state { padding: 0.35rem 0.8rem; font-size: 0.82rem; background: var(--o-peach); }
+.ord-confirmed { padding-block: 0.25rem 3.5rem; }
+.o-order .sf-section-title { text-transform: none; font-size: clamp(1.5rem, 1.25rem + 1vw, 1.9rem); font-weight: 700; letter-spacing: -0.015em; line-height: 1.15; }

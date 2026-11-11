@@ -36,7 +36,7 @@ export function OrderSummary({
 
   return (
     <div className="space-y-5">
-      <p className="text-sm font-medium text-primary">Order summary</p>
+      <p className="ord-label text-sm font-medium text-primary">Order summary</p>
       <div className="space-y-3 text-sm">
         <div className="flex items-center justify-between">
           <span className="text-muted-foreground">Subtotal</span>

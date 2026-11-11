@@ -40,7 +40,7 @@ export function OrderItemsList({ items, currencyCode = "USD", locale = "en-US" }
 
   return (
     <div className="space-y-5">
-      <p className="text-sm font-medium text-primary">Order items</p>
+      <p className="ord-label text-sm font-medium text-primary">Order items</p>
       <div>
         {items.map((item) => {
           // Paid orders keep what was bought as a snapshot; the live menu item may be gone or changed.

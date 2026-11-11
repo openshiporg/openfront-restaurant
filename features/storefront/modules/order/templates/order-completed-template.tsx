@@ -64,7 +64,7 @@ export default function OrderCompletedTemplate({ order }: OrderCompletedTemplate
   const typeLabel = ORDER_TYPE_LABEL[order.orderType] ?? order.orderType;
 
   return (
-    <div className="py-5 sm:py-10 lg:py-14">
+    <div className="ord-confirmed">
       <div className="storefront-shell">
         <Link href="/menu" className="-ml-2 inline-flex min-h-11 items-center gap-2 rounded-full px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-mint hover:text-leaf">
           <ArrowLeft size={14} />
@@ -85,7 +85,7 @@ export default function OrderCompletedTemplate({ order }: OrderCompletedTemplate
                 </p>
               ) : null}
             </div>
-            <div className="rounded-full bg-mint px-3 py-1 text-[0.8rem] font-medium text-leaf">
+            <div className="o-tag ord-state">
               {statusLabel}
             </div>
           </div>

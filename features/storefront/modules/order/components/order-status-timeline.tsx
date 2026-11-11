@@ -75,7 +75,7 @@ export function OrderStatusTimeline({ status, orderType }: OrderStatusTimelinePr
   if (isCancelled) {
     return (
       <div>
-        <p className="text-sm font-medium text-primary">Status</p>
+        <p className="ord-label text-sm font-medium text-primary">Status</p>
         <div className="mt-4 rounded-2xl bg-destructive/10 p-4 text-sm font-medium text-destructive">
           Order cancelled
         </div>
@@ -85,7 +85,7 @@ export function OrderStatusTimeline({ status, orderType }: OrderStatusTimelinePr
 
   return (
     <div>
-      <p className="text-sm font-medium text-primary">Status</p>
+      <p className="ord-label text-sm font-medium text-primary">Status</p>
       {/* One segmented bar at every width; on the phone only the current step is named. */}
       <div className="mt-4 flex gap-1.5" aria-hidden="true">
         {steps.map((step, index) => (

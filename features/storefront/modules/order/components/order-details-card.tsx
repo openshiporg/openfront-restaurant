@@ -56,7 +56,7 @@ export function OrderDetailsCard({
   return (
     <div className="space-y-6">
       <div>
-        <p className="text-sm font-medium text-primary">Order details</p>
+        <p className="ord-label text-sm font-medium text-primary">Order details</p>
       </div>
 
       <div className="grid grid-cols-2 gap-x-6 gap-y-4 text-sm">
@@ -72,7 +72,7 @@ export function OrderDetailsCard({
 
       {(customerName || customerEmail || customerPhone) ? (
         <div className=" pt-5">
-          <p className="text-sm font-medium text-primary">Customer</p>
+          <p className="ord-label text-sm font-medium text-primary">Customer</p>
           <div className="mt-3 space-y-2 text-sm text-muted-foreground">
             {customerName ? <p>{customerName}</p> : null}
             {customerEmail ? <p>{customerEmail}</p> : null}
@@ -83,7 +83,7 @@ export function OrderDetailsCard({
 
       {orderType === "delivery" && deliveryAddress ? (
         <div className=" pt-5">
-          <p className="text-sm font-medium text-primary">Delivery address</p>
+          <p className="ord-label text-sm font-medium text-primary">Delivery address</p>
           <div className="mt-3 space-y-1 text-sm text-muted-foreground">
             <p>{deliveryAddress}</p>
             {deliveryAddress2 ? <p>{deliveryAddress2}</p> : null}
@@ -94,7 +94,7 @@ export function OrderDetailsCard({
 
       {specialInstructions ? (
         <div className=" pt-5">
-          <p className="text-sm font-medium text-primary">Special instructions</p>
+          <p className="ord-label text-sm font-medium text-primary">Special instructions</p>
           <p className="mt-3 text-sm text-muted-foreground">{specialInstructions}</p>
         </div>
       ) : null}
