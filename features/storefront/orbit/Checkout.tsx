@@ -9,6 +9,7 @@ import { getUser } from "@/features/storefront/lib/data/user"
 import { getStoreSettings } from "@/features/storefront/lib/data/menu"
 import { storeOwnMark } from "@/features/storefront/lib/store-mark"
 import { Arcs } from "./Arcs"
+import { Brand } from "./chrome"
 import { Unavailable } from "./Unavailable"
 import "./orbit.css"
 
@@ -27,10 +28,7 @@ export async function OrbitCheckoutLayout({ children }: { children: React.ReactN
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M19 12H5M11 6l-6 6 6 6" /></svg>
             <span>Menu</span>
           </Link>
-          <Link href="/" className="o-brand" aria-label={`${name}, home`}>
-            {mark ? <span className="o-brand-mark" style={{ filter: `hue-rotate(${settings?.logoColor || "0"}deg)` }} dangerouslySetInnerHTML={{ __html: mark }} aria-hidden="true" /> : null}
-            <span className="o-brand-name">{name}</span>
-          </Link>
+          <Brand name={name} mark={mark} hue={settings?.logoColor} />
           <span style={{ width: 88 }} aria-hidden="true" />
         </div>
       </header>

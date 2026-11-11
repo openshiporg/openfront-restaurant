@@ -7,7 +7,7 @@ import { storeOwnMark } from "@/features/storefront/lib/store-mark"
 import StorefrontServer from "@/features/storefront/screens/StorefrontServer"
 import type { MenuItem } from "@/features/storefront/lib/store-data"
 import { OrbitCartProvider, type OrbitCart } from "./cart"
-import { Header } from "./chrome"
+import { Brand, Header } from "./chrome"
 import { NAV_LINKS } from "./links"
 import { plateFor } from "./lib"
 import { Arcs } from "./Arcs"
@@ -54,10 +54,7 @@ function Footer({ settings, name, mark, locale }: { settings: any; name: string;
       <Arcs variant="footer" />
       <div className="o-shell o-footer-grid">
         <div>
-          <Link href="/" className="o-brand" style={{ marginBottom: 12 }}>
-            {mark ? <span className="o-brand-mark" style={{ filter: `hue-rotate(${settings?.logoColor || "0"}deg)` }} dangerouslySetInnerHTML={{ __html: mark }} aria-hidden="true" /> : null}
-            <span className="o-brand-name">{name}</span>
-          </Link>
+          <Brand name={name} mark={mark} hue={settings?.logoColor} style={{ marginBottom: 12 }} />
           {settings?.tagline ? <p style={{ color: "var(--o-ink-soft)", maxWidth: "32ch" }}>{settings.tagline}</p> : null}
         </div>
         <div>
