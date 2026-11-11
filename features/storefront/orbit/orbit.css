@@ -198,7 +198,7 @@
 
 /* Item page */
 .o-item { display: grid; gap: 1.5rem; padding-block: 1.5rem 3.5rem; }
-@media (min-width: 900px) { .o-item { grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); gap: 3rem; padding-block: 3rem 5rem; align-items: start; } .o-item-stage { position: sticky; top: 110px; } }
+@media (min-width: 900px) { .o-item { grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); gap: 3rem; padding-block: 3rem 5rem; align-items: start; } .o-item > .o-item-stage { position: sticky; top: 130px; } }
 .o-item-stage { position: relative; aspect-ratio: 1; max-width: 500px; width: min(100%, 78vw); margin-inline: auto; }
 .o-item-stage svg { position: absolute; inset: -6%; width: 112%; height: 112%; overflow: visible; }
 .o-item-stage > img, .o-item-stage > .o-noimg { position: absolute; inset: 11%; width: 78%; height: 78%; object-fit: contain; filter: drop-shadow(0 26px 20px rgba(29,42,36,.2)) drop-shadow(0 4px 6px rgba(29,42,36,.12)); }
@@ -260,6 +260,9 @@
 .o-checkout .pass-action, .o-order .pass-action { display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; min-height: 52px; padding: 0 1.4rem; border-radius: 999px; background: var(--o-ink); color: #fff; font-weight: 600; }
 .o-checkout .pass-action:disabled { opacity: 0.45; }
 .o-checkout input, .o-checkout select, .o-checkout textarea { font-size: 16px; }
+/* Line items in the summary: the dish cut-out, floating like everywhere else. */
+.o-checkout :has(> img[src*="dishes"]), .o-order :has(> img[src*="dishes"]) { background: transparent !important; overflow: visible !important; }
+.o-checkout img[src*="dishes"], .o-order img[src*="dishes"] { object-fit: contain !important; filter: var(--o-dish-shadow); }
 /* A chosen option (pickup or delivery, a time slot, a gift amount) is a peach tile, the same as a chosen dish option. */
 .o-checkout [role="radio"][data-state="checked"] + label { background: color-mix(in oklab, var(--o-peach) 45%, white) !important; border-color: transparent !important; }
 .o-checkout [role="radio"] + label { border-radius: var(--o-r-m) !important; }
@@ -390,8 +393,9 @@
   .dsh-win { height: 112px; }
   .dsh-th { height: 112px; padding-top: 0; }
   .dsh-th .dsh-btn { width: min(88px, calc(var(--dsh-item) - 6px)); height: 108px; }
-  .dsh-th span { font-size: 11px; }
+  .dsh-th span { font-size: 11px; max-width: 100%; }
 }
+@container (max-width: 350px) { .dsh-th span { font-size: 9.5px; letter-spacing: -0.01em; } .dsh-arrow { width: 36px; } .dsh-strip { --dsh-item: calc((100cqi - 32px - 76px) / 3); } }
 @media (prefers-reduced-motion: reduce) { .dsh-track, .dsh-dot, .dsh-dot i, .dsh-th .dsh-btn, .dsh-th img { transition: none; } }
 @media (max-width: 639px) { .dsh-root { height: auto; } }
 @keyframes spin { to { transform: rotate(360deg); } }

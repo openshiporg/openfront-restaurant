@@ -10,6 +10,7 @@ import { getStoreSettings } from "@/features/storefront/lib/data/menu"
 import { storeOwnMark } from "@/features/storefront/lib/store-mark"
 import { Arcs } from "./Arcs"
 import { Brand } from "./chrome"
+import { plateFor } from "./lib"
 import { Unavailable } from "./Unavailable"
 import "./orbit.css"
 
@@ -41,7 +42,11 @@ export async function OrbitCheckoutLayout({ children }: { children: React.ReactN
 }
 
 export async function OrbitCheckoutPage() {
-  const base = await retrieveCart()
+  const found = await retrieveCart()
+  // Show each dish with the same cut-out as the menu and the cart drawer. Only the picture changes.
+  const base = found && Array.isArray(found.items)
+    ? { ...found, items: found.items.map((line: any) => (line?.menuItem ? { ...line, menuItem: { ...line.menuItem, thumbnail: plateFor(line.menuItem).src } } : line)) }
+    : found
   const cart = base ? { ...base, promo: await getCartPromo() } : base
   if (!cart || !Array.isArray(cart.items) || cart.items.length === 0) {
     return <Unavailable title="Your order is empty" message="Add a dish from the menu, then come back here to choose pickup or delivery and pay." />
