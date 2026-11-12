@@ -47,7 +47,7 @@ export type OrbitDish = {
   description: string
   /** Menu price in the store's own units, before options. */
   price: number
-  /** The dish's real modifier groups, chosen in the Options tab. */
+  /** The dish's real modifier groups, chosen in the card. */
   groups: OptionGroup[]
   accent: string
   href: string
@@ -118,7 +118,6 @@ export function DishOrbit({
 }) {
   const n = dishes.length
   const [index, setIndex] = useState(0)
-  const [tab, setTab] = useState<"overview" | "options">("overview")
   const [compact, setCompact] = useState(false)
   const [hovering, setHovering] = useState(false)
   const [focused, setFocused] = useState(false)
@@ -293,7 +292,6 @@ export function DishOrbit({
     if (!dish || adding === "adding") return
     setChosen(true)
     if (missing.length) {
-      setTab("options")
       setNote(`Choose ${missing.map((g) => g.name.toLowerCase()).join(" and ")} first.`)
       return
     }
@@ -395,14 +393,8 @@ export function DishOrbit({
             </div>
             <button type="button" className="dsh-btn dsh-arrow" aria-label="Next dish" onClick={() => step(1)}>{Icon.next}</button>
           </div>
-          <div className="dsh-card">
-            <div className="dsh-tabs" role="tablist" aria-label="About this dish">
-              {(["overview", "options"] as const).map((t) => (
-                <button key={t} type="button" role="tab" className="dsh-btn dsh-tab" aria-selected={tab === t} onClick={() => { setChosen(true); setTab(t) }}>
-                  {t === "overview" ? "Overview" : "Options"}
-                </button>
-              ))}
-            </div>
+          {/* One card per dish: time chip and facts, the description, the real options, then Add to cart. A sideways swipe inside it scrolls the options, not the dishes. */}
+          <div className="dsh-card" onPointerDown={(e) => e.stopPropagation()}>
             <div className="dsh-bodies">
               {dishes.map((d, i) => (
                 <div key={d.id} ref={(el) => { bodies.current[i] = el }} className={"dsh-body" + (i === 0 ? " dsh-on" : "") + (i === index ? " dsh-cur" : "")} aria-hidden={i !== index} inert={i !== index}>
@@ -410,9 +402,8 @@ export function DishOrbit({
                     {d.badge ? <span className="dsh-badge" style={{ background: d.accent }}><b>{d.badge}</b>{d.badgeUnit}</span> : null}
                     <span className="dsh-kit">{[d.station, ...d.facts].filter(Boolean).join(" · ")}</span>
                   </div>
-                  {tab === "overview" ? (
-                    <p className="dsh-desc">{d.description}</p>
-                  ) : d.groups.length ? (
+                  <p className="dsh-desc" data-short={d.groups.length ? "true" : undefined}>{d.description}</p>
+                  {d.groups.length ? (
                     <div className="dsh-opts">
                       {d.groups.map((g) => {
                         const multi = g.max > 1
@@ -431,9 +422,7 @@ export function DishOrbit({
                         )
                       })}
                     </div>
-                  ) : (
-                    <p className="dsh-desc">Served as it comes. No choices to make.</p>
-                  )}
+                  ) : null}
                 </div>
               ))}
             </div>

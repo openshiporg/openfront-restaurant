@@ -3,7 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import Link from "next/link"
-import { usePathname, useRouter } from "next/navigation"
+import { useRouter } from "next/navigation"
 import { addToCart, removeLineItem, updateLineItem } from "@/features/storefront/lib/data/cart"
 import { formatCurrency } from "@/features/storefront/lib/currency"
 import { getMenuItemHref } from "@/features/storefront/lib/menu-item-utils"
@@ -22,6 +22,8 @@ type Money = { currencyCode: string; locale: string }
 
 type CartApi = {
   count: number
+  /** The order's running total, formatted in the store's currency. */
+  total: string
   open: () => void
   add: (input: { menuItemId: string; quantity?: number; modifierIds?: string[]; specialInstructions?: string }) => Promise<{ ok: true } | { ok: false; message: string }>
 }
@@ -36,7 +38,7 @@ export function useOrbitCart() {
 const lineTotal = (line: OrbitCartLine) =>
   (Number(line.menuItem?.price || 0) + (line.modifiers || []).reduce((sum, m) => sum + Number(m.priceAdjustment || 0), 0)) * line.quantity
 
-const Bag = () => (
+export const Bag = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 8h14l-1.2 11.2a2 2 0 0 1-2 1.8H8.2a2 2 0 0 1-2-1.8z" /><path d="M9 8V6.5a3 3 0 0 1 6 0V8" /></svg>
 )
 const Close = () => (
@@ -63,8 +65,6 @@ export function OrbitCartProvider({
   children: React.ReactNode
 }) {
   const router = useRouter()
-  // The "View order" pill stays off pages made of forms, where it would sit on top of the fields.
-  const pathname = usePathname()
   const [isOpen, setOpen] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
   const [mounted, setMounted] = useState(false)
@@ -191,16 +191,9 @@ export function OrbitCartProvider({
   ) : null
 
   return (
-    <CartContext.Provider value={{ count, open, add }}>
+    <CartContext.Provider value={{ count, total: formatCurrency(subtotal, money), open, add }}>
       {children}
       {mounted && drawer ? createPortal(drawer, document.body) : null}
-      {mounted && count > 0 && !isOpen && !/^\/(account|order)(\/|$)/.test(pathname || "") ? createPortal(
-        <button type="button" className={`o-floating orbit-ui ${storefrontFont.variable}`} onClick={open} aria-label={`Open your order, ${count} item${count === 1 ? "" : "s"}, ${formatCurrency(subtotal, money)}`}>
-          <Bag />
-          <span>View order · {formatCurrency(subtotal, money)}</span>
-        </button>,
-        document.body,
-      ) : null}
     </CartContext.Provider>
   )
 }

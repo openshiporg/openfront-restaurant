@@ -7,7 +7,7 @@ import { storeOwnMark } from "@/features/storefront/lib/store-mark"
 import StorefrontServer from "@/features/storefront/screens/StorefrontServer"
 import type { MenuItem } from "@/features/storefront/lib/store-data"
 import { OrbitCartProvider, type OrbitCart } from "./cart"
-import { Brand, Header } from "./chrome"
+import { Brand, Dock, Header } from "./chrome"
 import { NAV_LINKS } from "./links"
 import { plateFor } from "./lib"
 import { Arcs } from "./Arcs"
@@ -40,6 +40,7 @@ export async function OrbitShell({ children, chrome = true }: { children: React.
           ) : null}
           <main>{children}</main>
           {chrome ? <Footer settings={settings} name={name} mark={mark} locale={money.locale} /> : null}
+          {chrome ? <Dock /> : null}
         </div>
       </OrbitCartProvider>
     </StorefrontServer>
