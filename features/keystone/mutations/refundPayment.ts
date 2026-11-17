@@ -2,7 +2,7 @@ import type { Context } from ".keystone/types";
 import { reserveGiftRefundValue } from "../utils/giftRefundReserve";
 import { permissions } from "../access";
 import { finalizeRefundWithClient } from "../utils/refundLedger";
-import { refundPayment as refundProviderPayment } from "../utils/paymentProviderAdapter";
+import { refundPayment as refundProviderPayment, getPaymentStatus as getProviderPaymentStatus } from "../utils/paymentProviderAdapter";
 import { consumeManagerApproval } from "../utils/managerApproval";
 import { getOrCreateIdempotencyAttempt, updateIdempotencyAttempt } from "../utils/idempotency";
 
@@ -136,6 +136,22 @@ export default async function refundPayment(
     let providerResult: any = { status: "succeeded", amount: reservation.refund.amount };
     if (!["cash", "gift_card"].includes(payment.paymentMethod || "")) {
       if (!payment.paymentProvider || !providerReference) throw new Error("Provider refund reference is missing");
+      // Recovery of an uncertain refund asks the provider what it has. Stripe lists every refund of the
+      // payment with the key we sent: if ours is there it is read back, and if the complete list has
+      // none the provider never made it, so it is marked failed and the amount can be refunded again.
+      if (reservation.replay && reservation.refund.status === "unknown" && !reservation.refund.providerRefundId && payment.paymentProvider.code === "pp_stripe_stripe" && String(payment.providerPaymentId || "").startsWith("pi_")) {
+        const observed = await getProviderPaymentStatus({ provider: payment.paymentProvider, paymentId: payment.providerPaymentId });
+        const made = (observed.refunds || []).find((row: any) => row.metadata?.restaurantRefundKey === args.idempotencyKey);
+        if (made) reservation.refund.providerRefundId = made.id;
+        else if (observed.refundsComplete === true) {
+          const failed = await prisma.$transaction((tx: any) => finalizeRefundWithClient(tx, {
+            refundId: reservation.refund.id, payment, providerResult: { status: "failed", reason: "The payment provider has no refund for this request" }, finalStatus: "failed", providerRefundId: null,
+            actorId: context.session?.itemId, managerApprovalId: args.managerApprovalId,
+          }), { isolationLevel: "Serializable" });
+          await updateIdempotencyAttempt(prisma, attempt.id, "failed", { refundId: failed.id, status: failed.status }, 422);
+          return { success: false, refundId: failed.id, status: failed.status, error: "The payment provider did not make this refund. Nothing was refunded; request it again." };
+        }
+      }
       if (reservation.replay && !reservation.refund.providerRefundId && reservation.refund.createdAt && Date.now() - new Date(reservation.refund.createdAt).getTime() > 60 * 60 * 1000) {
         throw new Error("Uncertain refund has no provider reference and is outside the automatic replay window; reconcile with the provider before any replacement refund");
       }
