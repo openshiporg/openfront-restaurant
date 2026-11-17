@@ -24,3 +24,12 @@ test("a required single-choice group swaps and can't be emptied", () => {
   assert.deepEqual(toggleOption(["s1"], size, "s2"), ["s2"])
   assert.deepEqual(toggleOption(["s2"], size, "s2"), ["s2"])
 })
+
+test("options in a group read cheapest first", () => {
+  const groups = groupsOf({ modifiers: [
+    { id: "t", name: "Triple", modifierGroup: "size", priceAdjustment: 600 },
+    { id: "s", name: "Single", modifierGroup: "size", priceAdjustment: 0 },
+    { id: "d", name: "Double", modifierGroup: "size", priceAdjustment: 350 },
+  ] } as never)
+  assert.deepEqual(groups[0].options.map((o) => o.id), ["s", "d", "t"])
+})

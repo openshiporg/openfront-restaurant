@@ -28,7 +28,8 @@ export function groupsOf(item: Pick<MenuItem, "modifiers">): OptionGroup[] {
     group.options.push({ id: m.id, name: m.name, price: Number(m.priceAdjustment || 0), default: Boolean(m.defaultSelected) })
     map.set(key, group)
   }
-  return [...map.values()].map((g) => ({ ...g, max: g.max || g.options.length, min: g.required ? Math.max(1, g.min) : g.min }))
+  // Options read cheapest first (Single, Double, Triple patty); equal prices keep the kitchen's order.
+  return [...map.values()].map((g) => ({ ...g, options: [...g.options].sort((a, b) => a.price - b.price), max: g.max || g.options.length, min: g.required ? Math.max(1, g.min) : g.min }))
 }
 
 /** One tap on an option: radio groups swap, others add or drop within the group's limits. */
