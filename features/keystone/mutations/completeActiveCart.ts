@@ -385,7 +385,9 @@ export default async function completeActiveCart(
     if (quote?.promo?.discountId) {
       // One guarded round trip: claim a use only while the code is enabled and under its limit.
       const claimed = await tx.$executeRaw`UPDATE "Discount" SET "usageCount" = "usageCount" + 1 WHERE "id" = ${quote.promo.discountId} AND "isDisabled" = false AND ("usageLimit" IS NULL OR "usageCount" < "usageLimit")`;
-      if (!claimed) throw new Error("That promo code has been fully used. Cancel the unpaid checkout and remove the code.");
+      // A card that is already charged was charged the quoted total, so the quote is honoured and the
+      // order is made; the count stays at its limit. Only an unpaid (manual) checkout is turned away.
+      if (!claimed && isManual) throw new Error("That promo code has been fully used. Cancel the unpaid checkout and remove the code.");
     }
     if (quote?.pricingPolicy) await freezeOrderPricingPolicy(tx, order.id, quote.pricingPolicy, context.session?.itemId);
     else await getOrderPricingPolicy(tx, order.id, settings);
