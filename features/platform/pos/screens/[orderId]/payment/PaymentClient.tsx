@@ -153,6 +153,12 @@ const RECONCILE_PAYMENT = gql`
   }
 `
 
+const CANCEL_PAYMENT_ATTEMPT = gql`
+  mutation CancelPaymentAttempt($paymentId: ID!) {
+    cancelPaymentAttempt(paymentId: $paymentId) { success status error }
+  }
+`
+
 function WebCardConfirmation({ paymentId, onComplete }: { paymentId: string; onComplete: () => Promise<void> }) {
   const stripe = useStripe()
   const elements = useElements()
@@ -357,6 +363,23 @@ export function PaymentClient({ orderId }: PaymentClientProps) {
     } finally {
       setProcessing(false)
     }
+  }
+
+  // Closing the card form without paying releases the amount, so the check can be paid another way.
+  const closeCardSession = async () => {
+    const session = cardSession
+    setCardSession(null)
+    if (!session) return
+    delete attemptKeys.current[session.splitId ? `split:${session.splitId}` : 'card']
+    try {
+      const result: any = await request('/api/graphql', CANCEL_PAYMENT_ATTEMPT, { paymentId: session.paymentId })
+      const outcome = result?.cancelPaymentAttempt
+      if (outcome?.status === 'succeeded') toast.success('The card was charged')
+      else if (!outcome?.success) toast.error(outcome?.error || 'The card attempt could not be cancelled')
+    } catch {
+      toast.error('The card attempt could not be cancelled')
+    }
+    await fetchOrder()
   }
 
   // Card payment
@@ -953,7 +976,7 @@ export function PaymentClient({ orderId }: PaymentClientProps) {
         </CardContent>
       </Card>
 
-      <Dialog open={Boolean(cardSession)} onOpenChange={(open) => !open && setCardSession(null)}>
+      <Dialog open={Boolean(cardSession)} onOpenChange={(open) => !open && closeCardSession()}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Secure web card payment</DialogTitle>

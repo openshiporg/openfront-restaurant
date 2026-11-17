@@ -7,6 +7,7 @@ import {
   capturePayment as captureProviderPayment,
   createPayment as createProviderPayment,
   getPaymentStatus as getProviderPaymentStatus,
+  cancelPayment as cancelProviderPayment,
 } from "../utils/paymentProviderAdapter";
 import { isPaymentProviderConfigured } from "../utils/paymentProviderConfig";
 import { finalizePaidOrderWithClient, reconcileCompletedOrderOperations } from "../utils/orderCompletion";
@@ -369,6 +370,40 @@ export async function capturePaymentMutation(
     }, { isolationLevel: "Serializable" });
     if (didSucceed && payment.order?.id) await reconcileCompletedOrderOperations(payment.order.id, context);
     return { success: didSucceed, status: persistedStatus, error: didSucceed ? null : "Capture outcome is not final" };
+  } catch (error) {
+    return { success: false, status: null, error: error instanceof Error ? error.message : "Unknown error" };
+  }
+}
+
+/** Staff closed the card form without the guest paying. The provider payment is cancelled and the
+ * tender released, so the check can take cash, a gift card, a void or be closed. If the card was
+ * charged after all, the payment is recorded instead. */
+export async function cancelPaymentAttemptMutation(
+  _root: unknown,
+  { paymentId }: { paymentId: string },
+  context: Context
+) {
+  if (!permissions.canManagePayments({ session: context.session })) {
+    return { success: false, status: null, error: "Not authorized to cancel payment" };
+  }
+  try {
+    const payment = await context.sudo().query.Payment.findOne({
+      where: { id: paymentId },
+      query: "id status paymentMethod providerPaymentId paymentProvider { id code isInstalled createPaymentFunction capturePaymentFunction refundPaymentFunction getPaymentStatusFunction generatePaymentLinkFunction handleWebhookFunction credentials metadata }",
+    });
+    if (!payment) throw new Error("Payment not found");
+    if (payment.status === "cancelled") return { success: true, status: "cancelled", error: null };
+    if (!["processing", "unknown"].includes(payment.status)) throw new Error("Only an unpaid card attempt can be cancelled");
+    if (!payment.paymentProvider || !payment.providerPaymentId) throw new Error("Provider payment reference is missing");
+    const outcome = await cancelProviderPayment({ provider: payment.paymentProvider, paymentId: payment.providerPaymentId, idempotencyKey: `cancel:${payment.id}` });
+    if (outcome.status !== "cancelled") return reconcilePaymentMutation(_root, { paymentId }, context);
+    const prisma = context.prisma as any;
+    const status = await prisma.$transaction(async (tx: any) => {
+      const current = await tx.payment.findUnique({ where: { id: payment.id } });
+      const updated = await tx.payment.update({ where: { id: payment.id }, data: { status: nextPaymentStatus(current.status, "cancelled") } });
+      return updated.status;
+    }, { isolationLevel: "Serializable" });
+    return { success: status === "cancelled", status, error: null };
   } catch (error) {
     return { success: false, status: null, error: error instanceof Error ? error.message : "Unknown error" };
   }

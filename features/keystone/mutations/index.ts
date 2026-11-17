@@ -15,7 +15,7 @@ import { mergeSchemas } from "@graphql-tools/schema";
 import type { GraphQLSchema } from 'graphql';
 import redirectToInit from "./redirectToInit";
 import updateActiveUser from "./updateActiveUser";
-import processPayment, { capturePaymentMutation, getPaymentStatus, reconcilePaymentMutation } from "./processPayment";
+import processPayment, { capturePaymentMutation, getPaymentStatus, reconcilePaymentMutation, cancelPaymentAttemptMutation } from "./processPayment";
 import redeemGiftCard, { lookupGiftCard } from "./redeemGiftCard";
 import refundPayment, { reconcileRefundMutation } from "./refundPayment";
 import { splitCheckByItem, splitCheckByGuest, splitCheckBySeat, recombineEqualChecks, mergeChecks } from "./splitCheck";
@@ -195,6 +195,7 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
         ): CapturePaymentResult
 
         reconcilePayment(paymentId: ID!): CapturePaymentResult
+        cancelPaymentAttempt(paymentId: ID!): CapturePaymentResult
 
         mergeChecks(orderId: ID!, sourceOrderId: ID!): SplitCheckResult
         splitCheckByItem(
@@ -621,6 +622,7 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
         approveManagerApproval,
         capturePayment: capturePaymentMutation,
         reconcilePayment: reconcilePaymentMutation,
+        cancelPaymentAttempt: cancelPaymentAttemptMutation,
         mergeChecks,
         splitCheckByItem,
         splitCheckByGuest, splitCheckBySeat, recombineEqualChecks,

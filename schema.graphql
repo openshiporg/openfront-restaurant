@@ -5845,6 +5845,7 @@ type Mutation {
   refundPayment(paymentId: ID!, amount: Int, reason: String!, idempotencyKey: String!, managerApproval: Boolean @deprecated(reason: "Caller assertions do not constitute approval"), managerApprovalId: ID): RefundPaymentResult
   capturePayment(paymentIntentId: String!): CapturePaymentResult
   reconcilePayment(paymentId: ID!): CapturePaymentResult
+  cancelPaymentAttempt(paymentId: ID!): CapturePaymentResult
   mergeChecks(orderId: ID!, sourceOrderId: ID!): SplitCheckResult
   splitCheckByItem(orderId: String!, itemIds: [String!]!): SplitCheckResult
   splitCheckBySeat(orderId: ID!, idempotencyKey: String!): SplitCheckResult
