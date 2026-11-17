@@ -37,3 +37,9 @@ export function toggleOption(now: string[], group: OptionGroup, id: string): str
   if (group.max === 1) return [id]
   return now.length >= group.max ? now : [...now, id]
 }
+
+/** Option groups shown in the hero card: required ones first, at most `max`; the rest live on the dish page. */
+export const CARD_GROUPS = 2
+export function cardGroups(groups: OptionGroup[], max = CARD_GROUPS): OptionGroup[] {
+  return [...groups].sort((a, b) => Number(b.min > 0) - Number(a.min > 0)).slice(0, max)
+}

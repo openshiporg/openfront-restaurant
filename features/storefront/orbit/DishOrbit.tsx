@@ -5,7 +5,8 @@ import Link from "next/link"
 import { gsap } from "gsap"
 import { arcPath } from "./geometry"
 import { formatCurrency } from "@/features/storefront/lib/currency"
-import { toggleOption, type OptionGroup } from "./options"
+import { cardGroups, toggleOption, type OptionGroup } from "./options"
+import { Bag } from "./cart"
 
 export { arcPath }
 
@@ -95,7 +96,6 @@ const HIDE_2 = "inset(0% 100% 0% 0%)"
 const SHOW = "inset(0% 0% 0% 0%)"
 
 const Icon = {
-  order: <svg className="dsh-ico dsh-fill" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5 3 15h18zM3 18h18v2.5H3z" /></svg>,
   prev: <svg viewBox="0 0 12 16" aria-hidden="true"><path d="M11 0v16L0 8z" /></svg>,
   next: <svg viewBox="0 0 12 16" aria-hidden="true"><path d="M1 0v16l11-8z" /></svg>,
 }
@@ -282,6 +282,7 @@ export function DishOrbit({
   const dish = dishes[index]
   const chosen_ = (dish && picked[dish.id]) || {}
   const missing = dish ? dish.groups.filter((g) => (chosen_[g.id] || []).length < g.min) : []
+  const missingHidden = dish ? missing.some((g) => !cardGroups(dish.groups).some((c) => c.id === g.id)) : false
   const extras = dish ? dish.groups.flatMap((g) => g.options.filter((o) => (chosen_[g.id] || []).includes(o.id))).reduce((sum, o) => sum + o.price, 0) : 0
   const toggle = (d: OrbitDish, g: OptionGroup, id: string) => {
     setChosen(true)
@@ -393,46 +394,57 @@ export function DishOrbit({
             </div>
             <button type="button" className="dsh-btn dsh-arrow" aria-label="Next dish" onClick={() => step(1)}>{Icon.next}</button>
           </div>
-          {/* One card per dish: time chip and facts, the description, the real options, then Add to cart. A sideways swipe inside it scrolls the options, not the dishes. */}
+          {/* One product card per dish: the name, what it is, a small time chip with the kitchen facts, its real options (required first), then Add to cart with the running price. */}
           <div className="dsh-card" onPointerDown={(e) => e.stopPropagation()}>
             <div className="dsh-bodies">
-              {dishes.map((d, i) => (
-                <div key={d.id} ref={(el) => { bodies.current[i] = el }} className={"dsh-body" + (i === 0 ? " dsh-on" : "") + (i === index ? " dsh-cur" : "")} aria-hidden={i !== index} inert={i !== index}>
-                  <div className="dsh-meta">
-                    {d.badge ? <span className="dsh-badge" style={{ background: d.accent }}><b>{d.badge}</b>{d.badgeUnit}</span> : null}
-                    <span className="dsh-kit">{[d.station, ...d.facts].filter(Boolean).join(" · ")}</span>
-                  </div>
-                  <p className="dsh-desc" data-short={d.groups.length ? "true" : undefined}>{d.description}</p>
-                  {d.groups.length ? (
-                    <div className="dsh-opts">
-                      {d.groups.map((g) => {
-                        const multi = g.max > 1
-                        const now = picked[d.id]?.[g.id] || []
-                        return (
-                          <div key={g.id} className="dsh-group" role={multi ? "group" : "radiogroup"} aria-label={g.name}>
-                            <p className="dsh-gname"><b>{g.name}</b><span>{g.min > 0 ? (g.min > 1 ? `Choose ${g.min}` : "Required") : "Optional"}{multi && g.max < g.options.length ? `, up to ${g.max}` : ""}</span></p>
-                            <div className="dsh-ing">
-                              {g.options.map((o) => (
-                                <button key={o.id} type="button" className="dsh-btn dsh-opt" role={multi ? "checkbox" : "radio"} aria-checked={now.includes(o.id)} onClick={() => toggle(d, g, o.id)}>
-                                  {o.name}{o.price > 0 ? <small>+{formatCurrency(o.price, money)}</small> : null}
-                                </button>
-                              ))}
+              {dishes.map((d, i) => {
+                const groups = cardGroups(d.groups)
+                const more = d.groups.length - groups.length
+                const kit = [d.station, ...d.facts].filter(Boolean).join(" · ")
+                return (
+                  <div key={d.id} ref={(el) => { bodies.current[i] = el }} className={"dsh-body" + (i === 0 ? " dsh-on" : "") + (i === index ? " dsh-cur" : "")} aria-hidden={i !== index} inert={i !== index}>
+                    <p className="dsh-name">{d.label}</p>
+                    <p className="dsh-desc" data-short={d.groups.length ? "true" : undefined}>{d.description}</p>
+                    {d.badge || kit ? (
+                      <div className="dsh-meta">
+                        {d.badge ? <span className="dsh-badge" style={{ background: d.accent }}><b>{d.badge}</b> {d.badgeUnit}</span> : null}
+                        {kit ? <span className="dsh-kit">{kit}</span> : null}
+                      </div>
+                    ) : null}
+                    {groups.length ? (
+                      <div className="dsh-opts">
+                        {groups.map((g) => {
+                          const multi = g.max > 1
+                          const now = picked[d.id]?.[g.id] || []
+                          return (
+                            <div key={g.id} className="dsh-group" role={multi ? "group" : "radiogroup"} aria-label={g.name}>
+                              <p className="dsh-gname"><b>{g.name}</b><span data-req={g.min > 0 ? "true" : undefined}>{g.min > 0 ? (g.min > 1 ? `Choose ${g.min}` : "Required") : "Optional"}{multi && g.max < g.options.length ? `, up to ${g.max}` : ""}</span></p>
+                              <div className="dsh-ing">
+                                {g.options.map((o) => (
+                                  <button key={o.id} type="button" className="dsh-btn dsh-opt" data-multi={multi ? "true" : undefined} role={multi ? "checkbox" : "radio"} aria-checked={now.includes(o.id)} onClick={() => toggle(d, g, o.id)}>
+                                    <i aria-hidden="true" />
+                                    <span>{o.name}</span>
+                                    {o.price > 0 ? <small>+{formatCurrency(o.price, money)}</small> : null}
+                                  </button>
+                                ))}
+                              </div>
                             </div>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  ) : null}
-                </div>
-              ))}
+                          )
+                        })}
+                        {more > 0 ? <Link className="dsh-btn dsh-moreopts" href={d.href}>More options ({more})</Link> : null}
+                      </div>
+                    ) : null}
+                  </div>
+                )
+              })}
             </div>
             <div className="dsh-foot">
               <button type="button" className="dsh-btn dsh-order" disabled={adding === "adding"} onClick={addDish}>
-                {Icon.order}
+                <Bag />
                 <span>{adding === "adding" ? "Adding…" : adding === "added" ? "Added to cart" : "Add to cart"}</span>
                 {dish && adding === "idle" ? <span className="dsh-total">{formatCurrency(dish.price + extras, money)}</span> : null}
               </button>
-              {note ? <p className="dsh-note" role="status">{note}</p> : null}
+              {note ? <p className="dsh-note" role="status">{note}{missingHidden ? <> <Link href={dish!.href}>Open the dish</Link></> : null}</p> : null}
             </div>
           </div>
         </div>
