@@ -190,9 +190,14 @@ async function startGiftCardPurchaseRaw(
   return { clientSecret: intent.client_secret, paymentIntentId: intent.id, amount: args.amount, currencyCode: currency.toUpperCase() };
 }
 
-/** Issues the card once Stripe reports the payment as succeeded. Safe to call repeatedly. */
 async function completeGiftCardPurchaseRaw(_root: unknown, { paymentIntentId }: { paymentIntentId: string }, context: Context) {
   throttle(context, "gift-complete", 20);
+  return issuePaidGiftCard(paymentIntentId, context);
+}
+
+/** Issues the card once Stripe reports the payment as succeeded. Safe to call repeatedly: the buyer's
+ * browser and the provider's payment event both call it, and whichever arrives first issues the card. */
+export async function issuePaidGiftCard(paymentIntentId: string, context: Context) {
   const stripe = stripeClient();
   if (!/^pi_[A-Za-z0-9_]+$/.test(paymentIntentId || "")) throw new UserError("Payment not found.");
   const intent = await stripe.paymentIntents.retrieve(paymentIntentId);
@@ -206,7 +211,9 @@ async function completeGiftCardPurchaseRaw(_root: unknown, { paymentIntentId }: 
     if (existing) return existing.giftCard;
     const order = await tx.restaurantOrder.create({ data: { orderNumber: giftOrderNumber(intent.id), orderType: "takeout", orderSource: "gift_card", status: "completed", subtotal: amount, tax: 0, tip: 0, discount: 0, total: amount, currencyCode, guestCount: 1, customerEmail: intent.metadata.purchaserEmail || "" } });
     const giftCard = await tx.giftCard.create({ data: { code, value: amount, balance: amount, isDisabled: false, orderId: order.id, metadata: { fundingMethod: "stripe", liability: true, currencyCode, paymentIntentId: intent.id, purchaserEmail: intent.metadata.purchaserEmail || "", recipientName: intent.metadata.recipientName || "" } } });
-    const tender = await tx.payment.create({ data: { idempotencyKey: key, orderId: order.id, amount, paymentMethod: "credit_card", status: "succeeded", currencyCode, reservedAt: new Date(), processedAt: new Date(), providerPaymentId: intent.id, data: { giftCardId: giftCard.id, purpose: "stored_value_issuance", paymentIntentId: intent.id } } });
+    // The provider is recorded so its later events (and a refund) find this payment.
+    const provider = await tx.paymentProvider.findFirst({ where: { code: "pp_stripe_stripe" }, select: { id: true } });
+    const tender = await tx.payment.create({ data: { idempotencyKey: key, orderId: order.id, amount, paymentMethod: "credit_card", status: "succeeded", currencyCode, reservedAt: new Date(), processedAt: new Date(), providerPaymentId: intent.id, paymentProviderId: provider?.id || null, data: { giftCardId: giftCard.id, purpose: "stored_value_issuance", paymentIntentId: intent.id } } });
     await tx.giftCardTransaction.create({ data: { idempotencyKey: key, type: "issue", amount, balanceAfter: amount, giftCardId: giftCard.id, orderId: order.id } });
     await appendAuditEventWithClient(tx, null, { eventKey: key, eventType: "gift_card.issued", entityType: "GiftCard", entityId: giftCard.id, after: { amount, currencyCode }, metadata: { paymentId: tender.id, orderId: order.id, fundingMethod: "stripe" } });
     await issueReceiptWithClient(tx, null, { kind: "sale", entityId: tender.id, paymentId: tender.id, orderId: order.id, amount, currencyCode, snapshot: { purpose: "stored_value_issuance", giftCardId: giftCard.id, amount, currencyCode, tender: "card" } });
@@ -214,7 +221,7 @@ async function completeGiftCardPurchaseRaw(_root: unknown, { paymentIntentId }: 
     const money = new Intl.NumberFormat("en-US", { style: "currency", currency: currencyCode }).format(amount / 100);
     const recipient = intent.metadata.recipientEmail || "";
     const note = intent.metadata.message ? `\n\n"${intent.metadata.message}"` : "";
-    if (recipient) await enqueueRestaurantNotification(tx, null, { eventKey: `gift-delivery:${giftCard.id}`, entityType: "GiftCard", entityId: giftCard.id, to: recipient, subject: `You've received a ${money} gift card for ${store?.name || "our restaurant"}`, text: `${intent.metadata.recipientName ? `Hi ${intent.metadata.recipientName},\n\n` : ""}You've been given a ${money} gift card for ${store?.name || "our restaurant"}.${note}\n\nYour code: ${code}\n\nEnter it at checkout or show it when you visit.` });
+    if (recipient) await enqueueRestaurantNotification(tx, null, { eventKey: `gift-delivery:${giftCard.id}`, entityType: "GiftCard", entityId: giftCard.id, to: recipient, subject: `You've received a ${money} gift card for ${store?.name || "our restaurant"}`, text: `${intent.metadata.recipientName ? `Hi ${intent.metadata.recipientName},\n\n` : ""}You've been given a ${money} gift card for ${store?.name || "our restaurant"}.${note}\n\nYour code: ${code}\n\nShow it when you visit.` });
     if (intent.metadata.purchaserEmail) await enqueueRestaurantNotification(tx, null, { eventKey: `gift-receipt:${giftCard.id}`, entityType: "GiftCard", entityId: giftCard.id, to: intent.metadata.purchaserEmail, subject: `Your ${money} gift card`, text: `Thank you for your purchase.\n\nGift card code: ${code}\nValue: ${money}${recipient ? `\nSent to: ${recipient}` : ""}` });
     return giftCard;
   });

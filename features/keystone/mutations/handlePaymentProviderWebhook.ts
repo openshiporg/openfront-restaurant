@@ -6,6 +6,9 @@ import { writeSaleEvidence } from "../utils/paymentEvidence";
 import { finalizePaidOrder } from "../utils/orderCompletion";
 import { nextPaymentStatus, webhookPaymentStatus, firstSettlementTime } from "../utils/paymentState";
 import { completeVerifiedCheckout } from "./completeActiveCart";
+import { issuePaidGiftCard } from "./storefrontPublic";
+
+const REFUND_EVENTS = ["charge.refunded", "refund.created", "refund.updated", "refund.failed", "PAYMENT.CAPTURE.REFUNDED"];
 import { syncKitchenTicketsForOrder } from "../utils/kitchenTicketSync";
 
 function normalizeHeaders(headers: any) {
@@ -83,7 +86,7 @@ export default async function handlePaymentProviderWebhook(
     rawBody,
   }: { providerCode: string; event: any; headers: any; rawBody?: string | null },
   context: Context,
-  offlineAdapters?: { getPaymentStatus?: typeof getPaymentStatus }
+  offlineAdapters?: { getPaymentStatus?: typeof getPaymentStatus; issuePaidGiftCard?: typeof issuePaidGiftCard }
 ) {
   const readProviderStatus = offlineAdapters?.getPaymentStatus || getPaymentStatus;
   if (!providerCode || !/^[a-z0-9_-]+$/i.test(providerCode)) throw new Error("Invalid provider code");
@@ -138,6 +141,20 @@ export default async function handlePaymentProviderWebhook(
     });
   }
 
+  // An online gift card is issued here as well as from the buyer's browser, so a closed tab or a
+  // payment that settles later still gets its card. Issuing is idempotent on the payment.
+  if (webhookPaymentStatus(type) === "succeeded" && resource?.metadata?.purpose === "gift_card") {
+    const paymentIntentId = resource.object === "charge" ? resource.payment_intent : resource.id;
+    try {
+      await (offlineAdapters?.issuePaidGiftCard || issuePaidGiftCard)(paymentIntentId, context);
+    } catch (error) {
+      await markWebhookFailedUnlessTerminal(context, inbox.id, error instanceof Error ? error.message : "Gift card could not be issued");
+      throw error;
+    }
+    await (context.prisma as any).paymentWebhookEvent.update({ where: { id: inbox.id }, data: { status: "processed", attempts: { increment: 1 }, processedAt: new Date(), error: "" } });
+    return { success: true, error: null };
+  }
+
   const candidateIds = getCandidateProviderPaymentIds(type, resource);
   let payment: any = null;
   try {
@@ -161,6 +178,12 @@ export default async function handlePaymentProviderWebhook(
       error instanceof Error ? error.message : "Provider payment correlation failed",
     );
     throw error;
+  }
+  if (!payment && webhookPaymentStatus(type) !== "succeeded" && !REFUND_EVENTS.includes(type)) {
+    // Nothing here to update (a declined or abandoned attempt that never became a payment): the
+    // event is recorded and acknowledged, so the provider stops resending it.
+    await (context.prisma as any).paymentWebhookEvent.update({ where: { id: inbox.id }, data: { status: "ignored", attempts: { increment: 1 }, processedAt: new Date(), error: "" } });
+    return { success: true, error: null };
   }
   if (!payment) {
     await markWebhookFailedUnlessTerminal(context, inbox.id, "Awaiting payment correlation; retry this verified event");
