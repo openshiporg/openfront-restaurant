@@ -133,11 +133,16 @@ const StripePaymentButton: React.FC<PaymentButtonProps> = ({
         }
       )
 
-      if (confirmError) {
+      // On a retry after the card was already charged, Stripe returns an error that carries the paid
+      // intent: go on to place the order instead of asking to pay again.
+      const status = paymentIntent?.status || confirmError?.payment_intent?.status
+      const paid = status === "succeeded" || status === "requires_capture"
+
+      if (confirmError && !paid) {
         throw new Error(confirmError.message || "Payment confirmation failed.")
       }
 
-      if (paymentIntent?.status === "succeeded" || paymentIntent?.status === "requires_capture") {
+      if (paid) {
         const result = await placeOrder(session.id)
         if (result?.success === false && result.error) throw new Error(result.error)
         if (result && typeof result === "object" && "success" in result && result.success && "redirectTo" in result) {
