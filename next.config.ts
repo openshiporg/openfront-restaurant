@@ -6,6 +6,9 @@ const s3Hostname = process.env.S3_ENDPOINT ? process.env.S3_ENDPOINT.replace(/^h
 const nextConfig: NextConfig = {
   reactCompiler: true,
   serverExternalPackages: ['graphql'],
+  async redirects() {
+    return [{ source: '/favicon.ico', destination: '/favicon.svg', permanent: true }];
+  },
   // Workaround since we diverged from Keystone reltionship and document views
   // typescript: {
   //   ignoreBuildErrors: true,
