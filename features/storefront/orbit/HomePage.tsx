@@ -10,6 +10,7 @@ import { PlateCard } from "./PlateCard"
 import { Arcs } from "./Arcs"
 import { categoryIdOf, inMenuOrder, orbitDishes, plateFor, sectionTitle, toPlateCard, usedCategories } from "./lib"
 import { Unavailable } from "./Unavailable"
+import { isDeliveryConfigured } from "@/features/lib/delivery-zones"
 
 export async function generateMetadata(): Promise<Metadata> {
   const settings = await getStoreSettings()
@@ -50,7 +51,7 @@ export default async function OrbitHomePage() {
   const popular = [...new Map(popularPool.map((i) => [i.id, i])).values()].filter((i) => i.available !== false).slice(0, 8)
   const cards = popular.map((item, index) => toPlateCard(item, index, money))
   const pickup = settings.estimatedPickup ? String(settings.estimatedPickup) : null
-  const delivery = settings.deliveryEnabled && settings.estimatedDelivery ? String(settings.estimatedDelivery) : null
+  const delivery = isDeliveryConfigured(settings) && settings.estimatedDelivery ? String(settings.estimatedDelivery) : null
 
   return (
     <>
