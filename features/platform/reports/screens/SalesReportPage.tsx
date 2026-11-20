@@ -1,7 +1,4 @@
-import {
-  getSalesOverview,
-  getPaymentBreakdown,
-} from "../actions";
+import { getSalesOverview } from "../actions";
 import {
   getDateRange,
   getPreviousPeriodRange,
@@ -56,9 +53,8 @@ export async function SalesReportPage({ searchParams }: PageProps) {
   const previousEndDate = previousRange.endDate;
 
   try {
-    const [salesResponse, paymentResponse, storeSettings] = await Promise.all([
+    const [salesResponse, storeSettings] = await Promise.all([
       getSalesOverview(startDate, endDate, previousStartDate, previousEndDate),
-      getPaymentBreakdown(startDate, endDate),
       getStoreSettings(),
     ]);
 
@@ -68,11 +64,13 @@ export async function SalesReportPage({ searchParams }: PageProps) {
     };
 
     const salesData = salesResponse.success ? salesResponse.data : null;
-    const paymentData = paymentResponse.success ? paymentResponse.data : null;
 
     const orders = salesData?.restaurantOrders || [];
     const previousOrders = salesData?.previousOrders || [];
-    const payments = paymentData?.payments || [];
+    // Same basis as the stat cards: payments on completed checks (gift card sales excluded).
+    const payments = orders
+      .filter((o: any) => o.status === "completed" && o.orderSource !== "gift_card")
+      .flatMap((o: any) => o.payments || []);
 
     const salesMetrics = calculateSalesMetrics(orders, previousOrders);
     const daypartMetrics = calculateDaypartMetrics(orders);

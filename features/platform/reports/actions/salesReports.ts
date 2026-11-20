@@ -29,7 +29,7 @@ export async function getSalesOverview(
         tip
         discount
         total
-        payments { amount status refundedAmount }
+        payments { id amount status refundedAmount paymentMethod }
         createdAt
         tables {
           id
