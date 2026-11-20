@@ -307,7 +307,8 @@ export function PaymentClient({ orderId }: PaymentClientProps) {
   const getAmountPaid = (): number => {
     if (!order) return 0
     return order.payments
-      .filter((p) => p.status === 'succeeded')
+      // Same rule as processPayment: a refunded tender still settled this check, so nothing is due again.
+      .filter((p) => ['succeeded', 'partially_refunded', 'refunded'].includes(p.status))
       .reduce((sum, p) => sum + Number(p.amount || 0), 0)
   }
 
@@ -708,6 +709,9 @@ export function PaymentClient({ orderId }: PaymentClientProps) {
           <CardTitle>Payment Method</CardTitle>
         </CardHeader>
         <CardContent className="flex-1">
+          {remaining === 0 ? (
+            <p className="text-sm text-muted-foreground">Nothing is due on this order.</p>
+          ) : (
           <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col">
             <TabsList className="grid w-full grid-cols-4">
               <TabsTrigger value="cash" className="flex items-center gap-2">
@@ -973,6 +977,7 @@ export function PaymentClient({ orderId }: PaymentClientProps) {
               </Button>
             </TabsContent>
           </Tabs>
+          )}
         </CardContent>
       </Card>
 
