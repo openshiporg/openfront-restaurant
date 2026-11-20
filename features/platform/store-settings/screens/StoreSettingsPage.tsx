@@ -84,12 +84,13 @@ const defaultHours: HoursState = {
 
 function to12Hour(time24: string, locale = 'en-US', timezone = 'UTC') {
   const [hour, minute] = time24.split(':').map((v) => Number.parseInt(v, 10))
-  const d = new Date()
-  d.setHours(hour, minute, 0, 0)
+  // Saved hours are the venue's wall-clock time: format them as-is, never shifted by a zone.
+  void timezone
+  const d = new Date(Date.UTC(2000, 0, 1, hour, minute))
   return new Intl.DateTimeFormat(locale, {
     hour: 'numeric',
     minute: '2-digit',
-    timeZone: timezone,
+    timeZone: 'UTC',
   }).format(d)
 }
 
@@ -244,7 +245,9 @@ export function StoreSettingsPage({ initialSettings }: { initialSettings: StoreS
   ]
 
   const todaySummary = useMemo(() => {
-    const day = days[new Date().getDay() === 0 ? 6 : new Date().getDay() - 1]
+    const weekday = new Intl.DateTimeFormat('en-US', { weekday: 'short', timeZone: form.timezone || 'UTC' }).format(new Date())
+    const index = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].indexOf(weekday)
+    const day = days[index < 0 ? 0 : index]
     const today = hours[day.key]
     if (!today.enabled || today.ranges.length === 0) return `${day.label}: Closed`
     const first = today.ranges[0]

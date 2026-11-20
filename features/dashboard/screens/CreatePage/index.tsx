@@ -19,7 +19,7 @@ export async function CreatePage({ params }: CreatePageParams) {
 
   const list = await getListByPath(listKey)
 
-  if (!list) {
+  if (!list || list.isHidden) {
     notFound()
   }
 

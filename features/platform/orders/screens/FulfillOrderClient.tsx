@@ -114,7 +114,7 @@ export function FulfillOrderClient({ order }: FulfillOrderClientProps) {
               <Badge className="bg-emerald-600 ml-1">{order.status?.replace(/_/g, " ")}</Badge>
             </div>
             <p className="opacity-80">
-              This workflow advances the full order through service stages. Item-level kitchen controls are not implemented on this screen yet.
+              This workflow advances the full order through service stages.
             </p>
             {nextStatus ? (
               <div className="inline-flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-emerald-700">

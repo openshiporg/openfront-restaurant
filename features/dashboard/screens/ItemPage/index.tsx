@@ -23,7 +23,7 @@ export async function ItemPage({ params }: ItemPageParams) {
 
   const list = await getListByPath(listKey)
 
-  if (!list) {
+  if (!list || list.isHidden) {
     notFound()
   }
 

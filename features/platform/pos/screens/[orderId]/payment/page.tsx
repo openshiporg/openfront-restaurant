@@ -5,6 +5,8 @@
 
 import React from 'react'
 import { PageContainer } from '@/features/dashboard/components/PageContainer'
+import { notFound } from 'next/navigation'
+import { keystoneClient } from '@/features/dashboard/lib/keystoneClient'
 import { PaymentClient } from './PaymentClient'
 
 interface PaymentPageProps {
@@ -13,6 +15,11 @@ interface PaymentPageProps {
 
 export async function PaymentPage({ params }: PaymentPageProps) {
   const { orderId } = await params
+  const found = await keystoneClient<{ restaurantOrder: { id: string } | null }>(
+    `query PosPaymentOrder($id: ID!) { restaurantOrder(where: { id: $id }) { id } }`,
+    { id: orderId },
+  )
+  if (found.success && !found.data?.restaurantOrder) notFound()
 
   const header = (
     <div className="flex flex-col">

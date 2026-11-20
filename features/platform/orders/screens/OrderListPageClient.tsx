@@ -58,7 +58,7 @@ export function OrderListPageClient({
       <div>
         <h1 className="text-2xl md:text-3xl font-semibold tracking-tight">Service Order Board</h1>
         <p className="text-muted-foreground text-sm">
-          A clean command center for online + in-house order orchestration.
+          Online, pickup, delivery and dine-in orders in one place.
         </p>
       </div>
       <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs font-medium tabular-nums text-muted-foreground">

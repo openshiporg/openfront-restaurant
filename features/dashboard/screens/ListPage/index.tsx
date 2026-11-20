@@ -31,7 +31,7 @@ export async function ListPage({ params, searchParams }: PageProps) {
   // Get the list by path using our cached function
   const list = await getListByPath(listKeyParam);
 
-  if (!list) {
+  if (!list || list.isHidden) {
     notFound()
   }
 

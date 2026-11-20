@@ -10,7 +10,7 @@ export default async function AccountLayout({ dashboard, login }: { dashboard?: 
   const user = await getUser()
   return (
     <div className="o-checkout o-acct" data-testid="account-page">
-      <PageHero thin={user ? "Your" : "Sign"} heavy={user ? "Account" : "In"} lede={user ? `Signed in as ${user.email}` : "Track orders, reorder favourites and keep your details for checkout."} />
+      <PageHero thin={user ? "Your" : "Sign"} heavy={user ? "Account" : "In"} lede={user ? `Signed in as ${user.email}` : "Track orders, reorder favorites and keep your details for checkout."} />
       <div className="o-shell" style={{ paddingBottom: "4rem" }}>
         {user ? (
           <div className="o-acct-grid">

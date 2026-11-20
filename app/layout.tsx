@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { getStoreSettings } from "@/features/storefront/lib/data/menu";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -12,13 +13,17 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-export const metadata: Metadata = {
-  title: "Openfront Restaurant",
-  description: "Next, Keystone, and Tailwind Starter Template",
-  icons: {
-    icon: "/favicon.svg",
-  },
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const settings = await getStoreSettings().catch(() => null);
+  const name = String(settings?.name || "").trim() || "Order online";
+  return {
+    title: name,
+    description: settings?.tagline || settings?.heroHeadline || `Order from ${name}`,
+    icons: {
+      icon: "/favicon.svg",
+    },
+  };
+}
 
 export default function RootLayout({
   children,

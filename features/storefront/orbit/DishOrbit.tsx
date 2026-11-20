@@ -400,7 +400,7 @@ export function DishOrbit({
               {dishes.map((d, i) => {
                 const groups = cardGroups(d.groups)
                 const more = d.groups.length - groups.length
-                const kit = [d.station, ...d.facts].filter(Boolean).join(" · ")
+                const kit = [...d.facts].filter(Boolean).join(" · ")
                 return (
                   <div key={d.id} ref={(el) => { bodies.current[i] = el }} className={"dsh-body" + (i === 0 ? " dsh-on" : "") + (i === index ? " dsh-cur" : "")} aria-hidden={i !== index} inert={i !== index}>
                     <p className="dsh-name">{d.label}</p>
