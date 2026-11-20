@@ -86,6 +86,7 @@ export const MenuItem = list({
     }),
 
     price: integer({
+      label: "Price (cents)",
       validation: { isRequired: true, min: 0 },
       ui: {
         description: "Price in cents",

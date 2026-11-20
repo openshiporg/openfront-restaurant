@@ -99,7 +99,9 @@ export async function getFilteredDiscounts(
   // Status filtering - using correct boolean values from Dasher7
   if (status && status !== 'all') {
     if (status === 'active') {
+      // Same rule as the ACTIVE badge: not disabled and not past its end date.
       where.isDisabled = { equals: false };
+      where.AND = [{ OR: [{ endsAt: null }, { endsAt: { gt: new Date().toISOString() } }] }];
     } else if (status === 'disabled') {
       where.isDisabled = { equals: true };
     }
@@ -144,14 +146,14 @@ export async function getFilteredDiscounts(
  */
 export async function getDiscountStatusCounts() {
   const query = `
-    query GetDiscountStatusCounts {
-      active: discountsCount(where: { isDisabled: { equals: false } })
+    query GetDiscountStatusCounts($now: DateTime!) {
+      active: discountsCount(where: { isDisabled: { equals: false }, OR: [{ endsAt: null }, { endsAt: { gt: $now } }] })
       disabled: discountsCount(where: { isDisabled: { equals: true } })
       all: discountsCount
     }
   `;
 
-  const response = await keystoneClient(query);
+  const response = await keystoneClient(query, { now: new Date().toISOString() });
 
   if (response.success) {
     return {

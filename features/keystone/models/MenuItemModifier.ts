@@ -70,6 +70,7 @@ export const MenuItemModifier = list({
     }),
 
     priceAdjustment: integer({
+      label: "Price adjustment (cents)",
       defaultValue: 0,
       ui: {
         description: "Price adjustment in cents (can be negative for removals like no-cheese)",
