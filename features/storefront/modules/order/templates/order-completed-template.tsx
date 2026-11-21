@@ -77,7 +77,7 @@ export default function OrderCompletedTemplate({ order }: OrderCompletedTemplate
             <div>
               <h2 className="break-words sf-section-title text-foreground sm:text-[2rem]">Order #{order.orderNumber}</h2>
               <p className="mt-1 text-[0.85rem] text-muted-foreground sm:text-base">
-                {typeLabel} · {new Date(order.createdAt).toLocaleDateString()}
+                {typeLabel} · <ScheduledTime value={order.createdAt} />
               </p>
               {order.scheduledFor ? (
                 <p className="mt-1 text-sm font-semibold text-foreground" data-testid="order-scheduled-for">

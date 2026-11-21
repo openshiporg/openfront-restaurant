@@ -1,4 +1,4 @@
-"use client";
+import { ScheduledTime } from "./scheduled-time";
 
 interface OrderDetailsCardProps {
   orderNumber: string;
@@ -44,15 +44,6 @@ export function OrderDetailsCard({
   deliveryCountryCode,
   specialInstructions,
 }: OrderDetailsCardProps) {
-  const formattedDate = new Date(createdAt).toLocaleString("en-US", {
-    weekday: "long",
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-
   return (
     <div className="space-y-6">
       <div>
@@ -67,7 +58,7 @@ export function OrderDetailsCard({
         <span className="text-right font-medium text-foreground">{formatOrderType(orderType)}</span>
 
         <span className="text-muted-foreground">Placed</span>
-        <span className="text-right text-foreground">{formattedDate}</span>
+        <span className="text-right text-foreground"><ScheduledTime value={createdAt} /></span>
       </div>
 
       {(customerName || customerEmail || customerPhone) ? (
